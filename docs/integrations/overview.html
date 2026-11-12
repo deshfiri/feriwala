@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Integrations overview</title>
+    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+    <script src="../assets/docs.js"></script>
+</head>
+<body>
+<main id="doc">
+    <h1>Integrations overview</h1>
+    <p class="lead">Everything under <code>app/Integrations</code>: payment gateways, SMS providers, couriers, store platforms, DNS and object storage. Each family has one contract, one manager that resolves a driver, credentials held in settings, and fakes for tests. Read this before adding a driver or changing how Feriwala talks to a third party.</p>
+
+    <h2>How every family is built</h2>
+    <p>The families share one shape so that adding a provider never changes the code that uses it (D7, D8):</p>
+    <table>
+        <thead><tr><th>Piece</th><th>Payment</th><th>SMS</th><th>Courier</th><th>Store platform</th><th>DNS</th><th>Storage</th></tr></thead>
+        <tbody>
+        <tr><td>Contract</td><td><code>Contracts\PaymentGateway</code></td><td><code>Contracts\SmsProvider</code></td><td><code>Contracts\CourierProvider</code></td><td><code>Contracts\StorePlatformDriver</code></td><td><code>Contracts\TxtRecordResolver</code></td><td>none (Laravel <code>Filesystem</code>)</td></tr>
+        <tr><td>Manager</td><td><code>PaymentGatewayManager</code></td><td><code>SmsProviderManager</code></td><td><code>CourierManager</code></td><td><code>StorePlatformManager</code></td><td>container binding</td><td><code>R2Manager</code>, <code>ManagedStorage</code></td></tr>
+        <tr><td>Registry</td><td><code>config/payment.php</code></td><td><code>config/sms.php</code></td><td><code>config/courier.php</code> plus <code>courier_providers</code> rows</td><td><code>match</code> on <code>StorePlatform</code></td><td><code>WebsiteServiceProvider</code></td><td>settings</td></tr>
+        <tr><td>Credentials</td><td>settings, encrypted, sandbox and live keys</td><td>settings, encrypted</td><td>settings (<code>courier.steadfast.*</code>)</td><td>per connection, encrypted columns</td><td>none</td><td>settings, encrypted</td></tr>
+        </tbody>
+    </table>
+    <div class="callout callout-rule"><p><strong>Rule.</strong> Credentials are never in committed config, code or <code>.env</code> files for these families. They live encrypted in the settings table (payment, SMS, courier, R2) or in encrypted columns (store connections), are entered by an administrator, and never appear in a page prop, a log or an audit row. "Is it configured" is answered by names of missing keys, never values.</p></div>
+    <div class="callout callout-rule"><p><strong>Rule.</strong> A driver declares only what has been implemented against the provider's own documentation. What a driver does not declare is refused rather than guessed at. A decline is a result, not an exception; only genuine faults (unreachable provider, malformed response) throw.</p></div>
+
+    <h2>Payment gateways</h2>
+    <p>Location: <code>app/Integrations/Payment</code>. Implements §26 and decisions D4 (currencies and exchange rates), D7 (gateway abstraction), D12 (Feriwala is merchant of record) and D36 (Partner-owned gateways, Model B). Settlement logic lives in <code>app/Domain/Billing</code>; this layer only talks to providers.</p>
+
+    <h3>The contract</h3>
+    <p><code>Contracts\PaymentGateway</code> has these methods:</p>
+    <table>
+        <thead><tr><th>Method</th><th>Purpose</th></tr></thead>
+        <tbody>
+        <tr><td><code>initiate(PaymentIntent): GatewayRedirect</code></td><td>Begin a payment; returns the URL (and optional <code>formFields</code> when the gateway needs a POST).</td></tr>
+        <tr><td><code>handleCallback(Request): GatewayResult</code></td><td>Read the browser's return request. Establishes identity only; the outcome is a claim until verified.</td></tr>
+        <tr><td><code>verifyWebhookSignature(Request): bool</code></td><td>Constant-time, fail closed.</td></tr>
+        <tr><td><code>verify(string $gatewayReference): GatewayResult</code></td><td>Ask the provider directly. The authoritative answer; nothing releases value without it.</td></tr>
+        <tr><td><code>status(string $reference): GatewayResult</code></td><td>Ask what became of <em>our</em> transaction; used by reconciliation. Only called when <code>StatusQuery</code> is declared.</td></tr>
+        <tr><td><code>refund(RefundIntent): RefundResult</code>, <code>refundStatus(string): RefundResult</code></td><td>Only called when the matching refund capability is declared. A refund the provider has not settled is pending, never refunded.</td></tr>
+        <tr><td><code>name()</code>, <code>capabilities()</code>, <code>supports()</code>, <code>supportedCurrencies()</code>, <code>isSandbox()</code></td><td>Identity and declared abilities. <code>GatewayCapability</code> cases: <code>initiate</code>, <code>verify</code>, <code>webhook_signature</code>, <code>status_query</code>, <code>refund_full</code>, <code>refund_partial</code>, <code>refund_status</code>.</td></tr>
+        <tr><td><code>isConfigured()</code>, <code>requiredConfiguration()</code>, <code>missingConfiguration()</code></td><td>Names of keys, never values; drive the admin screen.</td></tr>
+        </tbody>
+    </table>
+    <p>Four rules every driver holds to: never trust the browser; verify server-to-server before releasing anything; never throw for a declined payment; declare only what you implemented. Optional <code>Contracts\TestsConnection::testConnection()</code> authenticates against the provider and discards the result (implemented by EPS). Outcomes map onto <code>GatewayOutcome</code> (<code>paid</code>, <code>pending</code>, <code>failed</code>, <code>cancelled</code>); only <code>paid</code> releases value. <code>GatewayResult</code> keeps the gateway-reported <code>amount</code> apart from the requested one, because comparing them is how a tampered redirect is caught.</p>
+    <p>Abstract <code>Gateways\Gateway</code> supplies naming, mode, configuration answers, and refusing defaults (<code>status()</code>, <code>refund()</code>, <code>refundStatus()</code> throw <code>GatewayCapabilityMissing</code>). Abstract <code>Gateways\GatewayCredentials</code> reads <code>payment.{gateway}.mode</code> and <code>payment.{gateway}.{mode}.{key}</code> from settings; an unrecognised mode means sandbox; a missing credential throws <code>GatewayUnavailable</code>.</p>
+
+    <h3>Drivers shipped</h3>
+    <table>
+        <thead><tr><th>Name (config key)</th><th>Driver</th><th>Required credential keys</th><th>Declared capabilities</th><th>Currencies</th><th>Shipped</th></tr></thead>
+        <tbody>
+        <tr><td><code>sslcommerz</code></td><td><code>SslCommerz\SslCommerzGateway</code></td><td><code>store_id</code>, <code>store_password</code></td><td>all seven</td><td>BDT</td><td>enabled by default (<code>PAYMENT_SSLCOMMERZ_ENABLED</code>)</td></tr>
+        <tr><td><code>eps</code></td><td><code>Eps\EpsGateway</code> (also <code>TestsConnection</code>)</td><td><code>base_url</code>, <code>merchant_id</code>, <code>store_id</code>, <code>username</code>, <code>password</code>, <code>hash_key</code></td><td>initiate, verify, status_query</td><td>BDT</td><td>disabled</td></tr>
+        <tr><td><code>surjopay</code></td><td><code>SurjoPay\SurjoPayGateway</code></td><td><code>username</code>, <code>password</code>, <code>prefix</code></td><td>initiate, verify</td><td>BDT</td><td>disabled</td></tr>
+        <tr><td><code>amarpay</code></td><td><code>AmarPay\AmarPayGateway</code></td><td><code>store_id</code>, <code>signature_key</code></td><td>initiate, verify, status_query</td><td>BDT</td><td>disabled</td></tr>
+        <tr><td><code>bkash</code></td><td><code>Bkash\BkashGateway</code></td><td><code>base_url</code>, <code>app_key</code>, <code>app_secret</code>, <code>username</code>, <code>password</code></td><td>initiate, verify, refund_full, refund_partial, refund_status</td><td>BDT</td><td>disabled</td></tr>
+        <tr><td><code>nagad</code></td><td><code>Nagad\NagadGateway</code></td><td><code>merchant_id</code>, <code>merchant_number</code>, <code>merchant_private_key</code>, <code>nagad_public_key</code></td><td>none</td><td>(base default BDT)</td><td>disabled; cannot be offered</td></tr>
+        <tr><td><code>stripe</code></td><td><code>Stripe\StripeGateway</code></td><td><code>secret_key</code>, <code>webhook_secret</code></td><td>all seven</td><td>USD, EUR, GBP</td><td>disabled</td></tr>
+        <tr><td><code>paypal</code></td><td><code>PayPal\PayPalGateway</code></td><td><code>client_id</code>, <code>client_secret</code>, <code>webhook_id</code></td><td>all seven</td><td>USD, EUR, GBP</td><td>disabled</td></tr>
+        </tbody>
+    </table>
+    <p>Per-driver notes that bite:</p>
+    <ul>
+        <li><strong>EPS</strong> is built from the EPS Merchant API Integration Guide v0.5 only: three calls on one host (<code>/v1/Auth/GetToken</code>, <code>/v1/EPSEngine/InitializeEPS</code>, <code>/v1/EPSEngine/CheckMerchantTransactionStatus</code>). Every request carries an <code>x-hash</code> computed here as <code>base64(hmac_sha512(data, hash_key))</code>: the hash of the username for the token call, of the merchant transaction id for the other two. Nobody pastes a hash or token. The guide documents no sandbox host and no IPN, so the base URL is a stored, validated setting (<code>EpsCredentials::baseUrl()</code>; official live host <code>https://pgapi.eps.com.bd</code>), and <code>verifyWebhookSignature()</code> refuses everything: nothing releases value except a direct status check. It needs a payer address and a numeric attempt reference (<code>PaymentIntent::attemptReference</code>, at least ten digits). Nothing sensitive is logged (never token, hash, credential, payer or payload).</li>
+        <li><strong>Stripe</strong> verifies webhooks with the <code>Stripe-Signature</code> header (<code>hash_hmac('sha256', timestamp.'.'.body, secret)</code>). <strong>PayPal</strong> verifies through PayPal's own verification endpoint using the <code>PAYPAL-TRANSMISSION-*</code> headers.</li>
+        <li><strong>Nagad</strong> is a configuration foundation only: its merchant guide is issued to registered merchants and an RSA signing scheme is not something to reconstruct, so it declares no capabilities and cannot take money.</li>
+        <li>Three providers do not sign notifications (shurjoPay's own guidance is to verify through its API). That is safe because a notification only says <em>which</em> payment to look at.</li>
+    </ul>
+    <div class="callout callout-note"><p><strong>Stale comments.</strong> The docblock of <code>PaymentGatewayManager::catalogue()</code> and a comment in <code>PaymentWebhookController</code> still say "EPS and Nagad" declare nothing. EPS now declares initiate, verify and status_query; trust <code>capabilities()</code> and <code>tests/Feature/Payment/ShippedGatewayStateTest.php</code>, not those comments.</p></div>
+
+    <h3>Registration, resolution and availability</h3>
+    <ul>
+        <li><code>config/payment.php</code> maps a name to <code>driver</code> (class), <code>enabled</code> (the <em>shipped default</em>) and <code>label</code>. A provider with an empty <code>driver</code> is listed but unimplemented.</li>
+        <li><code>PaymentGatewayManager::driver($name)</code> resolves from the container and caches per manager instance; it throws <code>InvalidArgumentException</code> for an unknown name and <code>GatewayUnavailable</code> for one with no driver. <code>names()</code> lists everything §26 names; <code>implemented()</code> those with a driver.</li>
+        <li><strong>Enabled</strong> is a setting, not config: <code>isEnabled()</code> reads <code>payment.{name}.enabled</code> and falls back to the config default, so an administrator can switch it without a deploy. A newly added provider arrives disabled.</li>
+        <li><strong>Available</strong> means implemented, able to <code>verify</code>, enabled <em>and</em> fully credentialled (<code>catalogue()</code> reports <code>is_available</code>; <code>available()</code> and <code>availableFor(Currency)</code> filter on it). No credential ever appears in the catalogue, only the names still missing.</li>
+        <li><code>scopedDriver($name, $mode, $credentials)</code> builds a fresh driver bound to a Partner's own credentials (D36) by swapping the constructor argument named <code>credentials</code> for one backed by <code>ScopedGatewaySettings</code>. It is never cached, so a Partner's driver can never become the next caller's gateway. <code>App\Domain\Billing\PartnerGatewayResolver</code> chooses: <code>activeVersionFor($website)</code> for a new attempt, <code>driverForPayment($payment)</code> for everything after, which uses the version frozen on the payment.</li>
+    </ul>
+
+    <h3>FX and exchange-rate conversion</h3>
+    <p>D4 (amended): the base ledger is Taka. <code>App\Domain\Billing\ExchangeRates</code> holds administrator-entered rates (setting <code>payment.fx.rates</code>, Taka per one unit, an exact decimal string with up to eight digits and six decimals; nothing fetches a rate). <code>PaymentGatewayManager::chargeCurrencyFor($gateway, $paymentCurrency)</code> returns the payment's own currency when the driver supports it; otherwise, for a Taka payment only, the first supported currency that has a rate; otherwise <code>null</code> and the gateway is not offered. A payment already in a foreign currency is never converted into another. Charging rounds the foreign figure <em>up</em> to the cent so Feriwala never collects less than it is owed; refunding rounds <em>down</em> so partial refunds cannot exceed what was charged. <code>conversionNotice()</code> gives the payer the currency, rate and charge before they choose. <code>PaymentIntent::amount</code> is what the gateway is asked for and <code>originalAmount</code> is the Taka amount owed. All of it is exact decimal (<code>Money</code>, bcmath), never a float.</p>
+
+    <h3>Webhooks, return URLs and idempotency</h3>
+    <table>
+        <thead><tr><th>Route</th><th>Behaviour</th></tr></thead>
+        <tbody>
+        <tr><td><code>POST /webhooks/payment/{gateway}</code> (<code>webhooks.payment</code>), <code>POST /webhooks/payment/{gateway}/{payment}</code> (<code>webhooks.partner-payment</code>)</td><td><code>Webhook\PaymentWebhookController</code>, throttled <code>payment-webhooks</code> (<code>PAYMENT_WEBHOOK_RATE_LIMIT</code>, default 120, per gateway and address). Verifies the signature where the driver has one, records a payment log row, queues <code>SettleGatewayNotification</code>, and always answers the same <code>{"message":"Acknowledged."}</code> so the endpoint cannot be used to ask which references exist. A Partner gateway's address names the payment, so its frozen version's credentials check the signature (D36).</td></tr>
+        <tr><td>Return routes <code>checkout.return</code>, <code>checkout.cancelled</code>, <code>checkout.failed</code>; <code>website-orders.payment.return|cancelled|failed</code></td><td>Where the payer is sent back; they settle nothing. A gateway that POSTs the payer back reaches a stateless receiver first.</td></tr>
+        </tbody>
+    </table>
+    <p><code>Billing\Jobs\SettleGatewayNotification</code> runs on queue <code>PAYMENT_QUEUE</code> (default <code>payments</code>), 5 tries, backoff 30 s, 2 min, 10 min, 30 min. It is safe to run twice: <code>SettlePayment</code> takes a distributed lock and re-reads the payment inside it, returns early if already settled, and the job uses <code>WithoutOverlapping</code>. The retry schedule is ours, not the provider's. <code>GatewayNavigation</code> sends the payer to the gateway via <code>Inertia::location()</code> (a <code>302</code> would be followed by the XHR and fail on CORS) and refuses a redirect that is malformed, not https (except a local stub), or has embedded credentials.</p>
+    <p>Money invariants apply: every amount is a <code>Money</code> object; a payment that settles posts a ledger entry through the Billing and Wallet Actions in a transaction with locking and an idempotency key. See <a href="../modules/billing.html">Billing</a> and <a href="../modules/wallet.html">Wallet</a>.</p>
+
+    <h3>Adding a payment gateway</h3>
+    <ol>
+        <li>Create <code>app/Integrations/Payment/Gateways/&lt;Name&gt;/&lt;Name&gt;Credentials.php</code> extending <code>GatewayCredentials</code>: <code>gateway()</code> returns the config name and <code>requiredKeys()</code> returns the credential key names.</li>
+        <li>Create <code>&lt;Name&gt;Gateway.php</code> extending <code>Gateway</code>. The constructor must take the credentials object as a parameter literally named <code>credentials</code> and typed to your subclass, or <code>scopedDriver()</code> (Partner gateways) cannot rebind it. Implement <code>credentials()</code>, <code>capabilities()</code> and each declared operation; call <code>requireConfigured()</code> before dialling out. Override <code>supportedCurrencies()</code> if not BDT.</li>
+        <li>Declare in <code>capabilities()</code> only what you implemented against the provider's own documentation. No <code>Verify</code> capability means the gateway can never be offered.</li>
+        <li>Add an entry to <code>config/payment.php</code> with <code>driver</code>, <code>enabled =&gt; false</code> and <code>label</code>.</li>
+        <li>Never touch <code>PaymentWebhookController</code> or the settlement flow; they know no provider names. Map the provider's status vocabulary onto <code>GatewayOutcome</code> in the driver.</li>
+        <li>Add <code>tests/Feature/Payment/&lt;Name&gt;GatewayTest.php</code> modelled on an existing one, and update <code>ShippedGatewayStateTest</code> (it pins every gateway's shipped state and will fail until you do, deliberately). Check <code>GatewayConfigurationTest</code> too.</li>
+        <li>Credentials are entered by an administrator at Admin, gateways (<code>PaymentGatewayController</code>); the screen renders its fields from <code>requiredConfiguration()</code>. Whether the screen needs any per-gateway label strings is not verified.</li>
+    </ol>
+    <p>Testing: <code>Http::fake()</code> for provider calls (note that <code>Http::fake()</code> merges stubs; <code>GatewayFlowTest</code> explains the trap), <code>Queue::fake()</code> for settlement, and settings fixtures for credentials. Run with <code>vendor/bin/pest tests/Feature/Payment</code> or <code>--group=payment</code>.</p>
+
+    <h2>SMS</h2>
+    <p>Location: <code>app/Integrations/Sms</code> (§30). The contract is <code>Contracts\SmsProvider</code>: <code>send(SmsMessage): SmsResult</code>, <code>balance(): ?string</code>, <code>name()</code>, <code>isConfigured()</code>, <code>requiredConfiguration()</code>, <code>missingConfiguration()</code>. <code>SmsMessage</code> carries <code>to</code>, <code>body</code>, <code>Locale</code>, <code>event</code> and <code>userId</code>, and knows its <code>segments()</code> (Bangla is UCS-2, 70 characters per segment instead of 160). <code>SmsResult</code> has three shapes: <code>accepted($reference, $cost)</code>, <code>rejected($error, $code)</code> (will refuse again: bad number, no balance) and <code>failed($error, $code)</code> (transient; <code>retryable = true</code>). A provider must not throw for a provider-side rejection.</p>
+    <table>
+        <thead><tr><th>Name</th><th>Driver</th><th>Notes</th></tr></thead>
+        <tbody>
+        <tr><td><code>log</code> (default)</td><td><code>Providers\LogSmsProvider</code></td><td>Writes to the <code>sms</code> log channel; recipient masked; the body is withheld in production because it is where one-time codes travel.</td></tr>
+        <tr><td><code>gennet</code></td><td><code>Providers\GenNet\GenNetSmsProvider</code></td><td>Required keys <code>base_url</code> (must be https), <code>api_token</code>, <code>sid</code>; timeout <code>SMS_GENNET_TIMEOUT</code> (20 s). <code>GenNetStatusCode</code> maps its codes.</td></tr>
+        <tr><td><code>bulksmsbd</code>, <code>novasms</code>, <code>sslcommerz</code>, <code>twilio</code></td><td>none (<code>driver</code> is null)</td><td>Declared in config, shown in the admin catalogue as known but unbuilt.</td></tr>
+        </tbody>
+    </table>
+    <p><strong>Resolution.</strong> <code>SmsProviderManager::driver(?string $name)</code> returns a named driver or the active one. <code>active()</code> reads setting <code>sms.provider</code>, then <code>SMS_PROVIDER</code> (default <code>log</code>), and ignores a chosen provider that has no driver. <code>isEnabled()</code> is the global switch (setting <code>sms.enabled</code>, then <code>SMS_ENABLED</code>); <code>canSend()</code> needs it on, an implemented active provider, and credentials present. <code>SmsServiceProvider</code> binds <code>SmsProvider</code> through the manager (not a singleton, so a provider switch takes effect without a worker restart) and registers <code>sms</code> as a notification channel. Per-event switches live beside the notifications (<code>SmsEventSwitch</code>).</p>
+    <p><strong>Credentials.</strong> <code>SmsCredentials</code> reads <code>sms.{provider}.{key}</code> from settings, encrypted, with no sandbox/live split. <code>SmsGateway</code> is the abstract base mirroring <code>Gateway</code>.</p>
+    <p><strong>Delivery.</strong> <code>Notification\Jobs\DeliverSmsMessage</code> on queue <code>SMS_QUEUE</code> (default <code>sms</code>), 3 tries, backoff 60 s then 300 s, retrying only <code>retryable</code> results; a rejection is recorded and left alone. Turning SMS off also stops what is already queued.</p>
+    <h3>Adding an SMS provider</h3>
+    <ol>
+        <li>Add <code>&lt;Name&gt;Credentials</code> extending <code>SmsCredentials</code> (<code>provider()</code>, <code>requiredKeys()</code>; override <code>missing()</code> for extra validation as GenNet does for the https base address).</li>
+        <li>Add <code>&lt;Name&gt;SmsProvider</code> extending <code>SmsGateway</code>; implement <code>send()</code> returning an <code>SmsResult</code>, never throwing for a rejection; call <code>requireConfigured()</code> first.</li>
+        <li>Set the entry's <code>driver</code> in <code>config/sms.php</code> (replace the null).</li>
+        <li>Tests: copy <code>GenNetSmsProviderTest</code> (<code>Http::fake()</code>, settings for credentials; <code>tests/Feature/Notification/</code>). The settings screen is <code>Admin\SmsController</code>; credentials are saved by <code>ConfigureSmsCredentials</code>.</li>
+    </ol>
+
+    <h2>Courier</h2>
+    <p>Location: <code>app/Integrations/Courier</code> (§21, D8). The contract <code>Contracts\CourierProvider</code>: <code>createShipment(Shipment)</code>, <code>requestPickup(Shipment)</code>, <code>fetchTrackingStatus(Shipment): ?OrderCourierStatus</code>, <code>cancelShipment(Shipment)</code>, <code>verifyWebhookSignature(Request): bool</code>, <code>code(): CourierProviderCode</code>. <code>CourierProviderCode</code> has <code>manual</code>, <code>steadfast</code> and <code>pathao</code>; <code>pathao</code> has no driver.</p>
+    <table>
+        <thead><tr><th>Code</th><th>Driver</th><th>Behaviour</th></tr></thead>
+        <tbody>
+        <tr><td><code>manual</code></td><td><code>Drivers\ManualCourierDriver</code></td><td>No outbound calls: a person enters the tracking number and advances status; the shipment row is the record.</td></tr>
+        <tr><td><code>steadfast</code></td><td><code>Drivers\SteadfastCourierDriver</code> with <code>Steadfast\SteadfastClient</code>, <code>SteadfastCredentials</code>, <code>SteadfastStatus</code></td><td>Booking happens in <code>BookSteadfastShipment</code> <em>before</em> a shipment row exists (a network call must not run inside the creating transaction), so <code>createShipment()</code> does nothing. <code>requestPickup()</code> and <code>cancelShipment()</code> throw <code>UnsupportedCourierOperation</code> (no such endpoints are documented). Webhook auth is <code>Authorization: Bearer &lt;token&gt;</code> compared whole, in constant time, failing closed.</td></tr>
+        <tr><td><code>pathao</code></td><td>none</td><td>Seeded as a disabled, credential-less provider row.</td></tr>
+        </tbody>
+    </table>
+    <p><strong>Registry.</strong> <code>config/courier.php</code> maps <code>drivers</code> (<code>manual</code> and <code>steadfast</code>) to classes. <code>CourierManager::driver(CourierProviderCode)</code> resolves from the container and throws for a code with no driver. Unlike payment, <em>enabled</em> is the seeded <code>courier_providers.is_enabled</code> row (<code>isEnabled()</code>), and <code>isAvailable()</code> means implemented and enabled. <code>catalogue()</code> lists every provider so the UI can name an unreachable one.</p>
+    <p><strong>Steadfast credentials</strong> are settings keys <code>courier.steadfast.api_key</code>, <code>secret_key</code>, <code>webhook_token</code>, <code>base_url</code> (plus last-test markers). The base address is validated on every read: https only, and in production the host must be in <code>courier.steadfast.allowed_hosts</code> (<code>portal.steadfast.com.bd</code>), an SSRF guard for an administrator-typed value. Timeouts and polling are in <code>config/courier.php</code> (<code>connect_timeout</code> 5, <code>timeout</code> 20, poll batch 50, interval 600 s, error interval 1800 s).</p>
+    <p><strong>Webhook.</strong> <code>POST /webhooks/courier/steadfast</code> (<code>webhooks.courier.steadfast</code>, <code>Webhook\SteadfastWebhookController</code>): bearer check first, then a 16 KB body cap, JSON only, five validated fields (<code>consignment_id</code>, <code>invoice</code>, <code>status</code>, <code>cod_amount</code>, <code>updated_at</code>), then <code>ReceiveSteadfastWebhook</code>. The body is never logged or stored; an unmatched or duplicate event answers like a processed one so the endpoint cannot be used to probe invoices. The token is rotated at <code>admin</code> route <code>courier.steadfast.webhook-token</code> (throttle 6 a minute).</p>
+    <div class="callout callout-note"><p><strong>Stale comment.</strong> The header of <code>config/courier.php</code> still says only <code>manual</code> has a driver and Steadfast has no entry; the file itself maps <code>steadfast</code>. The code is right.</p></div>
+    <h3>Adding a courier</h3>
+    <ol>
+        <li>Add a case to <code>CourierProviderCode</code> (with label) and a seeded <code>courier_providers</code> row via a migration.</li>
+        <li>Write the driver implementing <code>CourierProvider</code>. Refuse operations the provider does not offer by throwing <code>UnsupportedCourierOperation</code> rather than pretending.</li>
+        <li>Register it under <code>drivers</code> in <code>config/courier.php</code>. Put credentials in settings, never config.</li>
+        <li>If the provider calls back, add a controller that authenticates before reading the body, caps its size, and answers thinly. Add a route under <code>webhooks/courier/</code>.</li>
+        <li>Tests under <code>tests/Feature/Courier/</code> (<code>Http::fake()</code>; see <code>SteadfastBookingTest</code>, which also covers the "uncertain booking is never booked again blind" case). Run <code>vendor/bin/pest --group=courier</code>.</li>
+    </ol>
+
+    <h2>Store platforms</h2>
+    <p>Location: <code>app/Integrations/Store</code> (D29). Full behaviour is in <a href="../modules/external-store.html">External store</a>; this section is the driver layer.</p>
+    <p><strong>Contract.</strong> <code>Contracts\StorePlatformDriver</code>: <code>verify(StoreEndpoint)</code>, <code>fetchOrders(StoreEndpoint, int $sinceId, ?CarbonImmutable $updatedSince): StoreOrderPage</code>, <code>signatureIsValid(rawBody, lowercased headers, secret)</code>, <code>webhookEventId(headers)</code>, <code>readWebhook(payload): StoreWebhook</code>, <code>webhookEvents()</code>. Read-only by design: nothing writes to a store.</p>
+    <p><strong>Resolution.</strong> <code>StorePlatformManager::driver(StorePlatform)</code> is a <code>match</code> on the enum; the only case is <code>Dfcommerce</code> to <code>DfcommerceDriver</code>. <code>StoreServiceProvider</code> binds <code>HostResolver</code> to <code>DnsHostResolver</code>.</p>
+    <p><strong>DFCOMMERCE driver.</strong> <code>GET {base}/api/v1/orders?since_id=&amp;updated_since=&amp;limit=</code> answered with <code>{ok, data, paging:{next_since_id}}</code> (page size 100); credentials in <code>X-API-Key</code> and <code>X-API-Secret</code>; no ping endpoint, so <code>verify()</code> reads one order (which also proves the <code>orders.read</code> scope); notifications signed <code>X-Webhook-Signature: sha256=&lt;hmac of the raw body&gt;</code> with id in <code>X-Webhook-Event-Id</code>; events <code>order.placed</code>, <code>order.updated</code>, <code>order.cancelled</code>, <code>order.refunded</code>, <code>payment.received</code>. Failures become <code>StorePlatformException</code> with a message written in our code, never copied from the store.</p>
+    <h3>OutboundAddressGuard (SSRF protection)</h3>
+    <p><code>Support\OutboundAddressGuard</code> keeps calls to partner-supplied addresses off Feriwala's own network. <code>addressFor($host)</code> resolves through <code>HostResolver</code> (A and AAAA via <code>dns_get_record</code>; an IP literal resolves to itself), throws <code>StorePlatformException::unreachable()</code> if nothing resolves, requires <strong>every</strong> returned address to be public (<code>isPublic()</code>: PHP's no-private and no-reserved flags, IPv4-mapped IPv6 judged as the IPv4 it is, carrier-grade NAT <code>100.64.0.0/10</code> refused), throws <code>addressRefused()</code> otherwise, and returns the first address. The caller then <em>pins</em> the request to that address with <code>CURLOPT_RESOLVE</code>, disables redirects and sets short timeouts, so a DNS answer that changes between check and request cannot reach anywhere else. <code>Support\StoreAddress::parse()</code> accepts only <code>https</code> with a host and no embedded credentials, and reduces an address to the comparable <code>host[:port]</code>.</p>
+    <p>The same guard protects the <a href="../modules/website.html">Website</a> webhook sender (<code>ManageWebhookEndpoint</code> at save time, <code>AttemptWebhookDelivery</code> before every attempt). Anything in the ERP that calls an address a user typed must go through it.</p>
+    <h3>Adding a store platform</h3>
+    <p>Follow "Add a platform" on the <a href="../modules/external-store.html">External store</a> page: new <code>StorePlatform</code> case plus CHECK-constraint migration, a driver class using the guard and <code>ExactJson</code>, a new arm in <code>StorePlatformManager</code>. Test with <code>Http::fake()</code> and <code>externalStoreFakeDns()</code> from <code>tests/Pest.php</code>, which binds <code>HostResolver</code> to a stub returning a public address.</p>
+
+    <h2>DNS</h2>
+    <p>Location: <code>app/Integrations/Dns</code>. <code>Contracts\TxtRecordResolver::txtRecords(string $name): list&lt;string&gt;</code> returns the TXT strings at a name, unquoted, and throws <code>Exceptions\DnsLookupFailed</code> when the lookup itself could not be made. <code>SystemTxtRecordResolver</code> uses <code>dns_get_record($name, DNS_TXT)</code> and joins split strings. It is bound as a singleton in <code>WebsiteServiceProvider</code>. A failed lookup is never read as "no record": the caller must neither mark a domain verified nor demote it. Its one consumer is custom-domain verification in <code>ManageWebsiteDomainRouting</code> (record <code>_banij-verify.&lt;domain&gt;</code>). Note this is separate from <code>HostResolver</code> (A/AAAA for the outbound guard). Tests bind <code>TxtRecordResolver</code> to a fake that states what the DNS holds (see <code>WebsiteDomainRoutingTest</code>).</p>
+
+    <h2>Storage</h2>
+    <p>Location: <code>app/Integrations/Storage/R2Manager.php</code>, with the domain side in <code>app/Domain/Storage</code> (see <a href="../modules/storage.html">Storage</a>). Cloudflare R2 is reached as an S3-compatible disk built on demand: <code>R2Manager::diskConfig()</code> returns an <code>s3</code> disk config (region defaults to <code>auto</code>, path-style endpoint, the public domain as <code>url</code>, <code>throw = true</code>), <code>disk()</code> builds it with <code>Storage::build()</code> (so rotating a credential takes effect on the next call, with no config cache to clear), and <code>testConnection()</code> does a real round trip (listing the bucket root, which fails on a bad key, secret or bucket) and returns <code>R2ConnectionTestResult</code>, with <code>AWS4-HMAC-SHA256</code> and <code>Authorization</code> fragments stripped from any error before it reaches a screen or audit log.</p>
+    <p>Credentials come from <code>R2StorageSettings</code> (entered under Settings, Storage, encrypted at rest), not from <code>config/filesystems.php</code>'s static <code>s3</code> disk or <code>AWS_*</code> variables, which remain only an emergency fallback a deploy can use. <code>ManagedStorage::diskFor(StorageVisibility)</code> and <code>diskForLocal($name)</code> are the one fork: R2 when <code>R2StorageSettings::isAvailable()</code>, otherwise the local <code>public</code>, <code>private</code>, <code>kyc</code> or <code>supplier-media</code> disk (<code>FILESYSTEM_DISK</code>, <code>KYC_DISK_DRIVER</code>, <code>SUPPLIER_MEDIA_DISK_DRIVER</code>, <code>PRIVATE_DISK_DRIVER</code> in <code>config/filesystems.php</code>). Nothing already written is moved when R2 is switched on; <code>MigrateManagedFileToR2</code> and <code>RunStorageMigration</code> do that. Each file's row (<code>stored_files</code>) records its own disk, so product media URLs resolve from the row's disk.</p>
+    <p>There is no contract to implement here: to support another object store, extend <code>R2Manager</code>'s role (a new manager building another disk) and teach <code>ManagedStorage</code> to choose it; raise it for approval first. Test with <code>Storage::fake()</code> and the R2 settings fixtures in <code>tests/Feature/Storage</code>.</p>
+
+    <h2>Security and operations checklist for any integration</h2>
+    <ul>
+        <li>Anything an administrator or partner can type that the ERP will call must pass an outbound guard (<code>OutboundAddressGuard</code>, or an allow-list host as Steadfast does) and disable redirects.</li>
+        <li>Inbound webhooks authenticate before parsing, compare in constant time, cap body size where the provider allows, deduplicate on the provider's event id, and answer identically for known and unknown references.</li>
+        <li>Slow work goes to a queue (<code>payments</code>, <code>sms</code>, <code>webhooks</code>, <code>stores</code>/<code>default</code>); make sure a worker listens on each queue name you add or the work silently never runs.</li>
+        <li>Never log a token, signature, credential or payload. Reuse <code>PaymentLogRedactor</code> where headers are recorded.</li>
+        <li>Money from a provider is parsed as an exact decimal string and never passes through a float.</li>
+    </ul>
+
+    <h2>Related</h2>
+    <ul>
+        <li><a href="../modules/billing.html">Billing</a>, <a href="../modules/wallet.html">Wallet</a>: payment settlement.</li>
+        <li><a href="../modules/notification.html">Notification</a>: SMS events and delivery.</li>
+        <li><a href="../modules/courier.html">Courier</a>, <a href="../modules/website.html">Website</a>, <a href="../modules/external-store.html">External store</a>, <a href="../modules/storage.html">Storage</a>.</li>
+        <li><a href="../guide/testing.html">Testing</a>, <a href="../guide/architecture.html">Architecture</a>.</li>
+    </ul>
+</main>
+</body>
+</html>

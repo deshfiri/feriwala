@@ -45,23 +45,23 @@ function purchaseToApiIssue(Website $website): array
     $environment = [];
 
     foreach (preg_split('/\R/', (string) $response->json('env')) as $line) {
-        if (preg_match('/^(BANIJ_[A-Z_]+)=(.*)$/', $line, $match) === 1) {
+        if (preg_match('/^((?:ERP_BASE_URL|STORE_ID|STORE_TOKEN))=(.*)$/', $line, $match) === 1) {
             $environment[$match[1]] = $match[2];
         }
     }
 
-    $credential = WebsiteCredential::query()->where('key_id', $environment['BANIJ_CREDENTIAL_KEY_ID'] ?? '')->firstOrFail();
+    $credential = WebsiteCredential::query()->where('key_id', $environment['STORE_ID'] ?? '')->firstOrFail();
 
-    return [$credential, $environment['BANIJ_CREDENTIAL_SECRET'] ?? '', $environment];
+    return [$credential, $environment['STORE_TOKEN'] ?? '', $environment];
 }
 
 it('takes a paid wholesale purchase to the right storefront through the signed API', function () {
     [$credential, $secret, $environment] = purchaseToApiIssue($this->website);
 
     // B: the three values the operator copies, exactly as the storefront reads them.
-    expect(array_keys($environment))->toBe(['BANIJ_ERP_BASE_URL', 'BANIJ_CREDENTIAL_KEY_ID', 'BANIJ_CREDENTIAL_SECRET'])
-        ->and($environment['BANIJ_CREDENTIAL_KEY_ID'])->toMatch('/^wsk_[0-9A-Z]{26}$/')
-        ->and($environment['BANIJ_CREDENTIAL_SECRET'])->toMatch('/^[0-9a-f]{64}$/')
+    expect(array_keys($environment))->toBe(['ERP_BASE_URL', 'STORE_ID', 'STORE_TOKEN'])
+        ->and($environment['STORE_ID'])->toMatch('/^wsk_[0-9A-Z]{26}$/')
+        ->and($environment['STORE_TOKEN'])->toMatch('/^[0-9a-f]{64}$/')
         ->and($credential->website_id)->toBe($this->website->id);
 
     // Before the purchase there is nothing to sell.

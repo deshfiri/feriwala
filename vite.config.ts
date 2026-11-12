@@ -83,6 +83,11 @@ export default defineConfig({
             'composer.json',
             'resources/js/components/ui/*',
             'resources/views/mail/*',
+            // The developer documentation: hand-written static pages with their own shell.
+            'docs/**/*.html',
+            'docs/assets/**',
+            // Generated export of the bd_locations table.
+            'bd-locations.json',
             // Tooling files owned by their generators, not by our style config.
             '.claude/**',
             '.devcontainer/**',

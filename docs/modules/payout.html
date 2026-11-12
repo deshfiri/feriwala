@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Payout methods</title>
+    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+    <script src="../assets/docs.js"></script>
+</head>
+<body>
+<main id="doc">
+    <h1>Payout methods</h1>
+    <p class="lead">Where a Supplier or a Client/Partner business is paid out: a bank account, bKash or Nagad. One shared, owner-polymorphic table with encrypted details. A withdrawal snapshots a method at request time.</p>
+
+    <h2>Purpose</h2>
+    <p>D25 (P13-24, the Shared Payout Methods batch) generalised the Supplier-only payout method into one table used by both owner kinds. Business accounts manage their own methods on the ERP side; Suppliers on the Supplier portal. There is no staff screen for them. Spec §27, §31.3.</p>
+
+    <h2>Where it lives</h2>
+    <table>
+        <thead><tr><th>Path</th><th>Role</th></tr></thead>
+        <tbody>
+            <tr><td><code>app/Domain/Payout/Models/PayoutMethod.php</code></td><td>The model.</td></tr>
+            <tr><td><code>app/Domain/Payout/Enums/</code></td><td><code>PayoutMethodType</code>, <code>PayoutMethodStatus</code>, <code>PayoutOwnerType</code>, <code>BankAccountType</code>.</td></tr>
+            <tr><td><code>app/Domain/Payout/Actions/</code></td><td><code>SavePayoutMethod</code>, <code>ArchivePayoutMethod</code>, <code>SetDefaultPayoutMethod</code>.</td></tr>
+            <tr><td><code>app/Domain/Payout/Queries/PayoutMethodsForOwner.php</code>, <code>Data/PayoutMethodSnapshot.php</code>, <code>Policies/PayoutMethodPolicy.php</code>, <code>Exceptions/PayoutMethodRefused.php</code></td><td>Reads, snapshot, policy.</td></tr>
+            <tr><td><code>app/Http/Controllers/Erp/PayoutMethodController.php</code>, <code>Supplier/PayoutMethodController.php</code>, <code>Api/Mobile/V1/PayoutMethods/</code>, <code>Api/Mobile/V1/Supplier/PayoutMethods/</code></td><td>Entry points.</td></tr>
+            <tr><td><code>resources/js/pages/erp/payout-methods/</code> (index, payout-method-dialog, archive-payout-method-dialog); <code>supplier/payout-methods/</code></td><td>Pages.</td></tr>
+            <tr><td><code>lang/en/payout.php</code></td><td>Strings.</td></tr>
+            <tr><td><code>database/migrations/2026_10_11_120000_generalize_payout_methods.php</code></td><td>Table, constraints, triggers.</td></tr>
+            <tr><td><code>tests/Feature/Payout/PayoutMethodTest.php</code></td><td>Tests.</td></tr>
+        </tbody>
+    </table>
+
+    <h2>Key terms</h2>
+    <dl>
+        <dt>Owner</dt>
+        <dd><code>owner_type</code> (<code>business_account</code> or <code>supplier</code>) plus <code>owner_id</code>. The owner cannot change after creation.</dd>
+        <dt>Details</dt>
+        <dd>Sensitive fields, encrypted at rest and hidden from serialisation. Bank account: account holder name, account number, account type; bKash and Nagad: holder name and number. The bank and branch are real foreign keys, not inside the blob.</dd>
+        <dt>Last four, masked number</dt>
+        <dd>The only form of the number that reaches a screen (the bullets glyph plus the last four digits).</dd>
+        <dt>Fingerprint</dt>
+        <dd>A keyed HMAC-SHA256 (app key) of owner, type and the whitespace-stripped number. Used only to refuse the same account twice for one owner.</dd>
+    </dl>
+
+    <h2>Data model</h2>
+    <table>
+        <thead><tr><th>Column</th><th>Meaning</th></tr></thead>
+        <tbody>
+            <tr><td><code>public_id</code>, <code>owner_type</code>, <code>owner_id</code></td><td>Identity and owner. URLs use the public id.</td></tr>
+            <tr><td><code>type</code> (<code>bank_account</code>, <code>bkash</code>, <code>nagad</code>), <code>label</code></td><td>Kind and display label.</td></tr>
+            <tr><td><code>bd_bank_id</code>, <code>bd_bank_branch_id</code></td><td>Set only for bank accounts (<code>requiresBankBranch()</code>); a check ties them to the type.</td></tr>
+            <tr><td><code>details</code></td><td><code>encrypted:array</code>, in <code>$hidden</code>.</td></tr>
+            <tr><td><code>last_four</code>, <code>fingerprint</code></td><td>Clear last four; keyed hash.</td></tr>
+            <tr><td><code>is_default</code>, <code>status</code> (<code>active</code> or <code>archived</code>)</td><td>At most one active default per owner (partial unique index).</td></tr>
+            <tr><td><code>verified_at</code>, <code>verified_by</code></td><td>Cleared whenever an update saves a changed number. I found no action that sets them.</td></tr>
+        </tbody>
+    </table>
+    <p>Guarantees from the migration: checks <code>payout_methods_type_known</code>, <code>_status_known</code>, <code>_owner_type_known</code>, <code>_bank_fields_match_type</code>; unique index <code>payout_methods_fingerprint_unique_per_owner</code>; trigger <code>payout_methods_locked_owner</code> (owner columns immutable); trigger <code>payout_methods_never_deleted</code>. Methods are archived, never deleted. Account and Supplier withdrawals reference this table by foreign key.</p>
+
+    <h2>States &amp; lifecycle</h2>
+    <p><code>PayoutMethodStatus</code>: <code>active</code> may move to <code>archived</code>; <code>archived</code> is terminal. Archiving also clears <code>is_default</code>. A default can only be an active method.</p>
+
+    <h2>Actions &amp; workflows</h2>
+    <table>
+        <thead><tr><th>Class</th><th>Purpose</th></tr></thead>
+        <tbody>
+            <tr><td><code>SavePayoutMethod::handle(ownerType, ownerId, type, label, details, bankId, branchId, makeDefault, ?existing)</code></td><td>Create or update. Ownership is a parameter: the controller resolves the owner from its own guard. Derives last four and fingerprint, refuses a duplicate active account for the owner (checked, and caught again from the unique index), saves in a transaction under lock for updates, audits <code>payout_method.created</code> or <code>.updated</code> (sensitive; stores type and last four only). An update clears verification. Optionally sets default.</td></tr>
+            <tr><td><code>SetDefaultPayoutMethod</code></td><td>Locks the method, refuses an archived one, clears the owner's other defaults, sets this one.</td></tr>
+            <tr><td><code>ArchivePayoutMethod</code></td><td>Transition to archived through <code>transitionTo()</code>, audit <code>payout_method.archived</code>.</td></tr>
+            <tr><td><code>PayoutMethodsForOwner</code> (query)</td><td><code>forOwner()</code> and <code>findForOwner()</code> filter by owner type, id and public id, default first.</td></tr>
+        </tbody>
+    </table>
+    <p>The account-side controller validates <code>type</code> (enum), <code>label</code> (max 80), <code>details</code> as an array of strings (max 120), bank code and routing number required for bank accounts, and requires <code>current_password</code> to save and archive. Bank and branch come from the bank directory lookups (<code>banks.index</code>, <code>banks.branches</code>; see <a href="bank.html">Bank</a>).</p>
+    <p>A withdrawal calls <code>PayoutMethod::toSnapshot()</code> once, at request time (<code>PayoutMethodSnapshot</code>: public id, type, label, masked number, bank, branch, district, routing number). It never stores the raw details.</p>
+
+    <h2>Entry points</h2>
+    <table>
+        <thead><tr><th>Name</th><th>Method and URL</th><th>Controller</th></tr></thead>
+        <tbody>
+            <tr><td><code>payout-methods.index|store|update|default|archive</code></td><td>GET, POST <code>/payout-methods</code>; PUT <code>/{method}</code>; POST <code>/{method}/default</code>, <code>/{method}/archive</code></td><td><code>Erp\PayoutMethodController</code> (inside <code>business.activated</code>)</td></tr>
+            <tr><td><code>payout-methods.*</code> in <code>routes/supplier.php</code> (index, store, update, default, archive; name prefix of the file not verified)</td><td>same shapes on the Supplier portal</td><td><code>Supplier\PayoutMethodController</code></td></tr>
+            <tr><td><code>mobile.v1.payout-methods.index|store|update|default|archive</code></td><td>under <code>/api/mobile/v1/payout-methods</code>, <code>mobile.activated</code></td><td><code>Api\Mobile\V1\PayoutMethods\PayoutMethodController</code> (a Supplier variant exists under <code>routes/mobile/supplier</code>)</td></tr>
+        </tbody>
+    </table>
+
+    <h2>Permissions &amp; scoping</h2>
+    <p><code>PayoutMethodPolicy</code> (business side): any user with a business account may view their own; create, update, archive and set default need "runs the business" (<code>AccountPermission::UpdateAccount</code>); a method is reachable only if owned by the user's account. The Supplier side is not routed through a policy: every query is scoped to the signed-in Supplier's own guard, which already isolates suppliers. Self-scoping is in the query (<code>findForOwner</code>), so a borrowed public id finds nothing (§31.3).</p>
+
+    <h2>Money, ledger &amp; audit effects</h2>
+    <p>None directly. Audit actions: <code>payout_method.created</code>, <code>.updated</code>, <code>.archived</code>, all sensitive, with <code>accountId</code> set to the owner id.</p>
+
+    <h2>Configuration</h2>
+    <p>None. The fingerprint uses the application encryption key (<code>Crypt::getKey()</code>); rotating that key invalidates duplicate detection for existing methods.</p>
+
+    <h2>Rules, invariants &amp; gotchas</h2>
+    <ul>
+        <li>Never log, return or render <code>details</code>; use <code>maskedNumber()</code>. Never decrypt the fingerprint.</li>
+        <li>Editing a method does not change withdrawals already made against it (snapshot).</li>
+        <li>A changed number clears verification because it is no longer the verified number.</li>
+        <li>The duplicate rule is among <em>active</em> methods of the same owner and type; archive then re-add is allowed.</li>
+        <li>In <code>accountId:</code> of the audit entry the code passes <code>$ownerId</code> for either owner kind, so for a Supplier that is a supplier id, not a business account id.</li>
+    </ul>
+
+    <h2>How to&hellip;</h2>
+    <h3>Add a payout method type</h3>
+    <ol>
+        <li>Add the case to <code>PayoutMethodType</code> with <code>label()</code>, <code>detailFields()</code>, <code>requiresBankBranch()</code>.</li>
+        <li>Widen the <code>payout_methods_type_known</code> check (and bank-fields check if relevant) in a new migration.</li>
+        <li>Update the controller validation (both owner sides and mobile), the dialog in <code>payout-method-dialog.tsx</code>, lang strings, and the snapshot if it needs new fields.</li>
+    </ol>
+
+    <h2>Testing</h2>
+    <p><code>vendor/bin/pest tests/Feature/Payout</code> (group <code>payout</code>), own schema. <code>PayoutMethodTest</code> covers the module; withdrawal tests exercise snapshots.</p>
+
+    <h2>Related modules</h2>
+    <ul>
+        <li><a href="withdrawal.html">Withdrawal</a>, <a href="supplier.html">Supplier</a>, <a href="bank.html">Bank</a>, <a href="account.html">Account</a>.</li>
+    </ul>
+</main>
+</body>
+</html>

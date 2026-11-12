@@ -88,6 +88,11 @@ class ApiServiceProvider extends ServiceProvider
             return [$label($segments[0]).' · '.$label($segments[1])];
         }
 
+        // Wholesale spans three flows; each gets its own group so the cart is easy to find.
+        if ($segments[0] === 'wholesale' && isset($segments[1])) {
+            return [$label($segments[0]).' · '.$label($segments[1])];
+        }
+
         return [$label($segments[0])];
     }
 

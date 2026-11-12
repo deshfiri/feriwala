@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Settings module</title>
+    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+    <script src="../assets/docs.js"></script>
+</head>
+<body>
+<main id="doc">
+    <h1>Settings module</h1>
+    <p class="lead">Typed, admin-editable platform settings stored in one table behind a cached repository, plus the branding feature (logo, favicon and four colours) built on top of it.</p>
+
+    <h2>Purpose</h2>
+    <p>Much of the specification is "the admin can configure X": thresholds, toggles, deadlines. Those live in the <code>settings</code> table and are read through <code>SettingsRepository</code>. Anything with scope precedence, effective dates or history (commission, deposit, withdrawal and referral rules) does <strong>not</strong> belong here; it gets its own rule table resolved by <code>App\Support\Rules\RuleResolver</code> (the migration says so). Branding is the visual direction in CLAUDE.md: a neutral warm-grey surface, near-black actions, one admin-selectable accent from which every <code>--brand-*</code> token derives.</p>
+
+    <h2>Where it lives</h2>
+    <table>
+        <thead><tr><th>Path</th><th>Role</th></tr></thead>
+        <tbody>
+        <tr><td><code>app/Domain/Settings/SettingsRepository.php</code></td><td>Read, write, define, cache</td></tr>
+        <tr><td><code>app/Domain/Settings/Models/Setting.php</code>, <code>Enums/SettingType.php</code></td><td>Row and typing</td></tr>
+        <tr><td><code>app/Domain/Settings/Branding.php</code>, <code>AccentColor.php</code>, <code>Enums/BrandingAsset.php</code></td><td>Resolved brand assets and colours</td></tr>
+        <tr><td><code>app/Domain/Settings/Actions/ManageBranding.php</code>, <code>Policies/BrandingPolicy.php</code></td><td>Writes; authority</td></tr>
+        <tr><td><code>app/Http/Controllers/Admin/BrandingController.php</code></td><td>Screen</td></tr>
+        <tr><td><code>app/Http/Middleware/HandleInertiaRequests.php</code></td><td>Shares the <code>branding</code> prop (<code>$this-&gt;branding-&gt;toArray()</code>)</td></tr>
+        <tr><td><code>resources/js/pages/admin/branding.tsx</code>, <code>resources/css/app.css</code></td><td>UI and tokens</td></tr>
+        <tr><td><code>lang/{en,bn}/branding.php</code>, <code>settings.php</code></td><td>Labels</td></tr>
+        <tr><td><code>database/migrations/2026_09_01_110100_create_settings_table.php</code></td><td>Schema</td></tr>
+        <tr><td><code>tests/Feature/Settings/</code></td><td><code>BrandingTest</code>, <code>SettingsCacheTest</code>, plus account-settings tests (<code>ProfileUpdateTest</code>, <code>SecurityTest</code>, <code>SessionHistoryTest</code>, <code>SettingsIndexRedirectTest</code>)</td></tr>
+        </tbody>
+    </table>
+    <p>The <code>tests/Feature/Settings</code> directory also holds tests for the user's own profile and security screens, which are not this module.</p>
+
+    <h2>Key terms</h2>
+    <dl>
+        <dt>Setting</dt><dd>A row with a unique dotted <code>key</code> (e.g. <code>kyc.deadline_days</code>), a <code>group</code>, a text <code>value</code> and a <code>type</code>.</dd>
+        <dt>Define</dt><dd>Introduce a setting (key, group, type, default, flags). Writing requires it to exist.</dd>
+        <dt>Public setting</dt><dd><code>is_public</code>: a partner may read it (<code>publicValues()</code>).</dd>
+        <dt>Accent</dt><dd>The brand colour, stored as <code>#rrggbb</code>; null means the shipped <code>#ca6330</code> (<code>AccentColor::DEFAULT_HEX</code>).</dd>
+    </dl>
+
+    <h2>Data model</h2>
+    <table>
+        <thead><tr><th>Column (<code>settings</code>)</th><th>Notes</th></tr></thead>
+        <tbody>
+        <tr><td><code>key</code></td><td>Unique string</td></tr>
+        <tr><td><code>group</code> (64)</td><td>Indexed; <code>Setting::scopeInGroup</code></td></tr>
+        <tr><td><code>value</code></td><td>Text, nullable. One column serves every type.</td></tr>
+        <tr><td><code>type</code> (24, default <code>string</code>)</td><td><code>SettingType</code>: <code>string</code>, <code>integer</code>, <code>boolean</code>, <code>decimal</code>, <code>money</code>, <code>json</code></td></tr>
+        <tr><td><code>is_encrypted</code></td><td>Value is stored with <code>encrypt()</code> and decrypted on read (gateway, SMS, courier, R2 credentials)</td></tr>
+        <tr><td><code>is_public</code></td><td>Marked explicitly so exposing a setting is a decision</td></tr>
+        <tr><td><code>label</code>, <code>description</code></td><td>Display</td></tr>
+        <tr><td><code>updated_by</code></td><td>Nullable FK to <code>users</code></td></tr>
+        </tbody>
+    </table>
+    <h3>Type casting (<code>SettingType</code>)</h3>
+    <table>
+        <thead><tr><th>Type</th><th>Read as</th><th>Stored as</th></tr></thead>
+        <tbody>
+        <tr><td><code>string</code></td><td>string</td><td>string</td></tr>
+        <tr><td><code>integer</code></td><td><code>int</code></td><td>integer string</td></tr>
+        <tr><td><code>boolean</code></td><td><code>filter_var(..., FILTER_VALIDATE_BOOL)</code></td><td><code>'1'</code> / <code>'0'</code></td></tr>
+        <tr><td><code>decimal</code></td><td>string (never float, so a rate stays exact)</td><td>string</td></tr>
+        <tr><td><code>money</code></td><td><code>Money::fromDecimal()</code></td><td><code>Money::toDecimal()</code> (flat Taka, exact string)</td></tr>
+        <tr><td><code>json</code></td><td>array (<code>[]</code> if undecodable)</td><td><code>json_encode</code></td></tr>
+        </tbody>
+    </table>
+    <p>A null value always reads as null.</p>
+
+    <h2>States &amp; lifecycle</h2>
+    <p>No status machine. A setting exists once defined; its value is set, overwritten or nulled.</p>
+
+    <h2>Actions &amp; workflows</h2>
+    <h3><code>SettingsRepository</code></h3>
+    <table>
+        <thead><tr><th>Method</th><th>Behaviour</th></tr></thead>
+        <tbody>
+        <tr><td><code>get($key, $default = null)</code>, <code>has()</code>, <code>all()</code></td><td>Reads. <code>all()</code> caches the entire table as one entry (<code>rememberForever</code>) under <code>feriwala:settings:v2</code>, then holds the typed result for the request.</td></tr>
+        <tr><td><code>set($key, $value, $updatedBy)</code></td><td>The setting must already exist (<code>firstOrFail</code>); its type and encryption are schema, not something a caller invents. Flushes the cache.</td></tr>
+        <tr><td><code>define(...)</code></td><td>Creates a setting with a default, or updates the definition of an existing one <strong>without touching its value</strong>. Flushes.</td></tr>
+        <tr><td><code>publicValues()</code></td><td>Typed values of <code>is_public</code> rows (reads the database, not the cache).</td></tr>
+        <tr><td><code>flush()</code></td><td>Clears the request copy and the cache entry.</td></tr>
+        </tbody>
+    </table>
+    <p>The cache holds <strong>plain values with their type beside them</strong>, and types are applied after reading. Cache stores are configured to unserialize no classes (so a leaked app key cannot become a gadget chain), and a <code>Money</code> cached directly came back as an unusable half-object once. The whole entry is invalidated on every write, never one key: a missed partial invalidation leaves a stale fee in circulation.</p>
+    <h3><code>ManageBranding</code></h3>
+    <p>Methods: <code>replace($actor, BrandingAsset, UploadedFile)</code>, <code>restore()</code>, <code>setAccent()</code>, <code>setButton()</code>, <code>setNav()</code>, <code>setBackground()</code>. All call <code>BrandingPolicy::canManage</code> (the <code>system.manage_settings</code> permission) and throw <code>AuthorizationException</code> otherwise.</p>
+    <ol>
+        <li><code>replace</code>: store the file first (<code>StoreManagedFile</code>, public visibility, purpose <code>branding/&lt;asset&gt;</code>, MIME checked from the bytes, size capped), then define and set the setting; if saving fails the new file is deleted. The previous file is removed only <em>after</em> the new setting is saved.</li>
+        <li>Colours are saved through <code>define()</code> then <code>set()</code>; a background darker than the dark text allows is refused (<code>isReadableUnderDarkText</code>); white background and the default accent are stored as null.</li>
+        <li>Each change is audited with <code>module: 'system'</code>: <code>system.branding_replaced</code>/<code>_restored</code>, <code>system.branding_accent_changed</code>/<code>_restored</code>, and the same pattern for <code>button</code>, <code>nav</code> and <code>background</code>.</li>
+    </ol>
+
+    <h2>Entry points</h2>
+    <p>Admin, <code>/admin/settings/branding</code> (names <code>admin.branding.*</code>):</p>
+    <table>
+        <thead><tr><th>Name</th><th>Method and URL</th></tr></thead>
+        <tbody>
+        <tr><td><code>branding.edit</code></td><td>GET <code>/admin/settings/branding</code></td></tr>
+        <tr><td><code>branding.accent.update|destroy</code></td><td>PUT / DELETE <code>/admin/settings/branding/accent</code></td></tr>
+        <tr><td><code>branding.button.update|destroy</code></td><td>PUT / DELETE <code>.../button</code></td></tr>
+        <tr><td><code>branding.nav.update|destroy</code></td><td>PUT / DELETE <code>.../nav</code></td></tr>
+        <tr><td><code>branding.background.update|destroy</code></td><td>PUT / DELETE <code>.../background</code></td></tr>
+        <tr><td><code>branding.update|destroy</code></td><td>POST / DELETE <code>.../{asset}</code> (<code>logo</code> or <code>favicon</code>)</td></tr>
+        </tbody>
+    </table>
+    <p>All via <code>BrandingController</code>. <code>admin/settings</code> (<code>admin.settings</code>, <code>SettingsController</code>) is a permission-filtered index of the real settings screens, not a settings surface of its own. No scheduled tasks or mobile routes.</p>
+
+    <h2>Permissions &amp; scoping</h2>
+    <p><code>system.manage_settings</code> guards the screen and every write (held by <code>system_administrator</code> and, via <code>Gate::before</code>, Super Admin). Settings are platform-wide and have no owner. A setting a partner may read must be marked <code>is_public</code>.</p>
+
+    <h2>Money, ledger &amp; audit effects</h2>
+    <p>Money settings use the <code>money</code> type and surface as <code>Money</code>; nothing is multiplied or divided. Whether a given configuration action audits is up to that action: <code>SettingsRepository::set()</code> itself writes no audit entry, so configure-actions (for example <code>ConfigureMobileVerificationRequirement</code>) record their own.</p>
+
+    <h2>Configuration</h2>
+    <p>Branding setting keys: <code>branding.accent_color</code>, <code>branding.button_color</code>, <code>branding.background_color</code>, <code>branding.nav_color</code> (all <code>#rrggbb</code> strings), and <code>branding.logo_path</code>, <code>branding.favicon_path</code> (managed paths under <code>branding/</code> on the public disk, or the active R2 equivalent through <code>ManagedStorage</code>). Shipped fallbacks: <code>/logo.png</code>, <code>/favicon.svg</code>. Logo: PNG/JPEG/WebP up to 2048 KB; favicon: PNG/WebP/ICO up to 512 KB; SVG is deliberately refused everywhere (scriptable, stored XSS).</p>
+    <p>Settings defined by other modules (not exhaustive): <code>kyc.deadline_days</code>, <code>kyc.deadline_warning_days</code>, <code>account.mobile_verification_required</code>, <code>audit.log_retention_days</code>, <code>inventory.stock_blocks_orders</code>, <code>account.withdrawal_minimum</code>/<code>_maximum</code>, <code>supplier.withdrawal_minimum</code>/<code>_maximum</code>, <code>catalog.product_deletion_scope</code>, <code>sms.provider</code>/<code>sms.enabled</code>, <code>storage.r2.*</code>. Several are defined by <code>database/seeders/SafeSeeder.php</code> or by their configure-Action.</p>
+
+    <h2>Rules, invariants &amp; gotchas</h2>
+    <ul>
+        <li><strong>A colour never goes into a component directly.</strong> Every brand token derives from <code>--brand-base</code>; the shell writes <code>--brand-*</code> from the shared <code>branding</code> prop. <code>accent</code> is null while the shipped accent is in use, so the stylesheet's own value stands.</li>
+        <li><strong>Branding fails safe.</strong> Every getter catches a throwing settings store and falls back to defaults; a malformed hex, a path outside <code>branding/</code>, or a missing file also falls back. A missing logo is an inconvenience; a page that fails to render is an outage. <code>isManagedPath()</code> accepts both <code>branding/&lt;asset&gt;/&lt;name&gt;.&lt;ext&gt;</code> and the older <code>branding/&lt;asset&gt;-&lt;name&gt;.&lt;ext&gt;</code> so an old upload keeps showing.</li>
+        <li><strong>Accent text colour is computed from WCAG contrast</strong> (<code>MINIMUM_TEXT_CONTRAST</code> 4.5; light text <code>#ffffff</code>, dark <code>#1d2630</code>); the dark-mode accent is lifted (<code>DARK_LIFT_PERCENT</code> 25).</li>
+        <li><strong>Button colour equal to the accent is still a choice</strong> (it keeps buttons put if the accent later changes), unlike the accent, where the default is stored as null.</li>
+        <li><code>set()</code> on an undefined key throws; call <code>define()</code> first (the branding Actions define before every set).</li>
+        <li>Redefining never resets a configured value.</li>
+    </ul>
+
+    <h2>How to&hellip;</h2>
+    <h3>Add a setting</h3>
+    <ol>
+        <li>Pick a dotted key and group; add a constant on the owning class (follow <code>KycDeadlines</code> or <code>AuditRetention</code>).</li>
+        <li>Define it where it is first used: <code>$settings-&gt;define($key, 'group', SettingType::X, $default, label: ...)</code> in a seeder (<code>SafeSeeder</code>) or in the configure-Action, which also does <code>set()</code> and writes its own <code>AuditEntry</code>.</li>
+        <li>Read it only through <code>SettingsRepository::get()</code> inside a small class that answers the question once; give a safe default.</li>
+        <li>Use the right type: <code>money</code> for amounts, <code>decimal</code> for rates, never <code>integer</code> times 100.</li>
+        <li>Add a test; <code>SettingsCacheTest</code> shows how the cache behaves.</li>
+    </ol>
+    <h3>Mark a setting readable by partners</h3>
+    <ol><li>Pass <code>isPublic: true</code> to <code>define()</code>. Do not make credentials public; use <code>isEncrypted: true</code> for them.</li></ol>
+    <h3>Add another branding colour</h3>
+    <ol>
+        <li>Add a constant and getters in <code>Branding</code> (fail safe), a <code>setX</code> in <code>ManageBranding</code> with an audit entry, a controller method and routes, and include it in <code>Branding::toArray()</code>.</li>
+        <li>Consume it in <code>resources/css/app.css</code> through a <code>--brand-*</code> token.</li>
+    </ol>
+
+    <h2>Testing</h2>
+    <p><code>vendor/bin/pest tests/Feature/Settings</code> (own schema, one suite at a time). <code>BrandingTest</code> covers uploads, colours and fallbacks; <code>SettingsCacheTest</code> the cache. In tests that read settings, remember the repository holds a per-request copy; call <code>flush()</code> after direct database edits.</p>
+
+    <h2>Related modules</h2>
+    <div class="cards">
+        <a class="card" href="storage.html"><h3>Storage</h3><p>Where brand images are written.</p></a>
+        <a class="card" href="audit.html"><h3>Audit</h3><p>Branding and configuration changes.</p></a>
+        <a class="card" href="access.html"><h3>Access</h3><p><code>system.manage_settings</code>.</p></a>
+        <a class="card" href="kyc.html"><h3>KYC</h3><p>Deadline settings.</p></a>
+    </div>
+</main>
+</body>
+</html>

@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Mobile API</title>
+    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+    <script src="../assets/docs.js"></script>
+</head>
+<body>
+<main id="doc">
+    <h1>Mobile API</h1>
+    <p class="lead">The JSON API behind the Feriwala mobile app, served at <code>/api/mobile/v1</code>. It acts for a signed-in person with a Sanctum bearer token, is self-scoped exactly like the web ERP, and reuses the same Actions, Queries and policies. This page explains how it works and how to add an endpoint; the endpoint-by-endpoint reference is generated live at <code>/docs/mobile</code>.</p>
+
+    <h2>Where the live docs are</h2>
+    <table>
+        <thead><tr><th>URL</th><th>What</th></tr></thead>
+        <tbody>
+            <tr><td><code>/docs/mobile</code></td><td>Swagger UI (view <code>docs.swagger</code>)</td></tr>
+            <tr><td><code>/docs/mobile.json</code></td><td>Raw OpenAPI 3.1 document</td></tr>
+            <tr><td><code>/docs/mobile/scramble</code></td><td>Scramble's own UI</td></tr>
+        </tbody>
+    </table>
+    <p>The document is generated from the routes, Form Requests, API Resources and controller PHPDoc by Scramble (<code>App\Providers\ApiServiceProvider</code>), so it cannot drift from the code. Its introduction is <code>docs/api/mobile.md</code>, which is the source of truth for the client-facing rules summarised below. Access is controlled by the <code>viewApiDocs</code> Gate: open when <code>API_DOCS_PUBLIC</code> is true (<code>config('scramble.public')</code>), locally per the config comment, otherwise only a Super Admin or System Administrator. The storefront API has its own document, see <a href="storefront-api.html">Storefront API</a>.</p>
+
+    <h2>Where it lives</h2>
+    <table>
+        <thead><tr><th>Path</th><th>Role</th></tr></thead>
+        <tbody>
+            <tr><td><code>routes/api.php</code></td><td>Mounts <code>routes/mobile.php</code> under <code>mobile/v1</code> (route name prefix <code>mobile.v1.</code>) with middleware <code>mobile.locale</code> and <code>throttle:mobile</code>.</td></tr>
+            <tr><td><code>routes/mobile.php</code></td><td>Health, login and 2FA challenge, then <code>require</code>s module files by <code>glob()</code>: <code>routes/mobile/guest/*.php</code>, <code>routes/mobile/supplier/**</code>, <code>routes/mobile/admin/*.php</code>, <code>routes/mobile/*.php</code>.</td></tr>
+            <tr><td><code>routes/mobile/*.php</code></td><td>One file per module (alphabetical load order).</td></tr>
+            <tr><td><code>app/Http/Controllers/Api/Mobile/V1/&lt;Module&gt;/</code></td><td>Controllers, all extending <code>MobileController</code>.</td></tr>
+            <tr><td><code>app/Http/Requests/Mobile/&lt;Module&gt;/</code></td><td>Form Requests (validation, and parameter docs).</td></tr>
+            <tr><td><code>app/Http/Resources/Mobile/&lt;Module&gt;/</code></td><td>API Resources; <code>MoneyResource</code> for money.</td></tr>
+            <tr><td><code>app/Http/Middleware/Mobile/</code></td><td><code>SetMobileLocale</code>, <code>EnsureMobileIdentityHasAccess</code>, <code>EnsureMobileBusinessActivated</code>, <code>EnsureMobileSupplierIsOperational</code>, <code>RequireMobileTwoFactor</code>, <code>RequireMobilePassword</code>, <code>DefaultMobileReasonUnlessSecurity</code>.</td></tr>
+            <tr><td><code>config/mobile.php</code>, <code>config/sanctum.php</code></td><td><code>rate_limit_per_minute</code> (env <code>MOBILE_API_RATE_LIMIT</code>, default 120); token lifetime <code>SANCTUM_TOKEN_EXPIRATION_MINUTES</code> (default 30 days).</td></tr>
+            <tr><td><code>tests/Feature/Mobile/*</code>, <code>tests/Feature/Api/Mobile/Supplier/*</code></td><td>Tests, Pest group <code>mobile</code> (<code>tests/Pest.php</code>).</td></tr>
+        </tbody>
+    </table>
+
+    <h2>Authentication</h2>
+    <h3>Partner, staff and business logins (<code>User</code>)</h3>
+    <ol>
+        <li><code>POST /api/mobile/v1/auth/login</code> (<code>mobile.v1.auth.login</code>, <code>LoginController</code>) with <code>email</code>, <code>password</code> and <code>device_name</code> (max 100 characters, shown in "my devices"). Unauthenticated.</li>
+        <li>Same rules as the web login: the same failure throttle (<code>LoginThrottle</code> through Fortify's <code>LoginRateLimiter</code>; only <em>failed</em> attempts count: 5 per minute per email and 30 per quarter-hour per address, answering <code>429</code> with <code>Retry-After</code>), the same identity gate (<code>hasPlatformAccess()</code>), the same second factor.</li>
+        <li><strong>No 2FA:</strong> <code>200</code> with <code>{two_factor_required: false, token, token_type: "Bearer", expires_at, user}</code>.</li>
+        <li><strong>2FA on:</strong> <code>202</code> with <code>{two_factor_required: true, challenge_token, expires_in}</code> (5 minutes, held in cache). Finish with <code>POST /auth/two-factor-challenge</code> (<code>mobile-two-factor</code> limiter, 5 per minute keyed on the challenge) sending <code>challenge_token</code> plus a six-digit <code>code</code> or one <code>recovery_code</code> (spent on use). The success body is the same as above.</li>
+        <li>Send <code>Authorization: Bearer &lt;token&gt;</code> on every other call. <code>IssueMobileAccessToken</code> issues one token per device name: signing in again on a device replaces its token.</li>
+        <li>A suspended login gets <code>403</code> <code>{code: "account_unavailable"}</code> and its token is revoked on the next request (a bearer token outlives its issue, so the gate bites immediately).</li>
+    </ol>
+    <table>
+        <thead><tr><th>Endpoint</th><th>Name</th><th>Purpose</th></tr></thead>
+        <tbody>
+            <tr><td>GET <code>/auth/me</code></td><td><code>auth.me</code></td><td>Current user and business account state; call on app start.</td></tr>
+            <tr><td>POST <code>/auth/logout</code></td><td><code>auth.logout</code></td><td>Revoke the current token (<code>204</code>).</td></tr>
+            <tr><td>POST <code>/auth/logout-all</code></td><td><code>auth.logout-all</code></td><td>Revoke every token (<code>204</code>).</td></tr>
+            <tr><td>GET <code>/auth/devices</code></td><td><code>auth.devices</code></td><td>Devices holding a token; <code>reference</code> derived from the token and app key, never a database id.</td></tr>
+            <tr><td>DELETE <code>/auth/devices/{reference}</code></td><td><code>auth.devices.revoke</code></td><td>Revoke one device.</td></tr>
+        </tbody>
+    </table>
+    <h3>Suppliers (<code>Supplier</code>, D25)</h3>
+    <p>Suppliers are a separate account domain with their own tokens (<code>Supplier</code> uses <code>HasApiTokens</code>). <code>POST /supplier/auth/login</code> (<code>mobile.v1.supplier.auth.login</code>, <code>SupplierSessionController::store</code>, <code>SupplierLoginRequest</code>) returns <code>{token, token_type, expires_at, supplier}</code>; it is throttled like the main login. A suspended supplier may sign in to read its own status; only a <strong>closed</strong> one loses access. Token routes: <code>GET /supplier/auth/me</code>, <code>POST /supplier/auth/logout</code>.</p>
+    <div class="callout callout-rule"><p><strong>Rule.</strong> A token for one audience is refused on the other's routes. <code>mobile.access:user</code> and <code>mobile.access:supplier</code> (<code>EnsureMobileIdentityHasAccess</code>) answer <code>403</code> <code>{code: "wrong_audience"}</code>, so a controller written for a <code>User</code> is never handed a <code>Supplier</code>.</p></div>
+
+    <h2>Request headers</h2>
+    <table>
+        <thead><tr><th>Header</th><th>Meaning</th></tr></thead>
+        <tbody>
+            <tr><td><code>Authorization: Bearer &lt;token&gt;</code></td><td>Required on every route except login, 2FA challenge, health, registration and password reset.</td></tr>
+            <tr><td><code>Accept: application/json</code></td><td>Recommended. Exceptions render as JSON for any <code>api/*</code> path regardless.</td></tr>
+            <tr><td><code>Accept-Language: en | bn</code></td><td>Picks the response language. <code>SetMobileLocale</code> resolves: explicit <code>Accept-Language</code> (only <code>en</code>/<code>bn</code> accepted), then the person's saved <code>locale</code>, then <code>config('app.locale')</code>. Every response carries <code>Content-Language</code>. A person's saved language is changed with <code>PUT /locale</code>.</td></tr>
+            <tr><td><code>Content-Type: application/json</code></td><td>For bodies; file uploads use multipart.</td></tr>
+        </tbody>
+    </table>
+
+    <h2>Rate limits</h2>
+    <ul>
+        <li><code>throttle:mobile</code> on every mobile route: 120 per minute (configurable) per person, per IP before sign-in. Over the limit: <code>429</code> with <code>Retry-After</code>.</li>
+        <li>Login failures: see above. 2FA challenge: <code>mobile-two-factor</code>, 5 per minute per challenge.</li>
+        <li>Per-route inline limits on guest and sensitive routes, for example registration <code>throttle:10,1,mobile-register</code>, registration options <code>30,1</code>, password forgot/reset <code>5,1</code>, 2FA settings <code>10,1</code>, account deletion request <code>5,1</code>.</li>
+    </ul>
+
+    <h2>Response conventions</h2>
+    <h3>Success shape</h3>
+    <ul>
+        <li>A single resource: Laravel's <code>JsonResource</code> default, <code>{ "data": { ... } }</code>. A few endpoints return a hand-built object (login, <code>usable</code> balance, <code>auth/devices</code> returns <code>{data: [...]}</code>). The generated document states each shape through <code>@response</code> annotations.</li>
+        <li>A collection: <code>{ "data": [...], "links": {...}, "meta": {...} }</code>. Many list endpoints add extra top-level keys such as <code>filters</code> (what was actually applied; meaningless filters are ignored) and <code>options</code> (the values each filter accepts, already translated). <code>204</code> with no body for revoke/logout.</li>
+        <li>Identifiers: resources are addressed by a public ULID or slug exposed as <code>id</code>, never a database id. Anything not belonging to the signed-in person answers <code>404</code>, not <code>403</code>, so existence is not leaked (the wallet transaction endpoint scopes the query to the caller's wallet <em>before</em> using the public id).</li>
+        <li>Times are ISO 8601 strings (<code>toIso8601String()</code>).</li>
+    </ul>
+    <h3>Money</h3>
+    <p>Money is flat Taka, never poisha, and always the server's own object (<code>App\Http\Resources\Mobile\MoneyResource</code>, equal to <code>Money::jsonSerialize()</code>):</p>
+<pre><code>{ "amount": "100.50", "currency": "BDT", "formatted": "৳100.50" }</code></pre>
+    <p>The app displays it and never computes with it. Amounts the app <em>submits</em> are decimal strings exactly as typed (<code>"100.50"</code>); they are parsed with <code>DecimalAmount::parse()</code>, and more than two decimal places is rejected, never rounded. See <a href="../guide/conventions.html">Conventions</a>.</p>
+    <h3>Pagination</h3>
+    <p>List endpoints are Laravel length-aware paginators: query <code>page</code>, and <code>per_page</code> where the endpoint accepts it (for example <code>OrderListRequest</code>: <code>integer</code>, <code>min:1</code>, <code>max:100</code>); the response carries <code>data</code>, <code>links</code> and <code>meta</code> (<code>current_page</code>, <code>last_page</code>, <code>per_page</code>, <code>total</code>, and Laravel's other meta keys). The default page size is set by each controller (orders 25, wallet statement 20, website orders 20); the endpoint's PHPDoc says which. Some endpoints return a hand-built <code>meta</code> with only the four keys (for instance referrals). Exports are CSV downloads capped per controller (orders: 10,000 rows, spreadsheet formula cells neutralised).</p>
+    <h3>Errors</h3>
+    <table>
+        <thead><tr><th>Status</th><th>Body</th><th>Meaning</th></tr></thead>
+        <tbody>
+            <tr><td><code>401</code></td><td><code>{ "message": "Unauthenticated." }</code> (Laravel default)</td><td>Missing, expired or revoked token. Sign in again.</td></tr>
+            <tr><td><code>403</code></td><td><code>{ "code": "...", "message": "..." }</code>, or Laravel's <code>{message}</code> for a policy refusal</td><td>Not allowed. Check <code>code</code> (below).</td></tr>
+            <tr><td><code>404</code></td><td><code>{ "message": "..." }</code></td><td>Does not exist, or is not yours.</td></tr>
+            <tr><td><code>422</code></td><td><code>{ "message": "...", "errors": { "field": ["..."] } }</code></td><td>Validation failed, including wrong credentials (<code>errors.email</code>) and an expired 2FA challenge (<code>errors.challenge_token</code>).</td></tr>
+            <tr><td><code>429</code></td><td>Validation-style or throttle response, with <code>Retry-After</code></td><td>Too many requests (login failures answer <code>429</code> with <code>errors.email</code>).</td></tr>
+        </tbody>
+    </table>
+    <p>Machine-readable <code>403</code> codes found in the middleware and controllers:</p>
+    <table>
+        <thead><tr><th><code>code</code></th><th>Raised by</th><th>App should</th></tr></thead>
+        <tbody>
+            <tr><td><code>account_unavailable</code></td><td><code>EnsureMobileIdentityHasAccess</code>, <code>LoginController</code></td><td>Show "account not available"; the token has been revoked.</td></tr>
+            <tr><td><code>wrong_audience</code></td><td><code>EnsureMobileIdentityHasAccess</code></td><td>Sign in with the right kind of account.</td></tr>
+            <tr><td><code>account_not_activated</code></td><td><code>EnsureMobileBusinessActivated</code></td><td>Send the person to onboarding (<code>GET /onboarding</code>).</td></tr>
+            <tr><td><code>no_business_account</code></td><td><code>EnsureMobileBusinessActivated</code></td><td>The login has no business (platform staff, invitees); the area is not theirs.</td></tr>
+            <tr><td><code>two_factor_required</code></td><td><code>RequireMobileTwoFactor</code> (admin routes)</td><td>Send the person to the security screen to enrol.</td></tr>
+        </tbody>
+    </table>
+    <p>Supplier routes inside <code>mobile.operational</code> (<code>EnsureMobileSupplierIsOperational</code>) are closed to a Supplier that is not yet approved/un-suspended, with the same machine-readable shape; check the middleware for its exact code.</p>
+
+    <h2>Identity and onboarding gating</h2>
+    <p>The web funnel gate is an allow-list keyed on route names with redirects. A mobile client cannot follow a redirect, so the mobile API <strong>inverts the allow-list into structure</strong> (<code>routes/mobile.php</code> comment):</p>
+    <ul>
+        <li><code>auth:sanctum</code> + <code>mobile.access:user</code> wrap every signed-in route (<code>EnsureMobileIdentityHasAccess</code>: right audience, platform access, revokes the token of a suspended login).</li>
+        <li>The &sect;5.4 areas an unactivated account may reach are registered <strong>outside</strong> <code>mobile.activated</code>: onboarding status, KYC, packages and subscription, activation checkout, profile/verification/security/2FA/notifications/locale/account-deletion, staff invitation accept.</li>
+        <li>Everything else is registered <strong>inside</strong> <code>Route::middleware('mobile.activated')</code> (<code>EnsureMobileBusinessActivated</code>), so a route added in that group is closed to an unactivated account by default. Forgetting the group in a new module file exposes the route; always wrap business routes.</li>
+        <li><code>entitled:staff_limit</code> applies to staff management exactly as on the web.</li>
+        <li>Administration: <code>routes/mobile.php</code> reserves <code>/admin</code> with <code>auth:sanctum</code>, <code>mobile.access:user</code>, <code>mobile.two-factor</code> (second factor, else <code>403 two_factor_required</code>) and <code>mobile.reason</code> (default reason on staff screens), plus per-route <code>mobile.password</code> (<code>current_password</code> in the body) where the web uses <code>RequirePassword</code>. Route names there must equal the web route (<code>roles.store</code> inside the <code>admin.</code> group) so <code>config/reasons.php</code> and the policies recognise them. <strong>No files currently exist in <code>routes/mobile/admin/</code></strong>, so there are no mobile admin endpoints yet (<code>MobileAdminGatesTest</code> covers the gates).</li>
+    </ul>
+
+    <h2>Resource families</h2>
+    <p>Paths are relative to <code>/api/mobile/v1</code>. "Open" means outside <code>mobile.activated</code>. The route file name equals the module and the Swagger tag comes from the route name's first segment after <code>mobile.v1</code>.</p>
+    <table>
+        <thead><tr><th>Group (Swagger tag)</th><th>Paths</th><th>Gate</th><th>Route file</th><th>Controller folder (<code>Api/Mobile/V1/...</code>)</th></tr></thead>
+        <tbody>
+            <tr><td>System</td><td><code>GET /health</code></td><td>None</td><td><code>routes/mobile.php</code></td><td>closure</td></tr>
+            <tr><td>Authentication</td><td><code>/auth/login</code>, <code>/auth/two-factor-challenge</code>, <code>/auth/me</code>, <code>/auth/logout</code>, <code>/auth/logout-all</code>, <code>/auth/devices[/{reference}]</code></td><td>Login/challenge: none; rest: token</td><td><code>routes/mobile.php</code></td><td><code>Auth/</code> (<code>LoginController</code>, <code>TwoFactorChallengeController</code>, <code>SessionController</code>)</td></tr>
+            <tr><td>Register, Password</td><td><code>GET /register/options</code>, <code>POST /register</code>, <code>POST /password/forgot</code>, <code>POST /password/reset</code></td><td>None, throttled</td><td><code>mobile/guest/account.php</code></td><td><code>Account/</code> (<code>RegisterController</code>, <code>PasswordResetController</code>)</td></tr>
+            <tr><td>Onboarding, Dashboard, Referrals</td><td><code>GET /onboarding</code>; <code>GET /dashboard</code>, <code>GET /referrals</code></td><td>Onboarding open; others activated</td><td><code>mobile/onboarding.php</code></td><td><code>Onboarding/</code></td></tr>
+            <tr><td>Activation</td><td><code>GET|POST /checkout</code>, <code>POST /checkout/coupon</code>, <code>GET /checkout/payment</code>, <code>POST /checkout/payment/verify</code></td><td>Open</td><td><code>mobile/activation.php</code></td><td><code>Activation/</code></td></tr>
+            <tr><td>Kyc</td><td><code>/kyc</code>, <code>/kyc/history</code>, <code>/kyc/documents</code>, <code>/kyc/submit</code>, <code>/kyc/documents/{document}[/download]</code>, <code>/kyc/evidence/{file,value,remove,choose,deselect}</code></td><td>Open</td><td><code>mobile/kyc.php</code></td><td><code>Kyc/</code></td></tr>
+            <tr><td>Packages</td><td><code>GET /packages</code>, <code>POST /packages/{package}/select</code>, <code>/subscription</code> (show, cancel, change, renew)</td><td>Open</td><td><code>mobile/packages.php</code></td><td><code>Packages/</code></td></tr>
+            <tr><td>Profile, Verification, Security, Account deletion, Notifications, Locale</td><td><code>/profile</code>, <code>/verification/*</code>, <code>/security</code> (password, sessions, <code>/security/two-factor/*</code>), <code>/account-deletion</code>, <code>/notifications[/read|/{notification}/read]</code>, <code>/locale</code></td><td>Open</td><td><code>mobile/account.php</code></td><td><code>Account/</code></td></tr>
+            <tr><td>Staff</td><td><code>GET|POST /staff/invitation/{token}</code> (open); <code>/staff</code>, <code>/staff/invitations</code>, <code>/staff/{staff}</code></td><td>Invitation open; staff: activated + <code>entitled:staff_limit</code></td><td><code>mobile/staff.php</code></td><td><code>Staff/</code></td></tr>
+            <tr><td>Catalog</td><td><code>/catalog</code>, <code>/catalog/wholesale[/{product}]</code>, <code>/catalog/dropshipping[/{product}]</code>, <code>/catalog/{product}</code>, <code>/my-products</code>, <code>PUT /my-products/{product}/websites/{website}</code>, <code>/allocated-stock</code></td><td>Activated. Read-only: no route creates a product (&sect;12)</td><td><code>mobile/catalog.php</code></td><td><code>Catalog/</code></td></tr>
+            <tr><td>Wholesale</td><td><code>/wholesale/cart[/items...]</code>, <code>/wholesale/checkout[...]</code>, <code>/wholesale/orders[/{order}[/cancellation|/payment[/return|/failed|/cancelled]]]</code></td><td>Activated</td><td><code>mobile/wholesale.php</code></td><td><code>Wholesale/</code></td></tr>
+            <tr><td>Orders</td><td><code>/orders</code>, <code>/orders/export</code>, <code>/orders/external/{order}</code>, <code>/orders/store-orders[...]</code>, <code>/orders/stores[...]</code></td><td>Activated</td><td><code>mobile/orders.php</code></td><td><code>Orders/</code></td></tr>
+            <tr><td>Wallet</td><td><code>/wallet</code>, <code>/wallet/usable</code>, <code>/wallet/transactions[/{transaction}]</code>; top-up: <code>GET|POST /wallet/top-up</code>, <code>GET /wallet/statement.csv</code></td><td>Activated</td><td><code>mobile/wallet.php</code>, <code>mobile/wallet-topups.php</code></td><td><code>Wallet/</code>, <code>WalletTopups/</code></td></tr>
+            <tr><td>Withdrawals</td><td><code>/withdrawals</code>, <code>/withdrawals/options</code>, <code>/withdrawals/{withdrawal}</code></td><td>Activated</td><td><code>mobile/withdrawals.php</code></td><td><code>Withdrawals/</code></td></tr>
+            <tr><td>Payout methods</td><td><code>/payout-methods[/{method}[/default|/archive]]</code></td><td>Activated</td><td><code>mobile/payout-methods.php</code></td><td><code>PayoutMethods/</code></td></tr>
+            <tr><td>Addresses, Banks, Locations</td><td><code>/addresses[...]</code>, <code>/banks[/{bankCode}/branches]</code>, <code>/locations/divisions</code>, <code>/locations/{type}/{sourceId}/children</code></td><td>Activated</td><td><code>mobile/addresses.php</code>, <code>banks.php</code>, <code>locations.php</code></td><td><code>Addresses/</code>, <code>Banks/</code>, <code>Locations/</code></td></tr>
+            <tr><td>Websites</td><td><code>/websites[...]</code>: settings, products, categories, orders, returns, integration, sync, charges, domains, hostings</td><td>Activated; <code>ResolvesOwnWebsite</code> scopes to the caller's own website</td><td><code>mobile/websites.php</code></td><td><code>Websites/</code></td></tr>
+            <tr><td>Supplier &middot; Auth</td><td><code>POST /supplier/auth/login</code>; <code>GET /supplier/auth/me</code>, <code>POST /supplier/auth/logout</code></td><td>Login none; others supplier token</td><td><code>mobile/supplier/guest/auth.php</code>, <code>supplier/auth.php</code></td><td><code>Supplier/Auth/</code></td></tr>
+            <tr><td>Supplier &middot; Listings, Listing lots</td><td><code>/supplier/listings[...]</code> (incl. media), <code>/supplier/listing-lots[...]</code></td><td><code>mobile.operational</code></td><td><code>mobile/supplier/listings.php</code>, <code>listing-lots.php</code></td><td><code>Supplier/Listings/</code>, <code>Supplier/ListingLots/</code></td></tr>
+            <tr><td>Supplier &middot; Offers, Stock, Allocations, Fulfilment</td><td><code>/supplier/offers</code>, <code>/supplier/stock</code>, <code>/supplier/offers/{offer}/stock-updates</code>, <code>/supplier/allocations</code>, <code>/supplier/fulfilment[/{commitment}[/advance]]</code></td><td><code>mobile.operational</code></td><td><code>mobile/supplier/offers.php</code>, <code>stock.php</code>, <code>allocations.php</code>, <code>fulfilment.php</code></td><td><code>Supplier/Offers/</code>, <code>Stock/</code>, <code>Allocations/</code>, <code>Fulfilment/</code></td></tr>
+            <tr><td>Supplier &middot; Payables, Wallet, Withdrawals</td><td><code>/supplier/payables</code>, <code>/supplier/wallet</code>, <code>/supplier/wallet/transactions</code>, <code>/supplier/withdrawals[...]</code></td><td><code>mobile.operational</code></td><td><code>mobile/supplier/payables.php</code>, <code>wallet.php</code>, <code>withdrawals.php</code></td><td><code>Supplier/Payables/</code>, <code>Wallet/</code>, <code>Withdrawals/</code></td></tr>
+        </tbody>
+    </table>
+    <div class="callout callout-warn"><p><strong>Controllers without routes.</strong> Controller folders exist for <code>Supplier/Account</code>, <code>Supplier/Kyc</code>, <code>Supplier/Addresses</code>, <code>Supplier/Banks</code>, <code>Supplier/Locations</code>, <code>Supplier/PayoutMethods</code>, <code>Supplier/Password</code>, <code>Supplier/Registration</code> and <code>Supplier/Verification</code>, but no route file under <code>routes/mobile/supplier/</code> references them today (checked by listing the files). Treat them as unrouted until a route file is added; this page does not document any such endpoints.</p></div>
+
+    <h2>How Scramble documents an endpoint</h2>
+    <p>Scramble reads the code; you add PHPDoc only where it cannot infer. Conventions in use throughout <code>Api/Mobile/V1</code>:</p>
+    <table>
+        <thead><tr><th>Source</th><th>Becomes</th></tr></thead>
+        <tbody>
+            <tr><td>First line of the method docblock</td><td>Operation summary (<code>Sign in</code>, <code>Usable balance</code>).</td></tr>
+            <tr><td>Following paragraphs</td><td>Operation description. State filters, page size, error cases (<code>403 without the right to view orders</code>).</td></tr>
+            <tr><td><code>@unauthenticated</code></td><td>Marks the operation as needing no token (login, challenge, registration, password reset).</td></tr>
+            <tr><td><code>@response array{...}</code> / <code>@response 202 array{...}</code></td><td>Response schema when it cannot be inferred (hand-built <code>JsonResponse</code>, collection with extra keys). Reference resources by class name: <code>list&lt;WalletTransactionResource&gt;</code>, <code>MoneyResource</code>. Multiple annotations with status codes for multiple outcomes.</td></tr>
+            <tr><td>Return type (<code>JsonResource</code>, <code>AnonymousResourceCollection</code>)</td><td>Inferred from the Resource's <code>toArray()</code> return shape.</td></tr>
+            <tr><td>Form Request <code>rules()</code></td><td>Request body / query parameters. A <code>/** comment */</code> above a key becomes the parameter description (<code>/** The login email address. */</code>).</td></tr>
+            <tr><td>Resource <code>toArray()</code> keys with <code>/** ... */</code></td><td>Field descriptions (<code>MoneyResource</code>: "Exact decimal Taka as a string").</td></tr>
+            <tr><td>Route name</td><td>Swagger tag, via <code>ApiServiceProvider::tagFor()</code>: <code>mobile.v1.wallet.transactions.show</code> is "Wallet"; <code>mobile.v1.supplier.listings.index</code> is "Supplier &middot; Listings"; <code>mobile.v1.health</code> is "System". Name every route.</td></tr>
+        </tbody>
+    </table>
+    <p>The generated document is cached in the <code>file</code> store (<code>config/scramble.php</code> <code>cache</code>); use <code>scramble:cache</code> / <code>scramble:clear</code> if the live document looks stale (Scramble commands, not verified here).</p>
+
+    <h2>How to add an endpoint</h2>
+    <ol>
+        <li><strong>Find the Action or Query.</strong> The mobile app reuses the web app's Actions and Queries. If the logic exists for the web, call it. If not, write it in <code>app/Domain/&lt;Module&gt;/Actions</code> (money through <code>WalletService</code>/the recipe in <a href="../guide/conventions.html">Conventions</a>) and have the web controller call it too. No business logic in the controller.</li>
+        <li><strong>Pick the module file</strong> <code>routes/mobile/&lt;module&gt;.php</code> (create one if the module is new; it is picked up by <code>glob()</code> automatically). Decide the gate: if an unactivated account must reach it (&sect;5.4), register it <em>outside</em> <code>Route::middleware('mobile.activated')</code>; otherwise inside. Add <code>entitled:&lt;feature&gt;</code> if the web does.</li>
+        <li><strong>Register the route</strong> with a name (<code>mobile.v1.&lt;module&gt;.&lt;action&gt;</code>, written without the prefix in the file: <code>-&gt;name('wallet.usable')</code> inside the file becomes <code>mobile.v1.wallet.usable</code>) and public-id parameters (<code>{transaction}</code> resolved by <code>public_id</code>, never an auto-increment id). Literal segments before wildcard ones.</li>
+        <li><strong>Create the Form Request</strong> in <code>app/Http/Requests/Mobile/&lt;Module&gt;/</code>: rules, <code>/** description */</code> comments on each key. Money fields use <code>DecimalAmountRule</code> and are parsed with <code>DecimalAmount::parse()</code>. Reuse the web rules where possible.</li>
+        <li><strong>Create the Resource</strong> in <code>app/Http/Resources/Mobile/&lt;Module&gt;/</code>. Money is <code>new MoneyResource($money)</code> (or <code>MoneyResource::nullable()</code>), never a float or a hand-formatted string; ids are <code>public_id</code>/slug; never expose internal notes, secrets or database ids.</li>
+        <li><strong>Create the controller</strong> in <code>app/Http/Controllers/Api/Mobile/V1/&lt;Module&gt;/</code> extending <code>MobileController</code>. Resolve the account (<code>ResolvesBusinessAccount</code>) and <strong>start every query from it</strong>; authorize with a policy or permission; delegate to the Action; return the Resource. Write the Scramble docblock (summary, description, <code>@response</code> where needed).</li>
+        <li><strong>Self-scoping.</strong> Scope by the caller's account/wallet/website <em>before</em> using a public id from the URL, so a borrowed id finds nothing and answers <code>404</code>.</li>
+        <li><strong>Test</strong> in <code>tests/Feature/Mobile/Mobile&lt;Module&gt;Test.php</code> (group <code>mobile</code>): use <code>Sanctum::actingAs()</code> or <code>$this-&gt;withToken()</code>, <code>postJson(route('mobile.v1...'))</code>; assert success, <code>401</code> without a token, <code>403 account_not_activated</code> for an unactivated account (if gated), <code>404</code> for another account's id, and <code>422</code> for bad input. Run <code>vendor/bin/pest tests/Feature/Mobile</code> in its own schema (see <a href="../guide/testing.html">Testing</a>).</li>
+        <li><strong>Check the docs.</strong> Open <code>/docs/mobile</code>: the operation should appear under the right tag with the expected parameters and response. Fix docblocks until it does. Update <code>docs/api/mobile.md</code> only if a client-wide rule changed.</li>
+        <li><strong>Pint, PHPStan</strong> (<code>vendor/bin/pint --parallel</code>, <code>composer types:check</code>).</li>
+    </ol>
+    <div class="callout callout-note"><p><strong>Note.</strong> The mobile API is versioned in the path but, unlike the storefront API, is not documented as frozen. Still, the app in users' hands is slow to update: add fields rather than renaming or removing them, and introduce <code>v2</code> for a breaking change.</p></div>
+
+    <h2>Testing the API by hand</h2>
+<pre><code># sign in
+curl -sX POST "$APP_URL/api/mobile/v1/auth/login" \
+  -H "Accept: application/json" -H "Content-Type: application/json" \
+  -d '{"email":"owner@example.test","password":"...","device_name":"curl"}'
+
+# call something
+curl -s "$APP_URL/api/mobile/v1/wallet/usable" \
+  -H "Accept: application/json" -H "Accept-Language: bn" \
+  -H "Authorization: Bearer $TOKEN"</code></pre>
+    <p>Do not paste real tokens or passwords into tickets or docs. Use <code>APP_URL</code> as served by <code>php artisan serve</code>.</p>
+    <p>See also: <a href="../guide/http-layers.html">HTTP layers</a>, <a href="../guide/architecture.html">Architecture</a>, <a href="storefront-api.html">Storefront API</a>, <a href="../modules/supplier.html">Supplier</a>, <a href="../modules/wallet.html">Wallet</a>.</p>
+</main>
+</body>
+</html>

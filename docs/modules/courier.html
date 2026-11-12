@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Courier module</title>
+    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+    <script src="../assets/docs.js"></script>
+</head>
+<body>
+<main id="doc">
+    <h1>Courier module</h1>
+    <p class="lead">Shipments, courier providers and the Steadfast integration. A provider-neutral shipment domain (manual first, D8) with one real API provider, Steadfast, behind a shared contract. Used by courier staff in the admin panel, by the system (webhook and scheduled poll) and, read-only, by Partners through order pages and bell notices.</p>
+
+    <div class="callout callout-warn"><p><strong>Built locally, never run live.</strong> Per <code>requirements/06-steadfast-courier.md</code> and the code comments, the Steadfast contract was taken from Steadfast's maintained package source, not from a live service. No test or script has made a real booking, and a real <code>create_order</code> creates a live, possibly chargeable consignment. Do not run one without explicit approval. The unverified assumptions are listed under "Rules, invariants &amp; gotchas".</p></div>
+
+    <h2>Purpose</h2>
+    <p>Orders need to leave the warehouse with a courier and be tracked until delivered or returned (§21, D8). This module holds the shipment record, the provider contract, and the Steadfast driver. D8 sets the order of work: a driver contract and a manual workflow first (courier name, tracking number, delivery charge, COD amount, statuses, return charge, notes, manual reconciliation), then Steadfast, then Pathao; RedX, eCourier, Paperfly and Sundarban later through the same interface.</p>
+    <p>Booking only asks a courier to take a parcel. It does not dispatch the order, move stock, record cash on delivery, credit profit or mark anything picked up or delivered. Those are separate, existing paths in the <a href="order.html">Order</a> module.</p>
+
+    <h2>Where it lives</h2>
+    <table>
+        <thead><tr><th>Path</th><th>Role</th></tr></thead>
+        <tbody>
+        <tr><td><code>app/Domain/Courier/Models/</code></td><td><code>Shipment</code>, <code>ShipmentPackage</code>, <code>ShipmentTrackingEvent</code>, <code>ShipmentStatusChange</code>, <code>CourierProvider</code>, <code>CourierBookingAttempt</code>, <code>CourierWebhookReceipt</code>.</td></tr>
+        <tr><td><code>app/Domain/Courier/Enums/</code></td><td><code>CourierProviderCode</code> (manual, steadfast, pathao), <code>CourierBookingStatus</code>, <code>ShipmentStatusChangeSource</code>.</td></tr>
+        <tr><td><code>app/Domain/Courier/Actions/</code></td><td>Shipment creation, status recording, and all Steadfast actions.</td></tr>
+        <tr><td><code>app/Domain/Courier/Queries/</code></td><td><code>SteadfastOrderRequestBuilder</code>, <code>StoreOrderCourierPanel</code>.</td></tr>
+        <tr><td><code>app/Domain/Courier/{Policies,Data,Exceptions,Events}/</code></td><td><code>ShipmentPolicy</code>, <code>CourierSettingsPolicy</code>; <code>SteadfastConnectionTest</code>, <code>SteadfastStatusApplied</code>; <code>CourierBookingRefused</code>, <code>CourierProviderUnavailable</code>, <code>UnsupportedCourierOperation</code>; <code>SteadfastStatusNeedsReview</code>.</td></tr>
+        <tr><td><code>app/Integrations/Courier/</code></td><td><code>CourierManager</code>, <code>Contracts/CourierProvider</code>, <code>Drivers/ManualCourierDriver</code>, <code>Drivers/SteadfastCourierDriver</code>, and <code>Steadfast/</code>: <code>SteadfastClient</code>, <code>SteadfastCredentials</code>, <code>SteadfastStatus</code>, <code>SteadfastFailureKind</code>, <code>SteadfastException</code>, <code>SteadfastOrderRequest</code>, <code>SteadfastConsignment</code>, <code>SteadfastStatusLookup</code>.</td></tr>
+        <tr><td><code>config/courier.php</code></td><td>Driver map and Steadfast non-secret settings.</td></tr>
+        <tr><td><code>app/Console/Commands/SyncSteadfastShipments.php</code></td><td><code>courier:steadfast-sync</code>.</td></tr>
+        <tr><td><code>app/Http/Controllers/Admin/</code></td><td><code>ShipmentController</code>, <code>SteadfastBookingController</code>, <code>SteadfastSettingsController</code>.</td></tr>
+        <tr><td><code>app/Http/Controllers/Webhook/SteadfastWebhookController.php</code></td><td>The inbound callback.</td></tr>
+        <tr><td><code>app/Listeners/AnnounceSteadfastReview.php</code>, <code>app/Notifications/Courier/</code></td><td>Staff and Partner notices.</td></tr>
+        <tr><td><code>resources/js/pages/admin/shipments/</code>, <code>admin/courier/steadfast.tsx</code>, <code>admin/orders/shipments-panel.tsx</code></td><td>Screens.</td></tr>
+        <tr><td><code>lang/en/courier.php</code>, <code>steadfast.php</code> (and <code>bn</code>)</td><td>Fixed, translated wording. Steadfast's own words are never shown.</td></tr>
+        <tr><td><code>database/migrations/</code></td><td><code>2026_10_22_100000_create_courier_providers</code>, <code>2026_10_22_110000_create_shipments</code>, <code>2026_10_22_120000_create_shipment_packages</code>, <code>2026_10_22_130000_create_shipment_tracking_events</code>, <code>2026_11_17_100000_add_provider_tracking_to_shipments</code>, <code>2026_11_17_110000_allow_system_shipment_tracking_events</code>.</td></tr>
+        <tr><td><code>tests/Feature/Courier/</code></td><td>See Testing.</td></tr>
+        </tbody>
+    </table>
+
+    <h2>Key terms</h2>
+    <dl>
+        <dt>Shipment</dt>
+        <dd>One courier-neutral consignment for an order. An order can have several (a failed delivery can be retried through a fresh shipment). Never deleted.</dd>
+        <dt>Provider</dt>
+        <dd>A seeded <code>courier_providers</code> row. Manual is usable; Steadfast is usable once configured and switched on; Pathao exists as a disabled row with no driver.</dd>
+        <dt>Booking attempt</dt>
+        <dd>The record of asking a provider to take a parcel, written <em>before</em> the call so a lost reply leaves something to reconcile.</dd>
+        <dt>Uncertain</dt>
+        <dd>A booking whose outcome Banij does not know. Never retried blind.</dd>
+        <dt>Invoice</dt>
+        <dd>Banij's own order reference (<code>ORD-...</code>), sent as Steadfast's <code>invoice</code>. It is the one identifier both sides know before any reply, and the key for every lookup.</dd>
+        <dt>Provider status</dt>
+        <dd>Steadfast's raw status string, kept as received in <code>shipments.provider_status</code> as a diagnostic. The application acts on the typed <code>OrderCourierStatus</code>, never on this string.</dd>
+        <dt>Needs review</dt>
+        <dd><code>shipments.needs_review</code>: a person has to look at this parcel.</dd>
+    </dl>
+
+    <h2>Data model</h2>
+    <table>
+        <thead><tr><th>Table / model</th><th>Purpose and columns</th><th>Constraints</th></tr></thead>
+        <tbody>
+        <tr><td><code>courier_providers</code> / <code>CourierProvider</code></td><td><code>code</code>, <code>name</code>, <code>is_enabled</code>, <code>supports_api</code>, <code>supports_webhook</code>, <code>supports_label</code>, <code>credentials</code> (cast <code>encrypted</code>; not where Steadfast keys are kept, see Configuration).</td><td>Seeded. Not a public-id model.</td></tr>
+        <tr><td><code>shipments</code> / <code>Shipment</code></td><td><code>public_id</code>, <code>reference</code> (prefix <code>SHP</code>), <code>order_id</code>, <code>courier_provider_id</code>, <code>status</code> (an <code>OrderCourierStatus</code>), <code>tracking_number</code>, <code>currency_code</code>, <code>delivery_charge</code> (Money), <code>delivery_charge_rule_snapshot</code>, <code>cod_amount</code>, <code>return_charge</code>, <code>pickup_requested_at</code>, <code>label_path</code>, cancellation fields, and provider columns <code>external_id</code>, <code>provider_status</code>, <code>provider_status_at</code>, <code>provider_charge</code>, <code>provider_synced_at</code>, <code>provider_sync_error</code>, <code>needs_review</code>.</td><td>Status is a foreign key into the seeded <code>order_courier_statuses</code>; a trigger lets a status move only along <code>order_courier_status_transitions</code>. CHECK: not <code>unassigned</code>; money not negative; cancelled rows have <code>cancelled_at</code>. Locked by trigger: <code>public_id</code>, <code>reference</code>, <code>order_id</code>, <code>courier_provider_id</code>, <code>currency_code</code>, <code>delivery_charge</code>, <code>delivery_charge_rule_snapshot</code>. Deletion is refused by trigger. Unique partial index on <code>(courier_provider_id, external_id)</code> where not null. <code>provider_charge</code> is its own column and is not the frozen <code>delivery_charge</code>.</td></tr>
+        <tr><td><code>shipment_packages</code> / <code>ShipmentPackage</code></td><td>Weight (3 dp), length/width/height (2 dp), <code>package_size</code>. These are physical measurements, not money.</td><td>At least one package is required to create a shipment.</td></tr>
+        <tr><td><code>shipment_tracking_events</code> / <code>ShipmentTrackingEvent</code></td><td><code>event_code</code>, <code>description</code>, <code>occurred_at</code>, <code>raw_payload</code>, <code>source</code> (<code>manual</code>, <code>system</code> or <code>webhook</code>), <code>external_event_id</code>.</td><td>Append-only by database guard.</td></tr>
+        <tr><td><code>shipment_status_history</code> / <code>ShipmentStatusChange</code></td><td>Previous and new status, <code>changed_by</code>, <code>source</code> (<code>staff</code>, <code>system</code>, <code>webhook</code>), reason and notes.</td><td>Append-only (update and delete refused). CHECK: previous differs from new.</td></tr>
+        <tr><td><code>courier_booking_attempts</code> / <code>CourierBookingAttempt</code></td><td><code>public_id</code>, <code>order_id</code>, <code>courier_provider_id</code>, <code>shipment_id</code>, <code>attempted_by</code>, <code>status</code>, unique <code>idempotency_key</code>, <code>request_snapshot</code> (JSON: invoice and COD amount, later consignment id, tracking code and raw status; never credentials or customer details), <code>failure_code</code>, <code>failure_message</code>, <code>started_at</code>, <code>completed_at</code>.</td><td>Partial unique index <code>courier_booking_attempts_one_live_per_order</code>: one attempt per order with status pending, booked or uncertain. CHECK: a booked attempt has a shipment.</td></tr>
+        <tr><td><code>courier_webhook_receipts</code> / <code>CourierWebhookReceipt</code></td><td>That a push was received once: <code>event_key</code>, <code>payload_hash</code> (SHA-256 of the body; the body itself is never stored), <code>outcome</code>, <code>received_at</code>, <code>processed_at</code>, <code>shipment_id</code>.</td><td>Unique <code>(courier_provider_id, event_key)</code>.</td></tr>
+        </tbody>
+    </table>
+
+    <h2>States &amp; lifecycle</h2>
+    <h3>Shipment status = OrderCourierStatus</h3>
+    <p>A shipment has no enum of its own. Its status is <code>OrderCourierStatus</code> (defined in the Order module), and the order's <code>courier_status</code> axis mirrors it. Moves go through <code>transitionWithHistory()</code> from the <code>RecordsStatusHistory</code> concern, never by assigning the attribute.</p>
+    <table>
+        <thead><tr><th>From</th><th>Legal next</th></tr></thead>
+        <tbody>
+        <tr><td><code>assigned</code> (set at creation)</td><td>pickup_requested, cancelled</td></tr>
+        <tr><td><code>pickup_requested</code></td><td>picked_up, cancelled</td></tr>
+        <tr><td><code>picked_up</code></td><td>in_transit, failed_delivery</td></tr>
+        <tr><td><code>in_transit</code></td><td>delivered, failed_delivery</td></tr>
+        <tr><td><code>failed_delivery</code></td><td>returned_to_origin, assigned</td></tr>
+        <tr><td><code>delivered</code>, <code>returned_to_origin</code>, <code>cancelled</code></td><td>none</td></tr>
+        </tbody>
+    </table>
+    <p>A reason is required for <code>cancelled</code> and <code>failed_delivery</code>. The mapping onto the order's delivery axis is in <code>RecordManualCourierStatusUpdate::mapToDeliveryStatus()</code> (picked_up → shipped, in_transit → in_transit, delivered → delivered, failed_delivery → failed_delivery, cancelled → cancelled; <code>returned_to_origin</code> has none on purpose: it is a courier depot fact, distinct from a customer return).</p>
+
+    <h3>CourierBookingStatus</h3>
+    <table>
+        <thead><tr><th>Case</th><th>Meaning</th></tr></thead>
+        <tbody>
+        <tr><td><code>pending</code></td><td>Recorded; the provider has not answered.</td></tr>
+        <tr><td><code>booked</code></td><td>Provider confirmed and the shipment exists.</td></tr>
+        <tr><td><code>failed</code></td><td>The provider refused, or the request provably never reached it. Safe to try again.</td></tr>
+        <tr><td><code>uncertain</code></td><td>The reply was lost. The provider may or may not hold the parcel. Never retried blind.</td></tr>
+        </tbody>
+    </table>
+    <p><code>isLive()</code> is true for everything but <code>failed</code>. This enum is not a state machine; the actions set it directly under a row lock, and only a still-<code>pending</code> attempt is settled by <code>BookSteadfastShipment</code>.</p>
+    <pre><code>pending --> booked      (Steadfast confirmed, shipment recorded)
+pending --> failed      (rejected key / validation / unreachable)
+pending --> uncertain   (timeout, unexpected reply, local write failed)
+uncertain --> booked    (reconcile: found at Steadfast, or id already known)
+uncertain --> failed    (reconcile: HTTP 404, or staff confirm "not booked")</code></pre>
+
+    <h3>Steadfast status vocabulary</h3>
+    <p>Eleven documented values, matched <strong>exactly</strong> (no case folding, no trimming). Anything else is unknown. Steadfast has no picked-up or in-transit value, so only <code>delivered</code> and <code>cancelled</code> move a shipment.</p>
+    <table>
+        <thead><tr><th>Steadfast value</th><th>Courier target</th><th>Provider-final</th><th>Review</th></tr></thead>
+        <tbody>
+        <tr><td><code>pending</code>, <code>in_review</code></td><td>-</td><td>no</td><td>no</td></tr>
+        <tr><td><code>hold</code></td><td>-</td><td>no</td><td>yes</td></tr>
+        <tr><td><code>delivered_approval_pending</code>, <code>cancelled_approval_pending</code></td><td>-</td><td>no</td><td>no (wait for the final value)</td></tr>
+        <tr><td><code>partial_delivered_approval_pending</code>, <code>unknown_approval_pending</code></td><td>-</td><td>no</td><td>yes</td></tr>
+        <tr><td><code>delivered</code></td><td>delivered</td><td>yes</td><td>no (existing delivery pipeline only)</td></tr>
+        <tr><td><code>partial_delivered</code></td><td>-</td><td>yes</td><td>yes (no design for partial quantities)</td></tr>
+        <tr><td><code>cancelled</code></td><td>cancelled</td><td>yes</td><td>no</td></tr>
+        <tr><td><code>unknown</code></td><td>-</td><td>no</td><td>yes</td></tr>
+        <tr><td>anything else</td><td>-</td><td>no</td><td>yes: stored as received, staff told once</td></tr>
+        </tbody>
+    </table>
+    <p>Only <code>delivered</code> may have a financial effect, and only by running the existing delivery pipeline. Nothing records COD collection.</p>
+
+    <h2>Actions &amp; workflows</h2>
+    <table>
+        <thead><tr><th>Class</th><th>Purpose</th></tr></thead>
+        <tbody>
+        <tr><td><code>CreateShipmentFromAllocations</code></td><td>Raise a shipment (any provider): checks the provider is available, writes the shipment and packages, calls the driver's <code>createShipment()</code>, then moves the order's courier axis to <code>assigned</code> and delivery axis to <code>courier_assigned</code> through the Order actions. Audit <code>shipment.created</code>.</td></tr>
+        <tr><td><code>RecordManualCourierStatusUpdate</code></td><td>The one place a shipment's status moves after creation, for staff, webhook and poll alike. Locks the shipment, records history and a tracking event, mirrors onto the order's courier and delivery axes, announces to the Partner, audits <code>shipment.status_advanced</code>.</td></tr>
+        <tr><td><code>BookSteadfastShipment</code></td><td>Book a Store Order's parcel with Steadfast (below).</td></tr>
+        <tr><td><code>RecordSteadfastBooking</code></td><td>Turn a confirmed consignment into a shipment (via <code>CreateShipmentFromAllocations</code>) and mark the attempt booked. Shared by booking and reconciliation. Idempotent. Audit <code>courier.booking_confirmed</code>.</td></tr>
+        <tr><td><code>ReconcileSteadfastBooking</code></td><td>Settle an uncertain attempt without booking again.</td></tr>
+        <tr><td><code>MarkSteadfastBookingNotBooked</code></td><td>A person confirms from Steadfast's panel that an uncertain booking never arrived. Reason required. Audit <code>courier.booking_confirmed_not_booked</code> (sensitive).</td></tr>
+        <tr><td><code>ApplySteadfastStatus</code></td><td>The one place a Steadfast status reaches Banij's records.</td></tr>
+        <tr><td><code>ReceiveSteadfastWebhook</code></td><td>Apply a verified push once.</td></tr>
+        <tr><td><code>SynchroniseSteadfastShipment</code> / <code>SynchroniseSteadfastShipments</code></td><td>Ask Steadfast about one parcel / one bounded batch.</td></tr>
+        <tr><td><code>ConfigureSteadfast</code>, <code>RotateSteadfastWebhookToken</code>, <code>TestSteadfastConnection</code></td><td>Settings screen actions.</td></tr>
+        </tbody>
+    </table>
+
+    <h3>Booking sequence (<code>BookSteadfastShipment</code>)</h3>
+    <ol>
+        <li>Refuse if Steadfast is not available (<code>CourierManager::isAvailable()</code>: a configured driver and an enabled row) with <code>CourierProviderUnavailable</code>.</li>
+        <li><strong>Begin</strong>, in a transaction under a row lock on the order: refuse if a live attempt exists (<code>needs_reconciliation</code>, <code>already_booked</code> or <code>already_in_progress</code>); refuse a Store Order not yet dispatched (<code>not_dispatched</code>, via <code>StoreOrderStep::hasDispatched()</code>); refuse if a non-cancelled shipment exists or the order cannot move to courier <code>assigned</code> and delivery <code>courier_assigned</code> (<code>order_not_ready</code>), checked <em>before</em> the call because a parcel booked and then unrecordable is the failure this sequence exists to avoid. Build the request, write a <code>pending</code> attempt with idempotency key <code>steadfast:{order public id}:{ulid}</code>, audit <code>courier.booking_requested</code>, commit.</li>
+        <li><strong>Call Steadfast outside any transaction</strong> (<code>SteadfastClient::createOrder()</code>). A network call must never hold a lock, and a rollback must never pretend a parcel was not booked.</li>
+        <li>A <code>SteadfastException</code> is classified: kinds whose outcome is unknown (<code>timeout</code>, <code>unexpected</code>) make the attempt <code>uncertain</code>; the rest (<code>not_configured</code>, <code>authentication</code>, <code>unreachable</code>, <code>validation</code>) make it <code>failed</code>. Both notify staff after commit.</li>
+        <li>On success the consignment id, tracking code and raw status are saved onto the attempt's snapshot at once (so reconciliation has them if the next step fails), then <code>RecordSteadfastBooking</code> creates the shipment (delivery charge = the order's <code>delivery</code>; COD amount from the snapshot), sets <code>external_id</code>, provider status and sync times, and marks the attempt booked. If recording fails, the attempt becomes <code>uncertain</code> with code <code>local_failure</code>.</li>
+    </ol>
+    <p>The request is built only from what the order froze (<code>SteadfastOrderRequestBuilder</code>): reference as <code>invoice</code>, recipient name and phone from the customer snapshot, address from the shipping snapshot, and COD amount (<code>order->total</code> if the order is cash on delivery, otherwise zero). It refuses non-Store Orders, non-BDT currency, a missing recipient, a phone that is not Bangladeshi mobile format (<code>01XXXXXXXXX</code>), and a missing street address.</p>
+
+    <h3>Reconciliation</h3>
+    <ul>
+        <li>If the attempt already holds a consignment id, finish the local records with no call.</li>
+        <li>Otherwise ask <code>GET /status_by_invoice/{invoice}</code>. Found: create the shipment with <code>needs_review = true</code> (that answer has no consignment id or tracking code). HTTP 404: the attempt becomes <code>failed</code> (<code>not_found_at_provider</code>) and booking may be tried again. Any other failure leaves it uncertain.</li>
+        <li>If the lookup is inconclusive, staff use "not booked" with a reason; if they are wrong, the parcel is booked twice.</li>
+    </ul>
+
+    <h3>Status application (<code>ApplySteadfastStatus</code>)</h3>
+    <ol>
+        <li>Under a row lock on the shipment. A raw value equal to the one held changes nothing except refreshing the sync time and clearing the error.</li>
+        <li>Unknown value or one that requires review sets the review flag. A <code>delivered</code> or <code>cancelled</code> target finds the shortest legal route through the courier map (<code>path()</code>, failure/return/cancel/delivery only ever as the destination) and walks it step by step through <code>RecordManualCourierStatusUpdate</code> in a nested transaction, so the walk is all-or-nothing. If there is no legal route (for example cancelled for a parcel already in transit) the shipment is left alone and flagged, never forced.</li>
+        <li>Stores <code>provider_status</code> as received, writes a tracking event <code>steadfast.{raw}</code>, and on the first move to flagged dispatches <code>SteadfastStatusNeedsReview</code> after commit (listener <code>AnnounceSteadfastReview</code> tells staff once).</li>
+    </ol>
+    <p>The webhook, the poll and "Check courier status now" are all this one path, so a status arriving by two routes produces one effect, one history row and one set of downstream actions.</p>
+
+    <h3>Scheduled sync</h3>
+    <p><code>SynchroniseSteadfastShipments</code> does nothing while Steadfast is off. Otherwise it takes up to <code>courier.steadfast.poll.batch</code> (50) Steadfast shipments whose own status is not terminal and whose provider status is not final, ordered oldest check first (nulls first), and only those whose last check is older than <code>interval</code> (600 s) or, after a failed check, <code>error_interval</code> (1800 s). One parcel's failure does not stop the others, except authentication or not-configured errors, which would fail every parcel identically and stop the run. A parcel Steadfast says it never heard of is flagged (<code>provider_sync_error = not_found</code>).</p>
+
+    <h2>Entry points</h2>
+    <table>
+        <thead><tr><th>Name</th><th>Method / URL</th><th>Handler</th><th>Auth / throttle</th></tr></thead>
+        <tbody>
+        <tr><td><code>admin.shipments.index</code>, <code>admin.shipments.show</code></td><td>GET <code>/admin/shipments</code>, <code>/admin/shipments/{shipment}</code></td><td>Admin\ShipmentController</td><td><code>viewAny</code> (<code>courier.view</code>)</td></tr>
+        <tr><td><code>admin.orders.shipments.store</code></td><td>POST <code>/admin/orders/{order}/shipments</code></td><td>@store</td><td><code>manageShipments</code></td></tr>
+        <tr><td><code>admin.shipments.status.advance</code></td><td>POST <code>/admin/shipments/{shipment}/status/advance</code></td><td>@advanceStatus</td><td><code>manageShipments</code></td></tr>
+        <tr><td><code>admin.orders.steadfast-booking.store</code></td><td>POST <code>/admin/orders/{order}/steadfast-booking</code></td><td>Admin\SteadfastBookingController@store</td><td><code>manageShipments</code>; throttle 10/min</td></tr>
+        <tr><td><code>admin.courier.booking-attempts.reconcile</code></td><td>POST <code>/admin/courier/booking-attempts/{attempt}/reconcile</code></td><td>@reconcile</td><td><code>manageShipments</code>; throttle 20/min</td></tr>
+        <tr><td><code>admin.courier.booking-attempts.not-booked</code></td><td>POST <code>.../{attempt}/not-booked</code></td><td>@markNotBooked</td><td><code>manageShipments</code>; reason required (max 500)</td></tr>
+        <tr><td><code>admin.shipments.steadfast-sync</code></td><td>POST <code>/admin/shipments/{shipment}/steadfast-sync</code></td><td>@sync ("Check courier status now")</td><td><code>manageShipments</code>; throttle 20/min; 404 unless the shipment's provider is Steadfast</td></tr>
+        <tr><td><code>admin.courier.steadfast.index</code> / <code>.update</code></td><td>GET / PUT <code>/admin/courier/steadfast</code></td><td>Admin\SteadfastSettingsController</td><td><code>courier.manage_integrations</code></td></tr>
+        <tr><td><code>admin.courier.steadfast.webhook-token</code></td><td>POST <code>/admin/courier/steadfast/webhook-token</code></td><td>@rotateWebhookToken</td><td>throttle 6/min</td></tr>
+        <tr><td><code>admin.courier.steadfast.test</code></td><td>POST <code>/admin/courier/steadfast/test</code></td><td>@test (reads the balance only)</td><td>throttle 6/min</td></tr>
+        <tr><td><code>webhooks.courier.steadfast</code></td><td>POST <code>/webhooks/courier/steadfast</code></td><td>Webhook\SteadfastWebhookController (invokable)</td><td>no session; Bearer token; throttle 240/min</td></tr>
+        <tr><td>Console</td><td><code>php artisan courier:steadfast-sync {--limit=}</code></td><td>SyncSteadfastShipments</td><td>Prints counts only; exits non-zero when every checked parcel failed</td></tr>
+        <tr><td>Schedule</td><td><code>Schedule::command('courier:steadfast-sync')</code> every five minutes</td><td>-</td><td><code>onOneServer</code>, <code>withoutOverlapping</code></td></tr>
+        </tbody>
+    </table>
+    <p>The admin routes sit in the <code>/admin</code> group (<code>auth</code>, <code>noindex</code>, <code>two-factor</code>). No mobile or Storefront API endpoint books or changes a shipment; Partners see courier progress on their order pages through <code>StoreOrderCourierPanel</code>.</p>
+
+    <h3>Webhook handling</h3>
+    <ol>
+        <li><code>SteadfastCourierDriver::verifyWebhookSignature()</code> compares the full <code>Authorization: Bearer &lt;token&gt;</code> header to the stored token with <code>hash_equals</code>, <strong>before</strong> the body is read. No token configured, or none sent, fails closed: 401.</li>
+        <li>Body over 16384 bytes: 413. Not JSON or not an object: 400.</li>
+        <li>Validated fields: <code>consignment_id</code> (alphanumeric, underscore, hyphen, 1-64), <code>invoice</code> (string, max 64), <code>status</code> (string, max 64), <code>updated_at</code> (string, max 64), <code>cod_amount</code> (nullable, <strong>ignored</strong>). A failure returns the field names only.</li>
+        <li><code>ReceiveSteadfastWebhook</code> builds an event key <code>sf:</code> + SHA-256 of consignment, invoice, status and Steadfast's <code>updated_at</code> (Steadfast sends no event id), inserts the receipt and applies the status in <strong>one transaction</strong>. If processing fails the receipt rolls back, so Steadfast's retry is processed. A duplicate (unique index) and an unmatched invoice both return the same <code>{"status":"success"}</code>, so the endpoint cannot be used to probe which invoices exist.</li>
+        <li>The shipment is found by the order whose <code>reference</code> equals the invoice and the latest Steadfast shipment on it. If the shipment already has an <code>external_id</code> that differs from the pushed consignment id, the push is treated as unmatched. A shipment recovered by invoice alone gets its <code>external_id</code> from the first push.</li>
+    </ol>
+
+    <h2>Permissions &amp; scoping</h2>
+    <table>
+        <thead><tr><th>Ability</th><th>Permission</th></tr></thead>
+        <tbody>
+        <tr><td><code>ShipmentPolicy::viewAny</code>, <code>view</code></td><td><code>courier.view</code></td></tr>
+        <tr><td><code>ShipmentPolicy::manageShipments</code> (create, advance, book, reconcile, sync)</td><td><code>courier.create</code> <strong>and</strong> <code>courier.edit</code>, both required</td></tr>
+        <tr><td><code>CourierSettingsPolicy::canManage</code></td><td><code>courier.manage_integrations</code> (held by the Courier Manager). One permission for seeing the screen and changing it, because it is where keys are entered and the callback token is issued.</td></tr>
+        </tbody>
+    </table>
+    <p>The <code>courier</code> module has CRUD plus approve, export and manage_integrations. Shipments are staff-only; there is no Partner permission. The Partner payload from <code>StoreOrderCourierPanel::forPartner()</code> carries the courier's name, tracking reference, Banij's customer-safe status and timeline, never a raw courier value, an error, a review flag or a credential. No tracking link is built: Steadfast's tracking-page address is not part of the verified contract.</p>
+
+    <h2>Money, ledger &amp; audit effects</h2>
+    <ul>
+        <li><code>shipments.delivery_charge</code>, <code>cod_amount</code>, <code>return_charge</code> and <code>provider_charge</code> are flat Taka (<code>NUMERIC(19,2)</code>). <code>delivery_charge</code> is the frozen Partner-facing decision; a staff-entered value is parsed with <code>DecimalAmount::parse()</code>, and a computed one freezes its breakdown in <code>delivery_charge_rule_snapshot</code>. The Steadfast balance is read from the raw JSON body so it never passes through a float.</li>
+        <li>Booking writes no ledger entry. Delivered, via the shared status action, runs the Order module's existing delivery pipeline (stock sold, supplier payable eligibility, Delivery Success Fee, proceeds "delivered" fact). <strong>Delivered is not cash collected</strong>: <code>RecordCodCollection</code> remains the only path that records collection, and the webhook's <code>cod_amount</code> is ignored.</li>
+        <li>Audit actions (module <code>courier</code> unless noted): <code>courier.booking_requested</code>, <code>courier.booking_confirmed</code>, <code>courier.booking_failed</code>, <code>courier.booking_uncertain</code>, <code>courier.booking_reconciled_not_found</code>, <code>courier.booking_confirmed_not_booked</code>, <code>courier.steadfast_configured</code> (sensitive; field names and host only), <code>courier.steadfast_webhook_token_rotated</code> (sensitive; the token is never in the row), <code>courier.steadfast_connection_tested</code>; and with module <code>courier</code> from the permission enum, <code>shipment.created</code>, <code>shipment.status_advanced</code>.</li>
+    </ul>
+
+    <h2>Configuration</h2>
+    <table>
+        <thead><tr><th>Key</th><th>Meaning</th></tr></thead>
+        <tbody>
+        <tr><td><code>courier.drivers</code></td><td>Provider code to driver class. Manual and Steadfast are mapped; Pathao is not, so <code>isImplemented()</code> is false for it.</td></tr>
+        <tr><td><code>courier.steadfast.default_base_url</code></td><td><code>https://portal.steadfast.com.bd/api/v1</code>.</td></tr>
+        <tr><td><code>courier.steadfast.allowed_hosts</code></td><td><code>['portal.steadfast.com.bd']</code>. In production the base URL must be https on an allow-listed host with no credentials, port other than 443, query or fragment; checked on every read, not only on save. Redirects are never followed.</td></tr>
+        <tr><td><code>courier.steadfast.connect_timeout</code>, <code>timeout</code></td><td>5 s and 20 s.</td></tr>
+        <tr><td><code>courier.steadfast.poll.batch</code>, <code>interval</code>, <code>error_interval</code></td><td>50, 600 s, 1800 s.</td></tr>
+        <tr><td>Settings (encrypted, group <code>courier</code>): <code>courier.steadfast.api_key</code>, <code>secret_key</code>, <code>webhook_token</code></td><td>Never in <code>.env</code>, config or tests. Masked in the UI and never sent to React. The one exception is a freshly generated webhook token, returned once so it can be pasted into Steadfast.</td></tr>
+        <tr><td>Settings: <code>courier.steadfast.base_url</code>, <code>last_test_at</code>, <code>last_test_ok</code></td><td>Optional override and the last Test connection outcome.</td></tr>
+        <tr><td><code>courier_providers.is_enabled</code> (Steadfast row)</td><td>The on/off switch. It cannot be switched on while keys or base URL are missing (<code>ConfigureSteadfast</code>).</td></tr>
+        </tbody>
+    </table>
+    <p>Nothing needs an environment variable. The scheduler (<code>php artisan schedule:work</code> or cron) must run for the poll.</p>
+
+    <h2>Rules, invariants &amp; gotchas</h2>
+    <div class="callout callout-rule"><p><strong>One booking per order, never blind.</strong> A pending attempt is recorded under a row lock before the call; the partial unique index allows one live attempt per order. A timeout, dropped connection or unreadable answer is <code>uncertain</code>, and is reconciled by invoice before any retry.</p></div>
+    <div class="callout callout-rule"><p><strong>Secrets never leave the server.</strong> Logs carry host, method, path and HTTP status only. Exceptions, audit rows and notices carry a fixed failure kind, never Steadfast's words, which could echo a key or customer data. Only a body hash is stored for webhooks.</p></div>
+    <div class="callout callout-warn"><p><strong>Unverified against the live service</strong> (from <code>requirements/06-steadfast-courier.md</code> and code comments): that <code>status_by_invoice</code> returns HTTP 404 for an unknown invoice (anything else leaves a booking uncertain); the shape of a rejected key (401/403 read as authentication, 422 as validation); whether the merchant panel exposes webhook configuration for the account and which status values the webhook actually sends; any length or format limit on <code>recipient_address</code> or <code>invoice</code> (none are invented); and the package's own host discrepancy (README says <code>portal.steadfast.com.bd</code>, its config says <code>portal.packzy.com</code>; Banij uses the first and the second is not allow-listed).</p></div>
+    <div class="callout callout-note"><p><strong>Not implemented because the package has no such call:</strong> cancellation, return requests, pickup requests, partial-delivery quantities, a settlement signal, bulk booking, status by consignment id or tracking code, and a tracking-page link. <code>SteadfastCourierDriver::cancelShipment()</code> and <code>requestPickup()</code> throw <code>UnsupportedCourierOperation</code>: cancel in Steadfast's merchant panel and Banij learns of it from the reported status. <code>fetchTrackingStatus()</code> returns null; polling goes through the synchroniser.</p></div>
+    <ul>
+        <li><strong>Booking is Store Orders only.</strong> <code>SteadfastOrderRequestBuilder</code> refuses other sources, and requires the order to be already dispatched. Other orders use a manual shipment.</li>
+        <li><strong>The driver does nothing on create.</strong> <code>SteadfastCourierDriver::createShipment()</code> is empty because booking happens <em>before</em> the shipment row exists. Do not move the network call into the shipment transaction.</li>
+        <li><strong>Unknown or conflicting status is flagged, not guessed.</strong> Partial delivery moves nothing and touches no stock, COD or wallet.</li>
+        <li><strong>Rolling back.</strong> Switch Steadfast off: booking and the scheduled poll stop, but the callback keeps applying statuses for parcels already booked. To refuse it too, generate a new token and do not give it to Steadfast. Shipments, attempts and receipts are kept; shipments are never deleted. Both additive migrations have working <code>down()</code> methods.</li>
+        <li>The provider-agnostic doc comments in <code>CourierProviderCode</code>, <code>CourierManager</code> and <code>config/courier.php</code> still say "only manual in this batch" and that Steadfast has no entry; the config now maps Steadfast. Trust the code.</li>
+        <li><code>ShipmentStatusChangeSource::Webhook</code> comment says no provider sends webhooks yet; Steadfast now does.</li>
+    </ul>
+
+    <h2>How to...</h2>
+    <h3>Deploy Steadfast for the first time</h3>
+    <ol>
+        <li>Run the migrations (the two <code>2026_11_17_*</code> ones are additive). Make sure the scheduler runs.</li>
+        <li>Grant <code>courier.manage_integrations</code> (Courier Manager has it). On <code>admin.courier.steadfast.index</code>, enter the API key and secret key, keep the default address, save, then Test connection (balance read only).</li>
+        <li>Generate the token, and in Steadfast's merchant panel enter the callback URL shown and the token as the Bearer auth token. Whether the panel offers this is unconfirmed.</li>
+        <li>Only then switch Steadfast on. Before the first real booking, do the read-only checks listed in section 5 of <code>requirements/06-steadfast-courier.md</code>, and get explicit approval.</li>
+    </ol>
+    <h3>Add a new courier provider</h3>
+    <ol>
+        <li>Add a case to <code>CourierProviderCode</code> and a seeded row in <code>courier_providers</code> (new migration; precedent <code>2026_10_22_100000_create_courier_providers</code>).</li>
+        <li>Write a driver implementing <code>App\Integrations\Courier\Contracts\CourierProvider</code> (create, pickup, fetch status, cancel, <code>verifyWebhookSignature</code>, <code>code</code>); throw <code>UnsupportedCourierOperation</code> for what the API lacks. Register it in <code>config/courier.php</code> under <code>drivers</code>.</li>
+        <li>Reuse <code>CreateShipmentFromAllocations</code> and route every status through <code>RecordManualCourierStatusUpdate</code> with source <code>webhook</code> or <code>system</code>. Never update shipment or order columns directly. Follow the Steadfast shape: attempt before call, call outside the transaction, uncertain on unknown outcome, receipts for idempotent pushes.</li>
+        <li>Add its own credentials as encrypted settings, never <code>.env</code>; add tests with <code>Http::fake</code>.</li>
+    </ol>
+    <h3>Handle a new Steadfast status value</h3>
+    <ol>
+        <li>Add the case to <code>SteadfastStatus</code> and set <code>courierTarget()</code>, <code>isProviderFinal()</code> and <code>requiresReview()</code>. <code>finalValues()</code> feeds the poller automatically.</li>
+        <li>If it needs a new courier target, check the walk in <code>ApplySteadfastStatus::path()</code> still finds a legal route. Add cases to <code>SteadfastStatusTest</code>.</li>
+    </ol>
+    <h3>Unstick an uncertain booking</h3>
+    <ol>
+        <li>On the order page use Reconcile. If the answer stays inconclusive, check Steadfast's merchant panel, then use "Mark not booked" with a reason. Do not book again before one of these.</li>
+    </ol>
+
+    <h2>Testing</h2>
+    <pre><code>psql -c 'CREATE SCHEMA IF NOT EXISTS testing_mine'
+DB_SEARCH_PATH=testing_mine vendor/bin/pest tests/Feature/Courier
+DB_SEARCH_PATH=testing_mine vendor/bin/pest --group=courier</code></pre>
+    <table>
+        <thead><tr><th>File</th><th>Covers</th></tr></thead>
+        <tbody>
+        <tr><td><code>SteadfastBookingTest.php</code></td><td>Booking, failure, uncertain, reconcile (uses <code>Http::fake</code>).</td></tr>
+        <tr><td><code>SteadfastStatusTest.php</code></td><td>Status application, webhook, poll.</td></tr>
+        <tr><td><code>SteadfastConnectionTest.php</code>, <code>SteadfastNoticesTest.php</code></td><td>Test connection and notices.</td></tr>
+        <tr><td><code>ManualShipmentWorkflowTest.php</code>, <code>ShipmentControllerTest.php</code>, <code>CourierProviderTrackingTest.php</code></td><td>Manual workflow, screens, provider tracking columns.</td></tr>
+        <tr><td><code>tests/Feature/Orders/OrderCourierStatusTransitionTest.php</code></td><td>The courier axis map.</td></tr>
+        </tbody>
+    </table>
+    <p>Fixtures are in <code>tests/Feature/Courier/SteadfastFixtures.php</code> (not a test file): <code>steadfastFixtureEnable()</code> (configures Steadfast with fixture keys), <code>steadfastFixtureOrder()</code> (a dispatched Store Order) and <code>steadfastFixtureShipment()</code>. No test calls the real service. Prefix any new helper (<code>steadfastFixture...</code>), since Pest's helpers share one global namespace.</p>
+
+    <h2>Related modules</h2>
+    <ul>
+        <li><a href="order.html">Order</a> - the axes a shipment drives, the dispatch gate, delivery consequences.</li>
+        <li><a href="notification.html">Notification</a> - <code>AnnounceCourierEvent</code> and the courier notifications.</li>
+        <li><a href="settings.html">Settings</a> - the encrypted settings store used for credentials.</li>
+        <li><a href="audit.html">Audit</a>, <a href="../integrations/overview.html">Integrations overview</a>.</li>
+    </ul>
+</main>
+</body>
+</html>

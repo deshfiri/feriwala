@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Architecture</title>
+    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+    <script src="../assets/docs.js"></script>
+</head>
+<body>
+<main id="doc">
+    <h1>Architecture</h1>
+    <p class="lead">The system map: what Feriwala does for the business, who uses which surface, how the code is layered, and what happens to a request on each of the four entry paths (web, mobile API, storefront API, webhook). Read this first, then <a href="conventions.html">Conventions</a>.</p>
+
+    <h2>What Feriwala is</h2>
+    <p>Feriwala is a centralized ERP for wholesale and dropshipping in Bangladesh. It is <strong>not a shop</strong>. The public Feriwala site has no catalog, no prices, no cart and no checkout (spec §1, <code>requirements/00-understanding.md</code>); the login screen is the landing page (<code>Route::get('/')</code> redirects to <code>login</code>). All real work happens behind login.</p>
+
+    <h3>The business model in one page</h3>
+    <ul>
+        <li><strong>Feriwala (the platform)</strong> owns the <em>central catalog</em> and the <em>central stock pool</em>. Only admins create products; partners select from the catalog (§11, §12).</li>
+        <li><strong>Partners</strong> are the businesses that register, pass KYC, pick a package, pay the combined registration + package fee, and become <code>Active</code>. A partner can then buy in bulk (<strong>wholesale</strong>, for their own stock) and/or resell through <strong>dropshipping</strong> (publish catalog products to their own storefront; the customer's order is fulfilled by Feriwala).</li>
+        <li><strong>Suppliers</strong> sell goods to Feriwala. They are a <em>separate account domain</em> (D25) with their own login, KYC, portal, wallet and payables. Suppliers list products, set confidential rates, hold offers and stock, and are paid through payables and withdrawals.</li>
+        <li><strong>Storefronts</strong> are each partner's public website. Each Owner has one independently installed storefront built from a master template (D32). The storefront reads catalog/stock/prices from the ERP and writes orders and customers back through the frozen <a href="../api/storefront-api.html">Storefront API</a>. See <a href="../storefront-app.html">Storefront app</a>.</li>
+        <li><strong>Customers</strong> of a storefront have no ERP account. They exist as website customers and pay for orders through a payment gateway or choose cash on delivery.</li>
+        <li><strong>Couriers</strong> (Steadfast is the implemented driver) deliver orders; cash-on-delivery is tracked and reconciled separately from online payments.</li>
+    </ul>
+
+    <h3>Money flow and merchant of record</h3>
+    <p>For dropshipping, <strong>Feriwala is the merchant of record</strong> (D12, non-negotiable 7): the customer pays a Feriwala-controlled gateway or selects COD; Feriwala verifies the payment, controls inventory, fulfilment, courier and COD reconciliation; the partner's <em>earning</em> (commission) is calculated once the order is eligible and credited to the partner's wallet; the partner withdraws from the ERP. "Retail margin" is a commission calculation base, not a separate money path.</p>
+    <div class="callout callout-note"><p><strong>D36 amends D12 for one case.</strong> D12 stands unchanged as <em>Model A</em> (Platform gateway). D36 (2026-11-02) adds <em>Model B</em>: where Admin allows it, a partner may collect a storefront customer's payment into the partner's own gateway account. For that transaction the partner is the payment recipient and Feriwala recovers its platform receivable from the partner's wallet. The payment direction is frozen on the payment when it is handed to a gateway. Read <a href="decisions.html">Decisions</a> before touching payment code.</p></div>
+
+    <h2>Actors and portals</h2>
+    <table>
+        <thead><tr><th>Surface</th><th>Who</th><th>Where it lives</th><th>Auth / gate</th></tr></thead>
+        <tbody>
+            <tr><td>Auth screens (landing = login)</td><td>Everyone</td><td><code>routes/web.php</code>, Fortify</td><td>Guest</td></tr>
+            <tr><td>ERP (business panel)</td><td>Partner owner and invited staff</td><td><code>routes/web.php</code> and <code>routes/settings.php</code>, controllers in <code>app/Http/Controllers/Erp</code>, pages <code>resources/js/pages/**</code>. No URL prefix; route names like <code>wallet.show</code>, <code>kyc.create</code></td><td><code>auth</code>, <code>business.activated</code> (allow-list funnel gate), <code>noindex</code></td></tr>
+            <tr><td>Admin panel</td><td>Feriwala platform staff</td><td><code>/admin/*</code>, route names <code>admin.*</code>, controllers in <code>app/Http/Controllers/Admin</code></td><td><code>auth</code>, <code>noindex</code>, <code>two-factor</code>, plus permissions via policies/Gates</td></tr>
+            <tr><td>Supplier portal</td><td>Suppliers</td><td><code>/supplier/*</code>, <code>routes/supplier.php</code>, route names <code>supplier.*</code>, controllers in <code>app/Http/Controllers/Supplier</code></td><td>Separate guard <code>auth:supplier</code>; <code>supplier.operational</code> on operational routes</td></tr>
+            <tr><td>Mobile app API</td><td>Partners, staff and suppliers on a phone</td><td><code>/api/mobile/v1</code>, <code>routes/mobile.php</code> + <code>routes/mobile/**</code></td><td>Sanctum bearer token, <code>mobile.*</code> gates. See <a href="../api/mobile-api.html">Mobile API</a></td></tr>
+            <tr><td>Storefront API</td><td>A partner's storefront installation (server to server)</td><td><code>/api/storefront/v1</code>, <code>routes/api.php</code></td><td>Signed requests, per-website credential, <code>storefront.*</code> middleware. See <a href="../api/storefront-api.html">Storefront API</a></td></tr>
+            <tr><td>Webhooks</td><td>Payment gateways, external stores, the courier</td><td><code>webhooks/payment/{gateway}</code>, <code>webhooks/payment/{gateway}/{payment}</code>, <code>webhooks/stores/{store}</code>, <code>webhooks/courier/steadfast</code></td><td>Signature or bearer secret, CSRF-exempt, throttled</td></tr>
+            <tr><td>Storefront application</td><td>Customers of a partner</td><td>Separate Laravel app in <code>storefront/</code></td><td>Calls the Storefront API with its own credential</td></tr>
+        </tbody>
+    </table>
+    <p>Admin and ERP are different <em>routes</em> over the same user table; what separates them is identity, permissions and the funnel gate, not a second database or a second deployable. Suppliers are the exception: a different model, guard and route tree.</p>
+
+    <h2>The single account structure</h2>
+    <p>The most unusual thing about the project. Three decisions fit together (D1, D23, D25):</p>
+    <table>
+        <thead><tr><th>Concept</th><th>Model / enum</th><th>Answers</th></tr></thead>
+        <tbody>
+            <tr><td>Login identity</td><td><code>App\Models\User</code>, <code>identity_status</code></td><td>May this person sign in at all? Gates <em>everything</em>, admin included.</td></tr>
+            <tr><td>Commercial workspace</td><td><code>App\Domain\Account\Models\BusinessAccount</code>, <code>AccountStatus</code> (the 22 &sect;5.3 statuses)</td><td>May this business trade? Gates the ERP: wallet, orders, websites.</td></tr>
+            <tr><td>Staff of a business</td><td><code>AccountMembership</code>, <code>AccountInvitation</code></td><td>A member belongs to the owner's account and does no KYC or payment of their own.</td></tr>
+            <tr><td>Platform authority</td><td>Roles and permissions (<code>app/Domain/Access</code>, <code>PlatformRole</code>, <code>PermissionCatalogue</code>)</td><td>What a Feriwala staff member may administer.</td></tr>
+            <tr><td>Supplier</td><td><code>App\Domain\Supplier\Models\Supplier</code>, guard <code>supplier</code>, provider <code>suppliers</code></td><td>A wholly separate identity; never converts to or from a <code>User</code>.</td></tr>
+        </tbody>
+    </table>
+    <ul>
+        <li>There is <strong>no "customer account" vs "partner account"</strong> and no upgrade path. One <code>BusinessAccount</code> moves through a status lifecycle; once activated it can do dropshipping, wholesale, or both from one panel, one KYC, one wallet.</li>
+        <li>A user <strong>owns at most one</strong> business account (database-enforced). There is no account switcher and no account segment in URLs: the account is resolved from the membership (<code>App\Concerns\ResolvesBusinessAccount</code>).</li>
+        <li>Platform staff reach permitted admin routes <strong>without</strong> owning a business account. A suspended <em>identity</em> loses everything; a suspended <em>business</em> loses the ERP for owner and members, but a staff member who also owns it keeps admin.</li>
+        <li>Keep three concepts apart in code: a <em>status</em> (lifecycle), a <em>package entitlement</em> (what was bought, <code>entitled:staff_limit</code> middleware, <code>App\Domain\Package\Entitlements</code>) and a <em>permission</em> (what a staff member may administer).</li>
+    </ul>
+
+    <h2>System map</h2>
+<pre><code>                         +---------------------------+
+   Customers  ---------> |  Partner storefront app   |  (storefront/, one install per Owner, D32)
+                         +-------------+-------------+
+                                       | signed HTTPS (frozen v1 contract)
+                                       v
+ Payment gateways --&gt;  webhooks/payment/*          /api/storefront/v1
+ External stores  --&gt;  webhooks/stores/*                  |
+ Steadfast        --&gt;  webhooks/courier/steadfast          |
+        |                                                  |
+        v                                                  v
++------------------------------------------------------------------------+
+|                    ONE LARAVEL APPLICATION (app/)                       |
+|                                                                        |
+|  Http (Controllers: Erp | Admin | Supplier | Api | Webhook | Settings)  |
+|        Middleware, Requests, Resources                                 |
+|                           |  validate, authorize, delegate, respond    |
+|                           v                                            |
+|  Domain/&lt;Module&gt;/Actions  (all business logic)                         |
+|     Models  Enums  Data  Events  Jobs  Policies  Queries  Rules        |
+|            |                         |                                 |
+|            v                         v                                 |
+|  Integrations/ (Payment, Sms,    Support/ + Concerns/                  |
+|   Courier, Store, Storage, Dns)    Money, Idempotency, Concurrency,    |
+|   one contract + manager each      StateMachine, References, Rules...  |
++--------------------+---------------------------+-----------------------+
+                     |                           |
+              PostgreSQL 18                  Redis 8
+        (NUMERIC(19,2) money, triggers)  (cache | sessions | queues | locks)
+
+   Browsers (Inertia + React)  ----&gt;  web routes  (ERP, /admin, /supplier)
+   Mobile app (bearer token)   ----&gt;  /api/mobile/v1</code></pre>
+    <p>It is a single deployable: one migration set, one test suite, domain folders as module boundaries, not packages (<code>requirements/01-architecture.md</code> §2).</p>
+
+    <h2>Layering</h2>
+    <table>
+        <thead><tr><th>Layer</th><th>Path</th><th>Holds</th><th>Must not</th></tr></thead>
+        <tbody>
+            <tr><td>Http</td><td><code>app/Http/Controllers/{Erp,Admin,Supplier,Api,Webhook,Settings,Public}</code>, <code>Middleware</code>, <code>Requests</code>, <code>Resources</code>, <code>Responses</code></td><td>Validate, authorize, delegate, respond. Inertia renders and API resources.</td><td>Contain workflow or money logic.</td></tr>
+            <tr><td>Domain</td><td><code>app/Domain/&lt;Module&gt;/</code></td><td><code>Models</code>, <code>Actions</code>, <code>Data</code>, <code>Enums</code>, <code>Events</code>, <code>Listeners</code>, <code>Jobs</code>, <code>Policies</code>, <code>Queries</code>, <code>Rules</code>, <code>Services</code>, <code>Exceptions</code></td><td>Put workflow in models; reach into another domain's models to rewrite their state.</td></tr>
+            <tr><td>Integrations</td><td><code>app/Integrations/{Payment,Sms,Courier,Store,Storage,Dns}</code></td><td>One contract + one manager per kind (<code>PaymentGatewayManager</code>, <code>SmsProviderManager</code>, <code>CourierManager</code>, <code>StorePlatformManager</code>) and the drivers.</td><td>Know about business rules; controllers must not know one provider from another.</td></tr>
+            <tr><td>Support</td><td><code>app/Support/{Money,Idempotency,Concurrency,StateMachine,StatusHistory,References,Rules,Localization,Security,Status,Navigation}</code></td><td>Cross-cutting primitives with no domain knowledge.</td><td>Depend on a domain module.</td></tr>
+            <tr><td>Concerns</td><td><code>app/Concerns</code></td><td>Model traits (<code>HasPublicId</code>, <code>HasSlug</code>, <code>HasReference</code>, <code>HasStateMachine</code>, <code>RecordsStatusHistory</code>, <code>AppendOnlyStatusHistory</code>, <code>ScopedToViewer</code>, <code>HasPartnerNumber</code>) and controller helpers (<code>ResolvesBusinessAccount</code>, <code>ResolvesWebsiteForStaff</code>, <code>ScopesWebsiteRoutes</code>).</td><td>&nbsp;</td></tr>
+            <tr><td>Providers</td><td><code>app/Providers</code></td><td><code>AuthorizationServiceProvider</code> (policy registration, Super Admin <code>Gate::before</code>), <code>ApiServiceProvider</code> (mobile limiters, Scramble docs), <code>PaymentServiceProvider</code>, <code>StoreServiceProvider</code>, <code>WebsiteServiceProvider</code>, <code>SmsServiceProvider</code>, <code>FortifyServiceProvider</code>, <code>AppServiceProvider</code></td><td>&nbsp;</td></tr>
+        </tbody>
+    </table>
+    <p>The same shape exists on the front end: <code>resources/js/pages/&lt;area&gt;/...</code>, <code>layouts</code>, <code>components</code>. See <a href="frontend.html">Frontend</a>.</p>
+
+    <h3>Domain modules</h3>
+    <p>Folders present under <code>app/Domain</code>: Access, Account, Address, Audit, Backup, Bank, Billing, Cases, Catalog, Cms, Commission, ContentLibrary, Courier, Damage, Dropshipping, ExternalStore, Fulfillment, Inventory, Kyc, Location, Notification, Order, Package, Payout, Referral, Reporting, Settings, Settlement, Sms, Sourcing, Storage, Supplier, Tax, Wallet, Website, Wholesale, Withdrawal. Eight of those folders contain no PHP files today: Backup, Cms, Commission, Dropshipping, Fulfillment, Reporting, Settlement and Sms (SMS drivers, for example, live in <code>app/Integrations/Sms</code>). They were reserved by the original plan in <code>requirements/01-architecture.md</code>; do not assume an empty folder means the feature is missing, check the relevant module page.</p>
+
+    <h3>How modules depend on each other</h3>
+    <p>There is no tooling that enforces a dependency graph; the rule is the Domain README's: <strong>cross-domain calls go through Actions or Events</strong>, not by rewriting another domain's models. In practice the dependencies run roughly from foundations upward:</p>
+<pre><code>Support, Concerns  (no domain knowledge)
+  Access, Audit, Settings, Location, Bank, Address, Notification, Sms, Storage
+    Account, Kyc, Package            (identity, activation funnel)
+      Billing  (payments, invoices, fees, gateways)
+        Wallet (wallet, ledger, balances)   Tax
+          Catalog, Inventory, Sourcing, Supplier, ContentLibrary
+            Wholesale, Dropshipping/Website, ExternalStore
+              Order  (unified order management), Courier, Cases, Damage
+                Commission, Referral, Withdrawal, Payout, Settlement</code></pre>
+    <p>The arrows are approximate and one-directional by intent. Real examples: <code>Wallet\Actions\CreditSettledPayment</code> takes a <code>Billing\Models\Payment</code> and credits through <code>Wallet\WalletService</code>; <code>Wallet\Actions\CorrectLedgerEntry</code> records into <code>Audit</code> through <code>RecordAuditLog</code>. When the arrow would have to point downward, publish an Event (for instance <code>Wallet\Events\WalletCredited</code>, fired after commit) rather than importing the upstream class.</p>
+
+    <h2>The Actions pattern</h2>
+    <p>Business logic lives in <strong>Actions</strong>: one class, one public method, usually <code>handle()</code>. Controllers validate, authorize, delegate and respond. Models hold relationships, casts and scopes, never workflow.</p>
+<pre><code>// app/Domain/Wallet/Actions/CreditSettledPayment.php (abridged)
+class CreditSettledPayment
+{
+    public function __construct(
+        protected WalletService $wallet,
+        protected LogManager $log,
+    ) {}
+
+    public function handle(Payment $payment): ?WalletTransaction
+    {
+        // ... decide whether this payment is wallet money at all ...
+        return $this-&gt;wallet-&gt;credit($wallet, $type, $payment-&gt;amount, new PostingContext(
+            source: 'payment',
+            description: $payment-&gt;purpose-&gt;label().' - '.$payment-&gt;reference,
+            idempotencyKey: 'payment:'.$payment-&gt;reference,
+            paymentId: $payment-&gt;id,
+        ));
+    }
+}</code></pre>
+    <ul>
+        <li>Actions receive typed arguments: a <code>Money</code> (never a raw number or decimal string) and DTOs from <code>Data/</code>. What a person typed is parsed at the HTTP boundary with <code>DecimalAmount::parse()</code>.</li>
+        <li><code>Queries/</code> are read models and report queries, including self-scoping. <code>Jobs/</code> carry queued work; <code>Events/</code> and <code>Listeners/</code> are how modules react to each other.</li>
+        <li>A shared infrastructure service that is not one operation can be a <code>Service</code> or a root-level class (<code>WalletService</code> is "the only thing that moves money in a wallet"; Actions call it).</li>
+    </ul>
+
+    <h2>Request lifecycles</h2>
+
+    <h3>1. A web request (ERP, admin, supplier)</h3>
+    <ol>
+        <li><strong>Kernel and web group.</strong> <code>bootstrap/app.php</code> prepends <code>ApplyConfiguredSessionLifetime</code> (it must run before <code>StartSession</code>), then the framework web middleware (cookies, session, CSRF), then appends, in order: <code>HandleAppearance</code>, <code>DefaultReasonUnlessSecurity</code>, <code>EnsureIdentityHasPlatformAccess</code> (global identity gate, signs out a suspended login), <code>SetLocale</code>, <code>TrackAuthenticatedSession</code>, <code>HandleInertiaRequests</code>, <code>AddLinkHeadersForPreloadedAssets</code>.</li>
+        <li><strong>Route middleware.</strong> ERP: <code>auth</code> (and often <code>verified</code>), <code>business.activated</code>, <code>noindex</code>, optionally <code>entitled:&lt;feature&gt;</code>. Admin: <code>auth</code>, <code>noindex</code>, <code>two-factor</code>, with <code>RequirePassword</code> on sensitive actions. Supplier: <code>auth:supplier</code>, <code>supplier.operational</code>.</li>
+        <li><strong>Controller.</strong> Resolves the account from the membership (<code>ResolvesBusinessAccount</code>), validates (a Form Request, or an inline <code>$request-&gt;validate()</code> with <code>DecimalAmountRule</code> for money), authorizes (policy, Gate, or the permission name <code>module.action</code>).</li>
+        <li><strong>Action</strong> runs the work in a transaction where it mutates money or stock.</li>
+        <li><strong>Response.</strong> <code>Inertia::render('wallet/top-up', [...])</code> for pages (money passed as <code>Money::jsonSerialize()</code>), or a redirect with flash data. A 403 on catalog or inventory admin routes renders a branded Inertia refusal page (<code>bootstrap/app.php</code>).</li>
+    </ol>
+
+    <h3>2. A mobile API request</h3>
+    <ol>
+        <li><code>routes/api.php</code> mounts <code>routes/mobile.php</code> under <code>mobile/v1</code> with <code>mobile.locale</code> and <code>throttle:mobile</code>. No session, no CSRF.</li>
+        <li>Token routes add <code>auth:sanctum</code> and <code>mobile.access:user</code> (or <code>supplier</code>), which refuses a token held by the wrong kind of login and revokes the token of a suspended one.</li>
+        <li>Business routes sit inside <code>mobile.activated</code>; pre-activation areas are registered outside it.</li>
+        <li>A controller extending <code>MobileController</code> validates with a Form Request, calls the same Actions and Queries as the web app, and returns an API Resource (envelope <code>data</code>, <code>links</code>, <code>meta</code>). Details: <a href="../api/mobile-api.html">Mobile API</a>.</li>
+    </ol>
+
+    <h3>3. A storefront API request</h3>
+    <ol>
+        <li><code>routes/api.php</code> prefix <code>storefront/v1</code>, name prefix <code>storefront.v1.</code>. Stateless.</li>
+        <li><code>storefront.log</code> writes every call to <code>api_logs</code>, refused ones included.</li>
+        <li><code>storefront.auth</code> (<code>AuthenticateStorefrontRequest</code>) requires HTTPS, a non-revoked credential, a timestamp within &plusmn;300 s, a matching signature compared in constant time, and a nonce not seen for 600 s. Every failure is the same <code>401</code> to the caller with a precise reason in the log. The credential <em>is</em> the tenancy boundary: no endpoint accepts a website from the caller.</li>
+        <li><code>storefront.host</code> checks a stated storefront host belongs to that website; <code>storefront.rate:read|write|other</code> applies the credential's budget; <code>storefront.scope:&lt;scope&gt;</code> requires the endpoint's scope; writes also pass <code>storefront.idempotent</code> (<code>Idempotency-Key</code>, same key answered once with the same bytes).</li>
+        <li>The controller (<code>app/Http/Controllers/Api/Storefront/V1</code>) delegates to Actions. There is deliberately no wallet, ledger, KYC, commission or account surface. The contract is frozen at v1 (<code>requirements/05-storefront-api-contract.md</code>).</li>
+    </ol>
+
+    <h3>4. A webhook</h3>
+    <ol>
+        <li>Routes are in <code>routes/web.php</code>, CSRF-exempt (<code>bootstrap/app.php</code>: <code>webhooks/payment/*</code>, <code>webhooks/stores/*</code>, <code>webhooks/courier/*</code>), throttled (<code>payment-webhooks</code>, <code>store-webhooks</code>, <code>240,1</code> for Steadfast).</li>
+        <li>The controller authenticates the message first (gateway signature, store signature over the raw body, or the bearer token for the courier), before looking anything up.</li>
+        <li>It writes the message down (<code>RecordPaymentLog</code>), <strong>queues</strong> the work (<code>SettleGatewayNotification</code>) and acknowledges. Every outcome that is not a signature failure gets the identical <code>Acknowledged.</code> answer so the endpoint cannot be used to probe which references exist.</li>
+        <li>The job asks the gateway directly what happened (a notification only says which payment to look at), then settles through the Billing and Wallet Actions, idempotently.</li>
+        <li>The payer's browser coming back from a gateway uses separate <code>checkout/return</code>-style POST routes that run <em>without</em> the <code>web</code> group (<code>GatewayReturnController</code>); they settle nothing and 303 to a signed-in GET page.</li>
+    </ol>
+
+    <h2>Architecture-locked</h2>
+    <div class="callout callout-rule"><p><strong>Raise before implementing.</strong> Changes to any of these need approval first (<code>CLAUDE.md</code>, change control in <code>requirements/04-decisions.md</code>): merchant of record &middot; financial ledger &middot; payment direction &middot; storefront separation &middot; single account structure &middot; product ownership &middot; wallet settlement &middot; referral rewards.</p></div>
+    <table>
+        <thead><tr><th>Locked area</th><th>Where it is decided</th><th>What it means in code</th></tr></thead>
+        <tbody>
+            <tr><td>Merchant of record</td><td>D12, amended by D30, partly superseded by D36</td><td>Feriwala verifies payments and controls fulfilment; Model A / Model B payment directions.</td></tr>
+            <tr><td>Financial ledger</td><td>&sect;23.2, &sect;36.1</td><td>Append-only ledger; every mutation is a locked transaction with a ledger entry.</td></tr>
+            <tr><td>Payment direction</td><td>D12, D36</td><td>Frozen on the payment when handed to a gateway.</td></tr>
+            <tr><td>Storefront separation</td><td>D11, D30, D32; contract <code>05</code></td><td>The ERP is authoritative for catalog, prices, stock, orders, payments, customers and money; storefronts are separate installs behind the frozen v1 API.</td></tr>
+            <tr><td>Single account structure</td><td>D1, D23 (and D25 for suppliers)</td><td>User vs BusinessAccount; one account per owner; suppliers a separate domain.</td></tr>
+            <tr><td>Product ownership</td><td>&sect;11, &sect;12, D25</td><td>Only admins create products; suppliers never own catalog products.</td></tr>
+            <tr><td>Wallet settlement</td><td>&sect;23, &sect;24, D36</td><td>Platform credit vs withdrawable money; balance buckets.</td></tr>
+            <tr><td>Referral rewards</td><td>&sect;25, D24 (D14)</td><td>Admin-configurable multi-level commission, off by default; fraud prevention required.</td></tr>
+        </tbody>
+    </table>
+
+    <h2>Infrastructure</h2>
+    <ul>
+        <li><strong>PostgreSQL 18 and Redis 8</strong> run natively in WSL in development (D5). Docker and Sail are not a development path; <code>compose.yaml</code> is a production-parity reference only.</li>
+        <li>Redis carries cache, sessions, queues, rate limiting and locks on four separate databases, with locks isolated so a cache flush cannot drop a lock guarding a financial operation. <strong>Never</strong> switch session, cache or queue to <code>file</code>, <code>sync</code> or <code>database</code>, even temporarily: the app must stay stateless and horizontally scalable (&sect;40, D10).</li>
+        <li>Heavy work is queued: SMS, email, exports, sync, settlement, reconciliation. Scheduled tasks are in <code>routes/console.php</code>. See <a href="operations.html">Operations</a> and <a href="commands.html">Commands</a>.</li>
+        <li>Real-time nudges use Laravel Echo over a private channel per person (<code>routes/channels.php</code>, <code>NotificationsChanged::channelFor()</code>); the socket only tells the page to reload.</li>
+        <li>Tests run in a <code>testing</code> schema in the same database. See <a href="testing.html">Testing</a>.</li>
+    </ul>
+
+    <h2>Where to go next</h2>
+    <div class="cards">
+        <a class="card" href="conventions.html"><h3>Conventions</h3><p>The non-negotiables and the code that enforces them.</p></a>
+        <a class="card" href="http-layers.html"><h3>HTTP layers</h3><p>Routes, middleware, policies, rate limiters, shared props.</p></a>
+        <a class="card" href="frontend.html"><h3>Frontend</h3><p>Inertia, React, Wayfinder, DataTable, design tokens.</p></a>
+        <a class="card" href="decisions.html"><h3>Decisions</h3><p>D1 to D36, the approved record.</p></a>
+        <a class="card" href="database.html"><h3>Database</h3><p>Schema, constraints, triggers.</p></a>
+        <a class="card" href="glossary.html"><h3>Glossary</h3><p>Vocabulary as the code and UI use it.</p></a>
+    </div>
+</main>
+</body>
+</html>

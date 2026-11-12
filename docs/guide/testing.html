@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Testing and checks</title>
+    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+    <script src="../assets/docs.js"></script>
+</head>
+<body>
+<main id="doc">
+    <h1>Testing and checks</h1>
+    <p class="lead">How the Pest and Vitest suites are laid out, how they stay away from your development data, the traps that make a healthy suite look broken, and the four checks every change must pass.</p>
+
+    <div class="callout callout-rule"><p><strong>Rule.</strong> Every code change adds or updates a test, and the narrowest relevant slice is run after each change. Do not delete tests or test files without approval. Run <strong>one</strong> Pest process at a time against a given schema.</p></div>
+
+    <h2>Layout</h2>
+    <table>
+        <thead><tr><th>Path</th><th>What it holds</th></tr></thead>
+        <tbody>
+            <tr><td><code>tests/Feature/&lt;Module&gt;/</code></td><td>HTTP, action and database tests, one folder per module or concern (<code>Wallet</code>, <code>Kyc</code>, <code>Orders</code>, <code>Concurrency</code>, <code>SelfScope</code>, <code>Mobile</code>, <code>WebsiteApi</code>, ...). Bound to <code>Tests\TestCase</code> with <code>RefreshDatabase</code>.</td></tr>
+            <tr><td><code>tests/Unit/</code></td><td><code>Support</code> (money, locks, idempotency, state machine, references), <code>Domain</code>, <code>Http</code>, <code>Integrations</code>. Not bound to <code>TestCase</code> or <code>RefreshDatabase</code> by <code>tests/Pest.php</code>; keep them database-free.</td></tr>
+            <tr><td><code>tests/Pest.php</code></td><td>Binds feature tests, declares groups, and defines the shared fixture functions.</td></tr>
+            <tr><td><code>tests/Support/CaseFixtures.php</code></td><td>Fixtures for returns, exchanges and damages; loaded from <code>Pest.php</code> with <code>require_once</code>.</td></tr>
+            <tr><td><code>tests/TestCase.php</code></td><td>Base class. Binds a <code>HostResolver</code> stub so no test resolves a real host name (every name resolves to one public documentation address). Adds <code>skipUnlessFortifyHas()</code>.</td></tr>
+            <tr><td><code>resources/js/**/*.test.ts(x)</code></td><td>Vitest tests (through <code>vp test run</code>), beside the component, hook, page or lib they cover. Each file names its own environment; the shared setup is <code>resources/js/test/setup.ts</code> (Testing Library matchers and per-test cleanup).</td></tr>
+        </tbody>
+    </table>
+
+    <h2>The <code>testing</code> schema</h2>
+    <p>Tests run inside a <code>testing</code> schema <strong>in the same database</strong> as development, not in a separate database. <code>phpunit.xml</code> sets <code>DB_SEARCH_PATH=testing</code> and <code>config/database.php</code> passes it to the <code>pgsql</code> connection's <code>search_path</code>. The application role owns its database and can create schemas but has no <code>CREATEDB</code> privilege, so a schema gives the same isolation without elevated rights on every developer machine and CI runner (decision D5). <code>scripts/setup-dev-environment.sh</code> creates the schema; CI creates it with <code>CREATE SCHEMA IF NOT EXISTS testing</code>.</p>
+    <p><code>phpunit.xml</code> also fixes these environment values for the test process only:</p>
+    <table>
+        <thead><tr><th>Variable</th><th>Test value</th><th>Why</th></tr></thead>
+        <tbody>
+            <tr><td><code>APP_ENV</code></td><td><code>testing</code></td><td></td></tr>
+            <tr><td><code>DB_SEARCH_PATH</code></td><td><code>testing</code></td><td>Keeps <code>RefreshDatabase</code> off development data.</td></tr>
+            <tr><td><code>DB_URL</code></td><td>empty</td><td>A <code>DB_URL</code> would override the host/search path settings.</td></tr>
+            <tr><td><code>CACHE_STORE</code>, <code>CACHE_LIMITER</code></td><td><code>array</code></td><td>Rate-limit attempts must start at zero for every test; a shared Redis would carry a lockout into the next test.</td></tr>
+            <tr><td><code>SESSION_DRIVER</code>, <code>MAIL_MAILER</code></td><td><code>array</code></td><td></td></tr>
+            <tr><td><code>QUEUE_CONNECTION</code></td><td><code>sync</code></td><td>Jobs run inline.</td></tr>
+            <tr><td><code>BROADCAST_CONNECTION</code></td><td><code>null</code></td><td></td></tr>
+            <tr><td><code>BCRYPT_ROUNDS</code></td><td><code>4</code></td><td>Speed.</td></tr>
+            <tr><td><code>APP_MAINTENANCE_DRIVER</code></td><td><code>file</code></td><td></td></tr>
+        </tbody>
+    </table>
+    <div class="callout callout-rule"><p><strong>Rule.</strong> Those test values live in <code>phpunit.xml</code> and are scoped to the test process. They do not relax the project rule: never switch session, cache or queue to <code>file</code>, <code>sync</code> or <code>database</code> in <code>.env</code> or application config, not even temporarily and not to make a test pass. The application must stay stateless and horizontally scalable (§40, D10).</p></div>
+    <div class="callout callout-note"><p><strong>Note.</strong> A runner that sources <code>.env</code> into the shell before starting Pest makes <code>CACHE_STORE=redis</code> win over <code>phpunit.xml</code>, so <code>DistributedLock</code> then uses real Redis (<code>.ai/rules/concurrency.md</code>). Concurrency tests rely on that being safe, see below.</p></div>
+
+    <h2>One suite at a time</h2>
+    <p>Every run shares one schema and <code>RefreshDatabase</code> opens by dropping every table in it. Two concurrent runs against the same schema therefore deadlock on the drop and fail in ways that look exactly like code defects: <code>SQLSTATE[40P01]</code> scattered across whichever files happened to be running. A second symptom appears once the schema is large: concurrent drops exhaust PostgreSQL's lock table (<code>max_locks_per_transaction</code>) and fail with <code>SQLSTATE[53200] out of shared memory</code>, so even two runs in <em>different</em> schemas can fail. Run one Pest process at a time. Long slices (Wallet plus Inventory takes ten minutes or more) belong in the background.</p>
+    <p>If you genuinely need a second run, give it a schema of its own:</p>
+    <pre><code>psql -h 127.0.0.1 -U feriwala -d feriwala -c 'CREATE SCHEMA IF NOT EXISTS testing_mine'
+DB_SEARCH_PATH=testing_mine vendor/bin/pest tests/Feature/Wallet</code></pre>
+    <p>Use the <code>DB_*</code> credentials from your <code>.env</code> for <code>psql</code>. A missing schema makes every test fail immediately, which is harmless: development data is untouched. If a run reads <code>REDIS_PREFIX</code>-scoped keys (Redis-backed concurrency tests), give each run its own prefix too, for example <code>REDIS_PREFIX=mine_</code> (<code>config/database.php</code> reads it). Automating a per-run schema is task P0-57.</p>
+
+    <h2>The cached-config trap</h2>
+    <div class="callout callout-warn"><p><strong>Gotcha.</strong> A cached configuration (<code>bootstrap/cache/config.php</code>, written by <code>php artisan optimize</code> or <code>config:cache</code>) pins <code>search_path</code> to <code>public</code>. <code>php artisan test</code> and Pest then ignore <code>DB_SEARCH_PATH</code>, and <code>RefreshDatabase</code> drops and re-migrates your <strong>development</strong> schema. This has emptied a development database more than once.</p></div>
+    <p>Symptoms, none of which look like configuration: deadlocks (<code>SQLSTATE[40P01]</code>) naming <code>public</code> tables; bulk HTTP 419 responses (the cached <code>APP_ENV=local</code> turns CSRF back on); development tables suddenly empty. Bulk 419s are never a test-code symptom. Before any run, verify the override applies:</p>
+    <pre><code>DB_SEARCH_PATH=testing_mine php artisan tinker --execute 'echo config("database.connections.pgsql.search_path");'
+# must print testing_mine, not public</code></pre>
+    <p>If it prints <code>public</code>, run <code>php artisan config:clear</code> first. <code>composer test</code> does this as its first step (<code>php artisan config:clear --ansi</code>).</p>
+
+    <h2>Never rebuild assets while the suite runs</h2>
+    <p>Every Inertia response test renders the page shell, which resolves the entry through Vite: <code>public/hot</code> when the dev server is up, <code>public/build/manifest.json</code> otherwise. Deleting <code>public/hot</code> or running <code>npm run build</code> mid-run makes dozens of tests fail at once with <code>ViteException: Unable to locate file in Vite manifest</code> and a 500, across modules nobody touched (<code>.ai/rules/tests.md</code>). Build before starting the suite, and build again after adding a page if the dev server is not running.</p>
+
+    <h2>Pest conventions</h2>
+    <ul>
+        <li><strong>Most tests are feature tests.</strong> Create with <code>php artisan make:test --pest SomeFeatureTest</code> (do not include <code>Feature/</code> in the name); <code>--unit</code> for a unit test.</li>
+        <li><strong>Use factories</strong> for models and check the factory for a state before hand-building. Faker via <code>fake()</code> or <code>$this-&gt;faker</code>, following the surrounding file.</li>
+        <li><strong>Test the behaviour and its important failure modes</strong>, not every branch. Read the <code>testing-best-practices</code> skill before writing tests.</li>
+        <li><strong>Prove rejection, not only success</strong> for the non-negotiables: self-scoping (a non-admin cannot reach another user's data), product-creation restrictions (§12), immutable ledger rows, illegal status transitions.</li>
+        <li><strong>Do not tinker or write one-off verification scripts</strong> where a test proves the behaviour.</li>
+    </ul>
+
+    <h3>Helper naming: one global function namespace</h3>
+    <div class="callout callout-warn"><p><strong>Gotcha.</strong> Pest loads every test file into <strong>one global function namespace</strong>. A bare <code>function resolver()</code> in one file collides with the same name in another, and with Laravel's own helpers (<code>session()</code>, <code>cache()</code>, <code>report()</code>). The failure is a fatal "Cannot redeclare" that takes the <em>whole suite</em> down, not one test.</p></div>
+    <p>So prefix every helper with what it belongs to (<code>dataScopeResolver()</code>, <code>localeTestSession()</code>, <code>lockOverArrayStore()</code>) or define it inside the test closure. A helper defined in one file and called from another only works while both happen to be loaded, so a helper used by several files belongs in <code>tests/Pest.php</code> or <code>tests/Support/</code>, where a narrow run of one directory still sees it.</p>
+
+    <h2>Groups and running a slice</h2>
+    <p>Groups are declared in <code>tests/Pest.php</code> against directories so names stay consistent. They exist for the areas the spec (§43) names explicitly and the ones most likely to be skipped: concurrency, self-scoped access, product restrictions.</p>
+    <pre><code>vendor/bin/pest --group=wallet
+php artisan test --compact --group=ledger
+vendor/bin/pest tests/Feature/Kyc
+vendor/bin/pest --filter="rejects a partner"</code></pre>
+    <table>
+        <thead><tr><th>Group</th><th>Directory</th></tr></thead>
+        <tbody>
+            <tr><td><code>onboarding</code></td><td><code>Feature/Onboarding</code></td></tr>
+            <tr><td><code>kyc</code></td><td><code>Feature/Kyc</code></td></tr>
+            <tr><td><code>package</code></td><td><code>Feature/Package</code></td></tr>
+            <tr><td><code>payment</code></td><td><code>Feature/Payment</code></td></tr>
+            <tr><td><code>tax</code></td><td><code>Feature/Tax</code></td></tr>
+            <tr><td><code>wallet</code>, <code>ledger</code>, <code>commission</code>, <code>referral</code>, <code>withdrawal</code></td><td><code>Feature/Wallet</code>, <code>Ledger</code>, <code>Commission</code>, <code>Referral</code>, <code>Withdrawal</code></td></tr>
+            <tr><td><code>catalog</code>, <code>product-restrictions</code>, <code>inventory</code></td><td><code>Feature/Catalog</code>, <code>ProductRestrictions</code>, <code>Inventory</code></td></tr>
+            <tr><td><code>wholesale</code>, <code>dropshipping</code>, <code>website</code>, <code>website-api</code>, <code>external-store</code></td><td><code>Feature/Wholesale</code>, <code>Dropshipping</code>, <code>Website</code>, <code>WebsiteApi</code>, <code>ExternalStore</code></td></tr>
+            <tr><td><code>orders</code>, <code>fulfillment</code>, <code>courier</code>, <code>settlement</code>, <code>reports</code></td><td><code>Feature/Orders</code>, <code>Fulfillment</code>, <code>Courier</code>, <code>Settlement</code>, <code>Reports</code></td></tr>
+            <tr><td><code>permissions</code>, <code>self-scope</code>, <code>security</code>, <code>concurrency</code></td><td><code>Feature/Permissions</code>, <code>SelfScope</code>, <code>Security</code>, <code>Concurrency</code></td></tr>
+            <tr><td><code>supplier</code>, <code>database</code>, <code>location</code>, <code>address</code>, <code>bank</code>, <code>payout</code>, <code>mobile</code></td><td><code>Feature/Supplier</code>, <code>Database</code>, <code>Location</code>, <code>Address</code>, <code>Bank</code>, <code>Payout</code>, <code>Mobile</code></td></tr>
+        </tbody>
+    </table>
+    <p>Directories with no group (for example <code>Account</code>, <code>Access</code>, <code>Auth</code>, <code>Billing</code>, <code>Cases</code>, <code>Damage</code>, <code>Notification</code>, <code>Settings</code>, <code>Storage</code>, <code>Sourcing</code>, <code>ContentLibrary</code>) are run by path.</p>
+    <p>After the narrow slice passes, ask the maintainer to run the complete suite with <code>php artisan test --compact</code>. The full suite is long and must not run alongside another run.</p>
+
+    <h2>Fixtures and helpers</h2>
+    <p>Real helpers defined in <code>tests/Pest.php</code> and <code>tests/Support</code>. Prefer them over hand-building rows, because they build through the real actions and enforce the same rules production does.</p>
+    <table>
+        <thead><tr><th>Helper</th><th>Builds</th></tr></thead>
+        <tbody>
+            <tr><td><code>testBusinessAccount(?AccountStatus)</code></td><td>A business account at a status, with owner and membership.</td></tr>
+            <tr><td><code>testAccountReadyForActivation(int)</code></td><td>An account that has cleared every §5.1 condition, built through the real orchestration.</td></tr>
+            <tr><td><code>testPlatformStaff(PlatformRole)</code></td><td>Active login with a platform role and no business account (D23). Enrols two-factor, because the admin panel enforces it.</td></tr>
+            <tr><td><code>testStrongPassword()</code></td><td>A password the §6 policy accepts.</td></tr>
+            <tr><td><code>testAccountWithStaffLimit(?int, ?AccountStatus)</code></td><td>Active account on a package with a staff limit (null means no cap, zero means none).</td></tr>
+            <tr><td><code>testAccountWithPackageFeatures(array, ?AccountStatus)</code></td><td>Active account whose subscription grants the given features. A missing feature row is zero, not unlimited.</td></tr>
+            <tr><td><code>legacyReturnFlow(OrderReturn)</code></td><td>Marks a return as one placed before the case workflow (D35).</td></tr>
+            <tr><td><code>websiteTestAccount</code>, <code>websiteTestFee</code>, <code>websiteTestWallet</code>, <code>websiteTestProduct</code>, <code>websiteTestPurchase</code>, <code>websiteTestOwns</code>, <code>websiteTestOrders</code>, <code>websiteTestOwnsSelection</code>, <code>websiteTestSellOut</code></td><td>Website, dropshipping product, wallet, purchase and stock fixtures. Stock is created through the real purchase credit, never by writing a figure.</td></tr>
+            <tr><td><code>storefrontCall(...)</code>, <code>storefrontCredential(Website, scopes)</code></td><td>A signed Storefront API call (HTTPS, with every signature part overridable) and a website credential with its plaintext secret.</td></tr>
+            <tr><td><code>referralTestPlan</code>, <code>referralTestChain</code>, <code>referralTestSwitchOn</code>, <code>referralTestNewcomer</code>, <code>referralTestActivate</code></td><td>Referral plan versions, referral chains, the programme switch, a newcomer ready for activation, and real activation.</td></tr>
+            <tr><td><code>supplierTestSignIn</code>, <code>supplierTestListing</code>, <code>supplierTestOffer</code>, <code>supplierTestConnect</code>, <code>supplierTestOfferPriceVersion</code></td><td>Supplier-guard sign-in (without <code>actingAs()</code>, which would make <code>supplier</code> the default guard), listings, offers and price versions.</td></tr>
+            <tr><td><code>addressTestLocationChain</code>, <code>addressTestCreate</code>, <code>payoutTestBankBranch</code></td><td>A valid four-level <code>BdLocation</code> chain, a saved <code>SharedAddress</code> through the real action, a bank branch for a payout method.</td></tr>
+            <tr><td><code>externalStoreAccount</code>, <code>externalStoreFakeDns</code>, <code>externalStoreOrderRow</code>, <code>externalStoreConnected</code>, <code>externalStoreOrdersPage</code>, <code>externalStoreRecordOrder</code>, <code>externalStoreSignature</code></td><td>External store fixtures: faked DNS, a DFCOMMERCE order row and page, a connected store, a recorded order, a webhook signature.</td></tr>
+            <tr><td><code>partnerCheckoutWorld</code>, <code>partnerCheckoutSelection</code>, <code>partnerCheckoutEnable</code>, <code>partnerCheckoutConfigure</code>, <code>partnerCheckoutPlace</code>, <code>partnerCheckoutFakeProviders</code>, <code>partnerCheckoutPays</code>, <code>partnerCheckoutSigned</code>, <code>partnerCheckoutCaptureLogs</code>, <code>partnerCheckoutLogText</code>, <code>partnerCheckoutSentStore</code></td><td>Partner-gateway (Model B, D36) checkout: world setup, selections, gateway configuration, placing an order, faked SSLCommerz provider, payment and signed IPN, and log capture for secret-leak assertions.</td></tr>
+            <tr><td><code>caseTestSetUp</code>, <code>caseTestStaffWith</code>, <code>caseTestDeliveredOrder</code>, <code>caseTestOpenReturn</code>, <code>caseTestAdvance</code>, <code>caseTestDamageUnderReview</code>, <code>caseTestDamagePosted</code>, <code>caseTestPng</code>, <code>caseTestDisguisedScript</code>, <code>caseTestPdf</code></td><td>(<code>tests/Support/CaseFixtures.php</code>) Return, exchange and damage cases at chosen stages, and evidence uploads including a script disguised as a PNG.</td></tr>
+        </tbody>
+    </table>
+    <p>Pest also defines one custom expectation, <code>toBeOne()</code>, left from the starter kit.</p>
+
+    <h2>Concurrency tests</h2>
+    <p><code>tests/Feature/Concurrency</code> (group <code>concurrency</code>) proves that races resolve to one winner: wallet, payment, stock, return, damage, referral, withdrawal, supplier stock and order-allocation tests all live there. They fork worker processes. <code>.ai/rules/concurrency.md</code> records the trap: a forked worker that inherits the parent's open Redis socket reads other workers' replies, never sees its lock granted, and the lock stays held until its TTL (a 130-second hang). Before <code>pcntl_fork</code>, call <code>Redis::purge()</code> for every connection in <code>config('database.redis')</code> (except <code>client</code>, <code>options</code>, <code>clusters</code>), alongside <code>DB::purge()</code>.</p>
+
+    <h2>Repository guard tests</h2>
+    <p>These fail the build when a project rule is quietly broken. If one fails, fix the code; do not edit the allow-list without a documented reason.</p>
+    <table>
+        <thead><tr><th>Test</th><th>Guards</th></tr></thead>
+        <tbody>
+            <tr><td><code>tests/Unit/Support/Money/MoneySourceGuardTest.php</code></td><td>D26 source guard over <code>app</code>, factories, seeders, <code>lang</code> and the ERP frontend: no <code>Money::of()</code>, no <code>-&gt;minorUnits</code>, no <code>*_minor</code> field name, <code>minor_units</code> only in the four documented Storefront API adapter files, no <code>.decimal</code> read in the frontend, no float cast of a money value. It also proves it can fail (probe files). It asserts it scanned more than 500 backend and 100 frontend files so an empty scan cannot pass.</td></tr>
+            <tr><td><code>tests/Feature/Payment/MoneyColumnConventionTest.php</code></td><td>The schema guard: every money column is <code>NUMERIC(19,2)</code> flat Taka, named in an explicit <code>MONEY_COLUMN_INVENTORY</code>, and carries a currency (two documented exemptions). Adding a money column to a table without registering it here is a failing test.</td></tr>
+            <tr><td><code>tests/Unit/Support/TrackedEnvironmentFilesTest.php</code></td><td>Only <code>.env.example</code> is tracked and every other <code>.env*</code> is gitignored. Added after a developer's whole environment file was committed to a public repository.</td></tr>
+            <tr><td><code>tests/Unit/Support/BreadcrumbTitleGuardTest.php</code></td><td>Page breadcrumb <code>title</code> values are translation keys, not literal English.</td></tr>
+            <tr><td><code>tests/Feature/Database/UserPublicIdInvariantTest.php</code></td><td>Every user has a <code>public_id</code>.</td></tr>
+            <tr><td><code>tests/Feature/Database/FlatTakaConversionMigrationTest.php</code></td><td>The poisha-to-Taka conversion migration (D26).</td></tr>
+        </tbody>
+    </table>
+    <p>Test-only exceptions to the money guard (historical migrations, tests that model the old schema) are outside its scope by design. Test helper <code>websiteTestFee(FeeType, int $minorUnits)</code> keeps an old shorthand parameter name but converts to exact Taka once with bcmath; it does not scale at the column or the cast.</p>
+
+    <h2>The four required checks</h2>
+    <p>All four must pass before work is considered done (<code>CLAUDE.md</code>). CI runs them as <code>composer ci:check</code> (<code>npm run check</code>, <code>npm run types:check</code>, then <code>composer test</code>, which itself runs <code>config:clear</code>, Pint in check mode, PHPStan and <code>php artisan test</code>).</p>
+    <table>
+        <thead><tr><th>Check</th><th>Command</th><th>Notes</th></tr></thead>
+        <tbody>
+            <tr><td>PHP formatting</td><td><code>vendor/bin/pint --parallel</code> (<code>composer lint</code>)</td><td>Fixes in place. The Boost guidance form is <code>vendor/bin/pint --dirty --format agent</code>. <code>--dirty</code> formats every uncommitted file in the tree, including files another session or your editor changed, so check <code>git diff --stat</code> afterwards and stage explicit paths. <code>composer lint:check</code> is the non-writing variant used by CI.</td></tr>
+            <tr><td>Static analysis</td><td><code>composer types:check</code></td><td>PHPStan level 8 through Larastan over <code>app/</code>, <code>bootstrap/app.php</code>, <code>config/</code>, <code>database/</code>, <code>routes/</code>. The baseline in <code>phpstan-baseline.neon</code> holds starter-kit debt only; it should shrink over time and must never grow, and all new code is held to level 8.</td></tr>
+            <tr><td>Tests</td><td><code>vendor/bin/pest</code></td><td>Narrow slice while working, full suite by the maintainer. See the schema rules above.</td></tr>
+            <tr><td>Frontend</td><td><code>npm run check</code></td><td><code>vp check</code>: format, lint (type-aware, warnings denied) and types. <code>npm run check:fix</code> repairs. Also <code>npm run types:check</code> (<code>tsc --noEmit</code>) and <code>npm run test:js</code> (Vitest).</td></tr>
+        </tbody>
+    </table>
+    <div class="callout callout-warn"><p><strong>Gotcha.</strong> Run PHPStan through <code>composer types:check</code>, never <code>vendor/bin/phpstan</code> directly. A stale result cache in <code>build/phpstan</code> can put the run on a path where the bootstrap files never execute, and Larastan then dies with <code>Undefined constant "Larastan\Larastan\LARAVEL_VERSION"</code>, a message that points nowhere near the cause and persists until the cache is cleared. <code>scripts/phpstan.sh</code> (what the composer script runs) clears the cache and retries once <strong>only</strong> on that exact message; every other failure, including real type errors, passes straight through unretried. It is not an error-suppression script.</p></div>
+    <div class="callout callout-note"><p><strong>Note.</strong> <code>vp</code> owns TypeScript, CSS and Markdown formatting. A bare <code>npx vp check --fix</code> rewrites <code>.md</code> files across the repo (<code>.ai/rules/general.md</code>); pass explicit paths to <code>vp check --fix</code> (<code>.ai/rules/js.md</code>). If your editor also formats on save, the two disagree about ternary continuations and a file open in the editor reappears in <code>vp check</code>; point the editor at <code>vp check --fix</code> or turn it off for this project. The whitespace churn blocks nothing and is not worth a commit. This documentation's HTML under <code>docs/</code> is excluded from <code>vp fmt</code> in <code>vite.config.ts</code>.</p></div>
+    <p>Generated route helpers: <code>resources/js/actions</code> and <code>resources/js/routes</code> are gitignored. A fresh checkout needs them before <code>tsc</code> or Vitest page tests can resolve <code>@/actions</code> and <code>@/routes</code>. Generate with <code>php artisan wayfinder:generate --with-form</code> (never without <code>--with-form</code>, see <a href="commands.html">Commands</a>) or run <code>npm run build</code>, which CI does before the checks.</p>
+
+    <h2>Rules that apply to tests</h2>
+    <ul>
+        <li><code>.ai/rules/tests.md</code>: never rebuild frontend assets while the suite is running.</li>
+        <li><code>.ai/rules/concurrency.md</code>: purge Redis connections before forking race workers.</li>
+        <li><code>.ai/rules/index.md</code>: the file-to-rule map you must read before editing a path.</li>
+    </ul>
+
+    <h2>Troubleshooting</h2>
+    <table>
+        <thead><tr><th>Symptom</th><th>Cause</th><th>Fix</th></tr></thead>
+        <tbody>
+            <tr><td><code>SQLSTATE[40P01]</code> deadlock across unrelated files</td><td>Two runs share a schema, or the cached config pinned <code>public</code>.</td><td>One run at a time, or a schema per run; <code>config:clear</code>.</td></tr>
+            <tr><td><code>SQLSTATE[53200] out of shared memory</code></td><td>Concurrent <code>RefreshDatabase</code> drops exhausting the lock table.</td><td>One Pest process at a time.</td></tr>
+            <tr><td><code>SQLSTATE[08006] ... database system is starting up</code> on every test</td><td>PostgreSQL in crash recovery after an unclean WSL stop (can take around ten minutes).</td><td>Wait for <code>pg_isready</code>. Do not debug code.</td></tr>
+            <tr><td>Every test fails instantly with "schema does not exist"</td><td>The schema named by <code>DB_SEARCH_PATH</code> was not created.</td><td><code>CREATE SCHEMA IF NOT EXISTS ...</code></td></tr>
+            <tr><td>Bulk HTTP 419 failures</td><td>Cached config carrying <code>APP_ENV=local</code>.</td><td><code>php artisan config:clear</code>.</td></tr>
+            <tr><td>Dozens of <code>ViteException</code> 500s</td><td>Assets rebuilt or <code>public/hot</code> removed mid-run, or never built.</td><td>Build before the run.</td></tr>
+            <tr><td>Fatal "Cannot redeclare function"</td><td>An unprefixed global test helper.</td><td>Rename with a module prefix.</td></tr>
+            <tr><td>Concurrency test hangs for about 130 seconds</td><td>Forked worker inherited an open Redis socket.</td><td>Purge Redis connections before <code>pcntl_fork</code>.</td></tr>
+        </tbody>
+    </table>
+
+    <p>Related: <a href="getting-started.html">Getting started</a>, <a href="database.html">Database</a>, <a href="conventions.html">Conventions</a>.</p>
+</main>
+</body>
+</html>

@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Referral (Partner Network)</title>
+    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+    <script src="../assets/docs.js"></script>
+</head>
+<body>
+<main id="doc">
+    <h1>Referral (Partner Network)</h1>
+    <p class="lead">A multi-level referral hierarchy between business accounts, with versioned reward plans. A qualifying event (account activation after the verified activation payment) records one commission row per level; a scheduler pays each into the beneficiary's wallet after a holding period, and reversals are compensating ledger entries. The UI calls it the Partner Network.</p>
+
+    <div class="callout callout-rule"><p><strong>Rule.</strong> Multi-level commission is switched <strong>off</strong> by default (setting <code>referral.mlm_enabled</code>). Switching it on and choosing the plan is the operator's decision, to be taken with legal advice (D24 compliance note). Nothing is calculated while it is off.</p></div>
+
+    <h2>Purpose</h2>
+    <p>Every active user receives a referral code. A new business can register with a referrer's code. When that business activates, the platform decides which ancestors, up to the plan's depth, earn a reward, and credits the new account's own joining reward. D24 (2026-09-19) supersedes the original single-level §25; D14 stands (the joining reward is the new user's referral reward). Spec §25, §25.4.1, §25.5.</p>
+    <ul>
+        <li><strong>Client / Partner</strong> sees their code, link, direct referrals and own earnings only: no downline beyond level 1, no one else's KYC or wallet.</li>
+        <li><strong>Staff</strong> view platform records, configure plans, reverse commissions, and attach a referrer.</li>
+        <li><strong>System</strong> calculates at activation and pays on a schedule.</li>
+    </ul>
+
+    <h2>Where it lives</h2>
+    <table>
+        <thead><tr><th>Path</th><th>Role</th></tr></thead>
+        <tbody>
+            <tr><td><code>app/Domain/Referral/Models/</code></td><td><code>AccountReferral</code>, <code>ReferralPlan</code>, <code>ReferralPlanLevel</code>, <code>ReferralQualifyingEvent</code>, <code>ReferralCommission</code>.</td></tr>
+            <tr><td><code>app/Domain/Referral/Actions/</code></td><td>Resolve, attach, calculate, release, reverse, open and close plans.</td></tr>
+            <tr><td><code>app/Domain/Referral/Queries/</code></td><td><code>ReferralHierarchy</code>, <code>ResolveReferralPlan</code>, <code>ReferralRecords</code>.</td></tr>
+            <tr><td><code>app/Domain/Referral/</code> (top level)</td><td><code>ReferralCode</code>, <code>ReferralSettings</code>, <code>CommissionBaseCalculator</code>.</td></tr>
+            <tr><td><code>app/Domain/Referral/Data/</code>, <code>Enums/</code>, <code>Jobs/</code>, <code>Exceptions/</code></td><td><code>RewardRule</code>, <code>ReferralPlanDraft</code>; enums; <code>ReleaseReferralCommissions</code> job; <code>ReferralRefused</code>.</td></tr>
+            <tr><td><code>app/Http/Controllers/Erp/ReferralController.php</code>, <code>Api/Mobile/V1/Onboarding/ReferralController.php</code></td><td>Account's own page (web, mobile).</td></tr>
+            <tr><td><code>app/Http/Controllers/Admin/ReferralSettingsController.php</code>, <code>ReferralCommissionController.php</code>, <code>ReferralChainController.php</code></td><td>Staff.</td></tr>
+            <tr><td><code>resources/js/pages/referrals/index.tsx</code>; <code>admin/referral-settings.tsx</code>, <code>referral-chains.tsx</code>, <code>referral-commissions/</code> (index, event)</td><td>Pages.</td></tr>
+            <tr><td><code>lang/en/referral.php</code></td><td>Strings.</td></tr>
+            <tr><td><code>database/migrations/2026_09_29_100000_create_account_referrals.php</code>, <code>_110000_create_referral_plans.php</code>, <code>_120000_create_referral_commissions.php</code>, <code>2026_09_30_*</code></td><td>Tables, hierarchy and immutability triggers.</td></tr>
+            <tr><td><code>tests/Feature/Referral/</code>, <code>tests/Feature/Concurrency/Referral*ConcurrencyTest.php</code></td><td>Tests.</td></tr>
+        </tbody>
+    </table>
+
+    <h2>Key terms</h2>
+    <dl>
+        <dt>Referral code</dt>
+        <dd>8 characters from <code>23456789ABCDEFGHJKMNPQRSTVWXYZ</code> (no I, L, O, U, 0, 1), random, stored on <code>users.referral_code</code>. Normalised by uppercasing and stripping non-alphanumerics.</dd>
+        <dt>Referrer / referred</dt>
+        <dd>Business accounts. At most one direct referrer per account.</dd>
+        <dt>Level</dt>
+        <dd>Steps up the chain: 1 is the direct referrer. Level 0 is the new account's joining reward. Levels are never renumbered when one is skipped.</dd>
+        <dt>Plan version</dt>
+        <dd>A dated, immutable configuration: trigger, base, depth, rules per level, joining reward, holding days, qualifying account states. Changing anything is a new version.</dd>
+        <dt>Qualifying event</dt>
+        <dd>The thing that earns commission; recorded once per account ever.</dd>
+        <dt>Commission base</dt>
+        <dd>What a percentage is a percentage of: <code>activation_fees</code> (registration plus package fee), <code>package_fee</code> or <code>registration_fee</code>, from the payment's own allocations.</dd>
+        <dt>Outbox</dt>
+        <dd>The commission rows, written in the activation's own transaction and paid later.</dd>
+    </dl>
+
+    <h2>Data model</h2>
+    <table>
+        <thead><tr><th>Table / model</th><th>Purpose and notable columns</th></tr></thead>
+        <tbody>
+            <tr><td><code>account_referrals</code> / <code>AccountReferral</code></td><td>The hierarchy edge: <code>referred_account_id</code>, <code>referrer_account_id</code>, <code>referral_code</code>, <code>attached_via</code> (registration, backfill, staff), <code>attached_by</code>, <code>reason</code>, <code>locked_at</code>. Self-referral, cycles and changing a locked link are refused in code <em>and</em> by the database, which serialises hierarchy writes and walks the chain.</td></tr>
+            <tr><td><code>referral_plans</code> / <code>ReferralPlan</code></td><td><code>package_id</code> (null = global), <code>trigger_event</code>, <code>commission_base</code>, <code>max_depth</code>, <code>currency_code</code>, joining reward (<code>type</code>, <code>amount</code>, <code>rate_bps</code>, <code>cap</code>), <code>holding_days</code>, <code>minimum_qualifying_payment</code>, qualifying flags (<code>qualifies_suspended</code>, <code>_restricted</code>, <code>_package_lapsed</code>, <code>_not_active</code>), <code>effective_from</code>, <code>effective_to</code>, <code>reason</code>, opened and closed by. Immutability trigger (see migrations <code>2026_09_30_*</code>).</td></tr>
+            <tr><td><code>referral_plan_levels</code> / <code>ReferralPlanLevel</code></td><td>One rule per level: <code>reward_type</code>, <code>amount</code> or <code>rate_bps</code>, <code>cap</code>, <code>is_enabled</code>, <code>required_package_ids</code>, <code>min_active_direct_referrals</code>. Created once (no <code>updated_at</code>).</td></tr>
+            <tr><td><code>referral_qualifying_events</code> / <code>ReferralQualifyingEvent</code></td><td>Unique per trigger and subject (account). <code>payment_id</code>, <code>referral_plan_id</code>, <code>commission_base</code>, <code>chain</code> (json of level, account public id, outcome), <code>status</code> (<code>recorded</code> or <code>reversed</code>), <code>reversed_at</code>, <code>reversal_reason</code>.</td></tr>
+            <tr><td><code>referral_commissions</code> / <code>ReferralCommission</code></td><td><code>HasPublicId</code>, <code>HasStateMachine</code>. Event, plan, <code>beneficiary_account_id</code>, <code>source_account_id</code>, <code>level</code>, <code>kind</code> (<code>level</code> or <code>joining</code>), <code>rule_snapshot</code> (json: what was applied), <code>commission_base</code>, <code>amount</code>, <code>capped</code>, <code>status</code>, <code>skip_reason</code>, <code>available_at</code>, <code>paid_at</code>, <code>wallet_transaction_id</code>, reversal fields and <code>reversal_wallet_transaction_id</code>. Terms are immutable by trigger; only progress changes.</td></tr>
+            <tr><td><code>users.referral_code</code></td><td>The person's code.</td></tr>
+        </tbody>
+    </table>
+
+    <h2>States &amp; lifecycle</h2>
+    <h3>CommissionStatus</h3>
+    <table>
+        <thead><tr><th>From</th><th>May move to</th><th>Meaning</th></tr></thead>
+        <tbody>
+            <tr><td><code>skipped</code></td><td>none</td><td>Decided at calculation: pays nothing, kept so the chain shows every level and why.</td></tr>
+            <tr><td><code>pending</code></td><td>paid, cancelled</td><td>Calculated, not yet in the wallet. Cancelled = reversed before payment (no ledger entry either way).</td></tr>
+            <tr><td><code>paid</code></td><td>reversed, reversal_owed</td><td>Credited to the wallet.</td></tr>
+            <tr><td><code>reversal_owed</code></td><td>reversed</td><td>Reversal decided but the wallet could not cover it; retried, never taken into a negative balance.</td></tr>
+            <tr><td><code>cancelled</code>, <code>reversed</code></td><td>none</td><td>Terminal.</td></tr>
+        </tbody>
+    </table>
+    <p>Skip reasons (<code>CommissionSkipReason</code>): level_disabled, status_not_qualified, package_not_eligible, too_few_direct_referrals, base_exhausted, nothing_to_pay. Reversal causes (<code>ReversalCause</code>): refund, chargeback, fraud, activation_rollback, manual, beneficiary_closed. Other enums: <code>RewardType</code> (fixed, percentage), <code>ReferralTrigger</code> (account_activation only; an enum so order-based triggers can be added), <code>ReferralAttachment</code>, <code>CommissionBase</code>.</p>
+
+    <h2>Actions &amp; workflows</h2>
+    <table>
+        <thead><tr><th>Class</th><th>Purpose</th></tr></thead>
+        <tbody>
+            <tr><td><code>ResolveReferrer</code></td><td>Code to <code>User</code>, only if well formed and the owner's business is <code>active</code>. A bad code returns null and never blocks registration.</td></tr>
+            <tr><td><code>AttachReferrer</code></td><td><code>atRegistration()</code> and <code>byStaff()</code>.</td></tr>
+            <tr><td><code>CalculateReferralCommissions::forActivation</code></td><td>The engine.</td></tr>
+            <tr><td><code>ReleaseReferralCommission</code>, <code>ReleaseDueReferralCommissions</code>, job <code>ReleaseReferralCommissions</code></td><td>Pay.</td></tr>
+            <tr><td><code>ReverseReferralCommission</code>, <code>ReverseQualifyingEvent</code>, <code>ReverseReferralByStaff</code></td><td>Take back.</td></tr>
+            <tr><td><code>OpenReferralPlan</code>, <code>CloseReferralPlan</code>; <code>ReferralSettings::switchTo</code></td><td>Configuration.</td></tr>
+        </tbody>
+    </table>
+    <h3>Flow 1: registration</h3>
+    <p><code>Fortify\CreateNewUser</code> and <code>CreateManagedAccount</code> call <code>AttachReferrer::atRegistration</code> with the resolved referrer. <code>ReferralCode::issueTo</code> issues a code on first view of the referrals page if the person has none (and the business can transact). Staff can attach or correct a referrer with a reason, but only before a qualifying event has locked the link.</p>
+    <h3>Flow 2: calculation at activation</h3>
+    <ol>
+        <li><code>ActivateAccount</code> calls <code>forActivation()</code> inside its own transaction.</li>
+        <li>Stop (return null) if the switch is off, if the event already exists (returned as is: a retry or second worker pays nothing twice), or if no plan is in force. Plan: the account's package first, then the global one (<code>ResolveReferralPlan</code>; a package plan replaces the global plan entirely, not level by level).</li>
+        <li>Use the latest paid <code>activation</code> payment. Stop if there is none or it is below <code>minimum_qualifying_payment</code>.</li>
+        <li>Base from <code>CommissionBaseCalculator</code>: chosen allocations summed; any discount is shared across revenue lines in proportion and the chosen lines' share is rounded <em>up</em>, so the base rounds down; tax and deposit are never part of it.</li>
+        <li>Ancestors to the plan's depth (recursive SQL; upward only). Each level is decided alone: no ancestor ends the chain (<code>missing</code>); a disabled level, unqualified account state, wrong package, or too few active direct referrals records <code>skipped</code> at that level while the levels above keep theirs. The rule gives fixed or <code>base × bps ÷ 10 000</code> rounded toward zero, held to its cap and to what remains of the base (marked <code>capped</code>). Levels are processed from 1 up, then the joining reward, so the whole chain never exceeds the base.</li>
+        <li>Write the event (savepoint, so a lost race on the unique index does not abort the activation), one commission per level with <code>available_at = now + holding_days</code>, lock the links the chain was read through (<code>locked_at</code>), audit <code>referral.commissions_calculated</code>, and after commit dispatch <code>ReleaseReferralCommissions</code>.</li>
+    </ol>
+    <h3>Flow 3: payment</h3>
+    <ol>
+        <li>The job (right away) and the scheduled sweep (<code>referral-commission-release</code>, every five minutes) call <code>ReleaseReferralCommission</code> for pending rows whose <code>available_at</code> has passed (up to 500 per sweep).</li>
+        <li>Lock the commission; skip unless still pending and due. A closed beneficiary cancels it (cause <code>beneficiary_closed</code>). A beneficiary whose status the plan does not qualify waits and is retried.</li>
+        <li><code>WalletService::credit()</code> on the beneficiary's wallet (<code>OpenWallet</code> creates one if missing) with type <code>referral_reward_credit</code> or <code>joining_reward_credit</code> and key <code>referral-commission:{public id}</code>. Both default to platform credit: spendable, not withdrawable.</li>
+        <li>Set paid, <code>paid_at</code>, <code>wallet_transaction_id</code>; after commit notify the owner (<code>ReferralCommissionPaid</code>).</li>
+    </ol>
+    <h3>Flow 4: reversal</h3>
+    <ol>
+        <li>Triggers: a settled refund of the qualifying payment (<code>ProcessRefund</code> calls <code>ReverseQualifyingEvent::forRefund</code>; <strong>any</strong> refund, partial included, reverses the whole event; it never fails the refund, and logs critical if it cannot), or staff (<code>ReverseReferralByStaff</code>, reason required).</li>
+        <li><code>ReverseQualifyingEvent</code> marks the event reversed and reverses each pending or paid commission in level order through <code>ReverseReferralCommission</code>.</li>
+        <li>Pending: cancelled, no ledger entry. Paid: a <code>referral_reward_reversal</code> debit pointing at the original entry (<code>corrects_ledger_entry_id</code>), key <code>referral-commission-reversal:{public id}</code>, taken from the kind of money it was paid as. If the wallet cannot cover it the commission becomes <code>reversal_owed</code>; the sweep retries (<code>recovered</code> count).</li>
+        <li>Audit <code>referral.commission_reversed</code> (sensitive) and <code>referral.event_reversed</code>.</li>
+    </ol>
+
+    <h2>Entry points</h2>
+    <table>
+        <thead><tr><th>Name</th><th>Method and URL</th><th>Controller</th><th>Gate</th></tr></thead>
+        <tbody>
+            <tr><td><code>referrals.index</code></td><td>GET <code>/referrals</code></td><td><code>Erp\ReferralController</code></td><td>Own account; <code>business.activated</code></td></tr>
+            <tr><td><code>mobile.v1.referrals.index</code></td><td>GET <code>/api/mobile/v1/referrals</code></td><td><code>Onboarding\ReferralController</code></td><td><code>mobile.activated</code></td></tr>
+            <tr><td><code>admin.referral-settings.index</code></td><td>GET <code>/admin/referral-settings</code></td><td><code>Admin\ReferralSettingsController</code></td><td><code>referral.view_settings</code></td></tr>
+            <tr><td><code>.switch</code>, <code>.plans.store</code>, <code>.plans.close</code></td><td>POST <code>/admin/referral-settings/switch</code>, <code>/plans</code>, <code>/plans/{plan}/close</code></td><td>same</td><td><code>referral.manage_settings</code></td></tr>
+            <tr><td><code>admin.referral-commissions.index</code>, <code>admin.referral-events.show</code></td><td>GET <code>/admin/referral-commissions</code>, <code>/referral-events/{event}</code></td><td><code>Admin\ReferralCommissionController</code></td><td><code>referral.view</code></td></tr>
+            <tr><td><code>admin.referral-commissions.reverse</code>, <code>admin.referral-events.reverse</code></td><td>POST <code>/admin/referral-commissions/{commission}/reversal</code>, <code>/referral-events/{event}/reversal</code></td><td>same</td><td><code>referral.reverse_transaction</code> and a freshly confirmed password</td></tr>
+            <tr><td><code>admin.referral-chains.show</code>, <code>.attach</code></td><td>GET <code>/admin/referral-chains</code>; POST <code>/referral-chains/{account}/referrer</code></td><td><code>Admin\ReferralChainController</code></td><td>View <code>referral.view</code>; attach <code>referral.edit</code></td></tr>
+            <tr><td><code>referral-commission-release</code> (schedule)</td><td>every five minutes, <code>onOneServer</code></td><td><code>ReleaseDueReferralCommissions</code></td><td>Also retries owed reversals</td></tr>
+        </tbody>
+    </table>
+
+    <h2>Permissions &amp; scoping</h2>
+    <p>Permission module <code>referral</code>: <code>view</code>, <code>create</code>, <code>edit</code>, <code>approve</code>, <code>reject</code>, <code>reverse_transaction</code>, <code>export</code>, <code>manage_settings</code>, <code>view_settings</code>. The ones used by controllers are listed above. An account sees only its own: <code>ReferralRecords::earning()</code> is "the part of a commission its beneficiary may see", and nothing in the ERP asks for a whole downline (<code>ReferralHierarchy</code> walks upward only; <code>directReferrals()</code> is level 1).</p>
+
+    <h2>Money, ledger &amp; audit effects</h2>
+    <ul>
+        <li>Money fields are <code>Money</code> via <code>MoneyCast</code>; plan percentages are integer basis points, never floats.</li>
+        <li>Ledger: <code>referral_reward_credit</code>, <code>joining_reward_credit</code>, <code>referral_reward_reversal</code> (see <a href="wallet.html">Wallet</a>).</li>
+        <li>Audit: <code>referral.mlm_switched</code>, <code>referral.plan_superseded</code>, plan opened and closed, <code>referral.referrer_attached</code>, <code>referral.commissions_calculated</code>, <code>referral.commission_reversed</code>, <code>referral.event_reversed</code>.</li>
+        <li>Invariants: one event per account ever; commission terms never change (snapshot kept); the chain never pays more than the base; a reversal is only ever a compensating entry or a cancellation.</li>
+    </ul>
+
+    <h2>Configuration</h2>
+    <table>
+        <thead><tr><th>Key</th><th>Purpose</th></tr></thead>
+        <tbody>
+            <tr><td>Setting <code>referral.mlm_enabled</code> (boolean, default false)</td><td>The global switch. Turning it off stops new events; commissions already calculated run their course.</td></tr>
+            <tr><td>Plan versions (<code>referral_plans</code> rows)</td><td>Everything else is data.</td></tr>
+            <tr><td>Schedule <code>referral-commission-release</code> in <code>routes/console.php</code></td><td>Five-minute sweep.</td></tr>
+        </tbody>
+    </table>
+
+    <h2>Rules, invariants &amp; gotchas</h2>
+    <ul>
+        <li>A plan needs a rule for <em>every</em> level up to its depth or nothing is opened. Opening takes a distributed lock per scope (<code>referral-plan-scope:{package id|global}</code>); the version in force ends where the new one begins; a version scheduled at or after the new start makes the new one fail (<code>planOverlaps</code>).</li>
+        <li>A referrer is never changed silently, and never after a qualifying event has locked the link.</li>
+        <li>Only the activation trigger exists. The skip rules, the cap and holding period are all per plan version.</li>
+        <li>The beneficiary's qualification is checked twice: at calculation (level rules) and at payment (account status via the plan's flags).</li>
+        <li>Any refund, partial or not, of the qualifying payment reverses the whole chain (§25.5).</li>
+        <li><code>ReferralHierarchy::WHOLE_CHAIN</code> is 100 000, matching the database's own cycle guard walk.</li>
+    </ul>
+
+    <h2>How to&hellip;</h2>
+    <h3>Add a trigger event (for example an order)</h3>
+    <ol>
+        <li>Add a case to <code>ReferralTrigger</code>; teach <code>ResolveReferralPlan</code> callers and <code>OpenReferralPlan</code> (the draft) to use it.</li>
+        <li>Write a calculator method beside <code>forActivation</code> that records the event for its own subject type, once.</li>
+        <li>Extend the unique key and the event/commission triggers if the subject differs, and the reversal path for that payment.</li>
+    </ol>
+    <h3>Add a commission base</h3>
+    <ol>
+        <li>Add the case and its allocations to <code>CommissionBase</code>; <code>CommissionBaseCalculator</code> needs no change.</li>
+    </ol>
+    <h3>Change rewards</h3>
+    <p>Open a new plan version in Admin, Referral settings. Never edit a plan or a commission.</p>
+
+    <h2>Testing</h2>
+    <p><code>vendor/bin/pest tests/Feature/Referral</code> (group <code>referral</code>), own schema: <code>ReferralHierarchyTest</code>, <code>ReferralPlanTest</code>, <code>ReferralCommissionTest</code>, <code>ReferralSettingsScreenTest</code>, <code>ReferralScreensTest</code>; concurrency in <code>ReferralCommissionConcurrencyTest</code> and <code>ReferralHierarchyConcurrencyTest</code>. Frontend tests sit beside the pages (<code>referrals/index.test.tsx</code>, <code>referral-settings.test.tsx</code>, <code>referral-commissions/event.test.tsx</code>).</p>
+
+    <h2>Related modules</h2>
+    <ul>
+        <li><a href="wallet.html">Wallet</a>, <a href="billing.html">Billing</a> (refund reversal), <a href="account.html">Account</a> (activation, registration), <a href="package.html">Package</a>, <a href="../guide/decisions.html">Decisions</a> (D14, D24).</li>
+    </ul>
+</main>
+</body>
+</html>

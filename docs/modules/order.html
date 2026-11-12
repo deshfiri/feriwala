@@ -1,0 +1,684 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Order module</title>
+    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+    <script src="../assets/docs.js"></script>
+</head>
+<body>
+<main id="doc">
+    <h1>Order module</h1>
+    <p class="lead">The record of every sale in Feriwala: ERP wholesale purchases, storefront (Store) orders, and exchange replacements. It owns the order and its immutable line snapshots, four independent status axes, allocation of lines to stock sources, the money consequences of delivery (supplier payables, Partner profit), unpaid-order cancellation, platform receivables for Partner-gateway orders, and returns and exchanges. This is the largest module; read it before touching anything that sells, ships or refunds.</p>
+
+    <div class="callout callout-rule"><p><strong>Rules that bind this module.</strong> An order and its lines are snapshots: the database refuses to change or delete them. Order status moves only through <code>moveTo()</code> (which calls <code>transitionTo()</code>) along the <code>OrderStatus</code> map, and the database holds the same map. Money is flat Taka held in <code>Money</code>; nothing here converts through poisha. Every financial consequence runs inside a transaction under row locks, is idempotent, and leaves a ledger or audit record.</p></div>
+
+    <h2>Purpose</h2>
+    <p>The module answers "what was sold, to whom, for how much, where it came from, how far it has got, and who is owed what because of it". It implements specification §14 (wholesale checkout), §17 (website orders), §18 (orders, sources, statuses, history), §19.1 and §20 (reservation and fulfilment), §21 (shipping and couriers), §26.3 (refunds of returns), §28 (cash on delivery and settlement) and §31.3 (self-scoping).</p>
+    <p>There are three kinds of order in everyday use, distinguished by <code>orders.source</code> (the <code>OrderSource</code> enum):</p>
+    <table>
+        <thead><tr><th>Source value</th><th>Case</th><th>Who places it</th><th>What it is</th></tr></thead>
+        <tbody>
+        <tr><td><code>erp_wholesale</code></td><td><code>ErpWholesale</code></td><td>A Partner (business account) in the ERP or the mobile app</td><td>A purchase from Feriwala (D13, D34). Always paid in full, from a gateway or from the wallet. Fulfilled by the central warehouse or a Supplier offer. Paying it also credits the Partner's own stock.</td></tr>
+        <tr><td><code>website</code></td><td><code>Website</code></td><td>A customer of a Partner's storefront, through the signed Storefront API</td><td>The <strong>Store Order</strong> (dropshipping). Feriwala is merchant of record (D12). Moves through a strict named-action workflow (D34).</td></tr>
+        <tr><td><code>exchange</code></td><td><code>Exchange</code></td><td>The system, when an exchange case is opened (D35)</td><td>The replacement parcel of an exchange. Not a sale: no payment of its own, no second profit or payable.</td></tr>
+        <tr><td><code>manual</code>, <code>api</code>, <code>admin</code>, <code>external</code></td><td><code>ManualEntry</code>, <code>Api</code>, <code>AdminEntry</code>, <code>ExternalChannel</code></td><td>Reserved</td><td>Declared in the enum (§18.1) but no action in this module creates them. The enum's own docblock says they arrive with the modules that create them.</td></tr>
+        </tbody>
+    </table>
+    <p>Orders are used by Partners (see and cancel their own), platform staff (view, move, allocate, ship, return) and the system (payment settlement, schedulers, courier webhooks). Customers never touch the ERP; they act through the Storefront API (see <a href="../api/storefront-api.html">Storefront API</a>).</p>
+    <p>Decisions implemented: D8 (couriers), D12 (merchant of record; retail margin is a <em>calculation base</em>, not a separate money path), D13 (wholesale shares the fulfilment pipeline), D25 (Supplier allocation), D34 (wholesale always paid in full; storefront selling is the Non-Conditional route), D35 (returns, exchanges, damages), D36 (Partner-owned gateways, Model B, platform receivable). Code comments also cite "D-new"; that is the rule D34 replaced (see Gotchas).</p>
+
+    <h2>Where it lives</h2>
+    <table>
+        <thead><tr><th>Path</th><th>Role</th></tr></thead>
+        <tbody>
+        <tr><td><code>app/Domain/Order/Models/</code></td><td>Eloquent models: <code>Order</code>, <code>OrderItem</code>, <code>OrderItemAllocation</code>, <code>OrderProceedsSettlement</code>, four status-history models, <code>OrderPlatformReceivable(Line)</code>, <code>OrderReceivableCollection</code>, <code>OrderHoldReservation</code>, <code>ProductSourceLink</code> (legacy), <code>OrderReturn</code>, <code>OrderReturnItem</code>, <code>ReturnCharge</code>, <code>OrderReturnStatusChange</code>, <code>ReturnResponsibilityChange</code>.</td></tr>
+        <tr><td><code>app/Domain/Order/Enums/</code></td><td>Status enums (<code>OrderStatus</code>, <code>OrderFulfillmentStatus</code>, <code>OrderDeliveryStatus</code>, <code>OrderCourierStatus</code>, <code>ReturnStatus</code>, <code>ReceivableCollectionStatus</code>, <code>ProductSourceLinkStatus</code>), plus <code>OrderSource</code>, <code>StoreOrderAction</code>, <code>StoreOrderStep</code>, <code>UnpaidOrderCancellation</code>, <code>OrderStatusChangeSource</code>, <code>CollectionChannel</code>, <code>AllocationStatus</code>, <code>AllocationSourceType</code>, and the return/exchange vocabulary.</td></tr>
+        <tr><td><code>app/Domain/Order/Actions/</code></td><td>All business logic (about 55 actions). See "Actions &amp; workflows".</td></tr>
+        <tr><td><code>app/Domain/Order/Queries/</code></td><td>Read models and calculators: <code>AllocationSourceCandidates</code>, <code>PriceWebsiteOrder</code>, <code>PlatformReceivableCalculator</code>, <code>OrderTimeline</code>, <code>StoreOrderTimeline</code>, <code>StoreOrderIndex</code>, <code>BusinessOrderIndex</code>, <code>WholesaleOrderTracking</code>, <code>ReturnEligibility</code>, <code>ReturnRefundAmount</code>, <code>PriceExchange</code>, and others.</td></tr>
+        <tr><td><code>app/Domain/Order/Data/</code></td><td>Typed value objects: website order submission/quote/line, <code>AllocationCandidate</code>, receivable breakdown, return submission, exchange quote.</td></tr>
+        <tr><td><code>app/Domain/Order/Exceptions/</code></td><td>Typed refusals: <code>OrderRefused</code>, <code>WebsiteOrderRefused</code>, <code>StoreOrderRefused</code>, <code>AllocationRefused</code>, <code>ReturnRefused</code>, <code>PlatformReceivableRefused</code>, <code>ReceivableStockUnavailable</code>, <code>OrderStockUnconfirmable</code>, <code>ConfirmationCodesExhausted</code>.</td></tr>
+        <tr><td><code>app/Domain/Order/Policies/</code></td><td><code>OrderPolicy</code>, <code>ReturnCasePolicy</code>.</td></tr>
+        <tr><td><code>app/Domain/Order/DispatchGate.php</code>, <code>WebsiteCheckoutRules.php</code>, <code>PartnerCollectionDeadline.php</code>, <code>ReturnTerms.php</code></td><td>Small shared rule classes at the module root.</td></tr>
+        <tr><td><code>app/Http/Controllers/Admin/</code></td><td><code>OrderController</code>, <code>StoreOrderController</code>, <code>OrderReturnController</code> (legacy returns desk), <code>ReturnCaseActionController</code>, <code>CaseController</code>, <code>ShipmentController</code>, <code>SteadfastBookingController</code>.</td></tr>
+        <tr><td><code>app/Http/Controllers/Erp/</code></td><td><code>WholesaleOrderController</code>, <code>WholesaleOrderPaymentReturnController</code>, <code>StoreOrderController</code>, <code>WebsiteOrderController</code>, <code>OrderController</code> (all-source list and export), <code>CaseController</code>.</td></tr>
+        <tr><td><code>app/Http/Controllers/Api/Storefront/V1/</code></td><td><code>OrderController</code>, <code>ReturnController</code>.</td></tr>
+        <tr><td><code>app/Http/Controllers/Api/Mobile/V1/</code></td><td><code>Orders/OrderController</code>, <code>Orders/StoreOrderController</code>, <code>Wholesale/WholesaleOrderController</code>, <code>Websites/WebsiteOrderController</code>.</td></tr>
+        <tr><td><code>app/Notifications/Orders/WebsiteOrderPaid.php</code></td><td>Tells a website owner a customer paid.</td></tr>
+        <tr><td><code>resources/js/pages/admin/orders/</code>, <code>admin/store-orders/</code>, <code>admin/shipments/</code>, <code>store-orders/</code>, <code>wholesale/orders/</code>, <code>orders/</code>, <code>websites/orders.tsx</code></td><td>Inertia screens. Admin order detail is split into <code>allocation-panel.tsx</code>, <code>shipments-panel.tsx</code>, <code>fulfilment-commitment-panel.tsx</code>, <code>order-progress.tsx</code>, <code>order-status-update.tsx</code>, <code>order-lifecycle.ts</code>.</td></tr>
+        <tr><td><code>lang/en/orders.php</code>, <code>store_orders.php</code>, <code>stores.php</code> (and the <code>lang/bn</code> counterparts)</td><td>Order, Store Order and timeline wording. Public-facing timeline notes are lang keys such as <code>orders.notes.placed</code>.</td></tr>
+        <tr><td><code>database/migrations/</code></td><td><code>2026_09_27_*</code> (orders, items, statuses, history), <code>2026_10_19_*</code> (fulfilment/delivery/courier lifecycles), <code>2026_10_06_110000_take_order_item_source_allocations</code>, <code>2026_10_28_150000_create_order_proceeds_settlements</code>, <code>2026_11_15_100000_add_wholesale_payment_model_to_orders</code>, <code>2026_11_20_120000_create_order_platform_receivables</code>, <code>2026_11_21_120000_create_order_receivable_collections</code>, <code>2026_11_16_100000_add_return_case_workflow</code>, <code>2026_11_16_110000_add_exchange_orders</code>.</td></tr>
+        <tr><td><code>tests/Feature/Orders/</code>, <code>tests/Feature/Concurrency/</code>, <code>tests/Feature/Wholesale/</code>, <code>tests/Feature/WebsiteApi/</code></td><td>See Testing.</td></tr>
+        </tbody>
+    </table>
+
+    <h2>Key terms</h2>
+    <dl>
+        <dt>Store Order</dt>
+        <dd>An order with <code>source = website</code>: a customer bought from a Partner's storefront. Staff and Partners see it on the "store orders" screens; its status moves only through named actions (<code>StoreOrderAction</code>).</dd>
+        <dt>Wholesale order</dt>
+        <dd>An order with <code>source = erp_wholesale</code>: a Partner buying from Feriwala. <code>wholesale_payment_model = full</code> is stamped on every order placed since D34.</dd>
+        <dt>Exchange Order</dt>
+        <dd>An order with <code>source = exchange</code>, created with an exchange case. Carries <code>original_order_id</code> and <code>exchange_return_id</code>. Display number <code>EX-{original number}</code>, then <code>-2</code>, <code>-3</code>.</dd>
+        <dt>Conditional / Non-Conditional</dt>
+        <dd>The <code>AccountType</code> of the placing account, snapshotted on the order as <code>orders.account_type</code>. A Non-Conditional Partner sells storefront products without buying them first; Feriwala keeps its share from the proceeds.</dd>
+        <dt>Four axes</dt>
+        <dd>Order <code>status</code>, plus <code>fulfillment_status</code>, <code>delivery_status</code> and <code>courier_status</code>. Each is its own state machine with its own history table.</dd>
+        <dt>Allocation</dt>
+        <dd>A frozen decision to fulfil part of one order line from one source: a warehouse, or a Supplier offer (<code>OrderItemAllocation</code>).</dd>
+        <dt>Dispatch gate</dt>
+        <dd><code>DispatchGate</code>: delivery and courier may not start until fulfilment is Ready for dispatch (non-Store orders).</dd>
+        <dt>Proceeds settlement</dt>
+        <dd><code>OrderProceedsSettlement</code>: per line, the two independent facts (delivered, money collected) that must both be true before a Non-Conditional Partner's earning is credited.</dd>
+        <dt>Recoverable amount</dt>
+        <dd><code>OrderItem::recoverableAmount()</code>: what Feriwala keeps from a line's proceeds before the Partner earns anything.</dd>
+        <dt>Collection channel</dt>
+        <dd><code>CollectionChannel</code>: <code>cod</code>, <code>platform_gateway</code> or <code>partner_gateway_external</code>. Says how a line's money reached whoever holds it.</dd>
+        <dt>Platform receivable</dt>
+        <dd>What Feriwala is owed on a Partner-gateway Store Order (D36), frozen at placement and collected from the Partner's wallet.</dd>
+        <dt>Case</dt>
+        <dd>A return, exchange or damage. Returns and exchanges are rows of <code>order_returns</code>; see <a href="cases.html">Cases</a> and <a href="damage.html">Damage</a>.</dd>
+    </dl>
+
+    <h2>Data model</h2>
+    <p>Models live in <code>app/Domain/Order/Models/</code>. Money columns use <code>MoneyCast</code> and carry a <code>currency_code</code> column; all are exact decimal Taka. Public ids are ULIDs through <code>HasPublicId</code>; admin and ERP URLs bind on <code>public_id</code>, never on the numeric id.</p>
+
+    <h3>Core</h3>
+    <table>
+        <thead><tr><th>Table / model</th><th>Purpose and important columns</th><th>Constraints and immutability</th></tr></thead>
+        <tbody>
+        <tr><td><code>orders</code> / <code>Order</code></td><td>One sale. <code>public_id</code>, <code>reference</code> (<code>ReferencePrefix::Order</code>, prefix <code>ORD</code>), <code>source</code>, <code>status</code>, <code>business_account_id</code>, <code>account_type</code> (snapshot), <code>placed_by</code>, <code>website_id</code>, <code>website_customer_id</code>, <code>storefront_order_reference</code>, <code>storefront_return_url</code>, <code>cart_id</code>, <code>payment_id</code>, <code>idempotency_key</code>, <code>checkout_fingerprint</code>, <code>customer</code>/<code>billing_address</code>/<code>shipping_address</code> (JSON snapshots), money fields <code>subtotal</code>, <code>discount</code>, <code>delivery</code>, <code>tax</code>, <code>tax_included</code>, <code>cod_fee</code>, <code>total</code>, <code>coupon_code</code>, <code>fulfillment_status</code>, <code>courier_status</code>, <code>delivery_status</code>, <code>wholesale_payment_model</code>, <code>intended_resale_channel</code> (reporting only), <code>original_order_id</code>, <code>exchange_return_id</code>, <code>placed_at</code>, <code>paid_at</code>, <code>cancelled_at</code>, <code>cancellation_reason</code>, <code>held_at</code>, <code>hold_reason</code>.</td><td>Never deleted (the model throws on <code>deleting</code>). Unique: <code>public_id</code>, <code>reference</code>, <code>payment_id</code>, <code>idempotency_key</code>. A partial unique index allows one <code>payment_pending</code> order per <code>cart_id</code>. CHECKs: source known, totals add up, cancelled rows have <code>cancelled_at</code>, on-hold rows have <code>held_at</code> and <code>hold_reason</code>. <code>wholesale_payment_model</code> is column-locked by trigger (D34). Status follows the seeded transition table. Defaults: fulfilment <code>pending_review</code>, courier <code>unassigned</code>, delivery <code>not_shipped</code>.</td></tr>
+        <tr><td><code>order_items</code> / <code>OrderItem</code></td><td>One line, as priced when placed: <code>line_number</code>, product and variant ids, <code>sku</code>, <code>product_name</code>, <code>variant_label</code>, <code>quantity</code>, <code>unit_price</code>, <code>line_subtotal</code>, <code>discount</code>, <code>tax</code>, <code>tax_included</code>, <code>line_total</code>, tax code/rate/mode, <code>stock_reservation_id</code> (unique). Storefront extras: <code>product_cost</code>, <code>platform_retained_amount</code>, <code>suggested_unit_price</code>. Supplier snapshot (staff-only): <code>supplier_id</code>, <code>supplier_offer_id</code>, <code>supplier_rate</code>, <code>platform_rate</code>, <code>platform_margin</code>, <code>supplier_allocated_quantity</code>. Legacy: <code>resale_amount</code>, <code>sourcing_*</code> (never written now).</td><td>Unique <code>(order_id, line_number)</code>. The model throws on update and delete, with one exception: an exchange line's empty <code>stock_reservation_id</code> may be filled once. The database enforces the same.</td></tr>
+        <tr><td><code>order_item_allocations</code> / <code>OrderItemAllocation</code></td><td>Which source fills (part of) a line: <code>source_type</code> (<code>warehouse</code> | <code>supplier_offer</code>), <code>warehouse_id</code>, <code>linked_stock_item_id</code>, <code>supplier_id</code>, <code>supplier_offer_id</code>, <code>supplier_offer_price_change_id</code>, <code>stock_reservation_id</code>, <code>quantity</code>, <code>unit_cost</code>, <code>platform_rate</code>, <code>expected_margin</code>, <code>status</code> (<code>AllocationStatus</code>), <code>allocated_by</code>, <code>allocation_reason</code>, <code>released_*</code>, <code>superseded_by_allocation_id</code>, <code>idempotency_key</code>, <code>override_*</code>, plus frozen source-product columns.</td><td>Decision columns are locked by trigger; only workflow columns move. A partial unique index allows one <code>active</code> allocation per line <em>per slot</em> (see split allocation in Gotchas) and one active allocation per reservation. <code>expected_margin = (platform_rate - unit_cost) * quantity</code> is a CHECK. Never deleted. <code>unit_cost</code> and <code>expected_margin</code> are staff-only (D25).</td></tr>
+        <tr><td><code>order_proceeds_settlements</code> / <code>OrderProceedsSettlement</code></td><td>One row per line that "defers product cost": <code>resale_amount</code>, <code>recovered_amount</code>, <code>delivered_at</code>, collection fact (<code>collection_channel</code>, <code>cod_collected_at</code>, <code>cod_amount_collected</code>, <code>payment_collected_at</code>, <code>payment_collected_amount</code>, <code>collection_payment_id</code>), <code>eligible_at</code>, <code>reseller_earning</code>, <code>reversed_amount</code>, <code>flagged_for_review</code>, <code>wallet_transaction_id</code>.</td><td>Unique on <code>order_item_id</code> (the race between "delivered" and "collected" is settled by this index). Never deleted. A Partner-gateway row can never carry a wallet credit (the database refuses it).</td></tr>
+        </tbody>
+    </table>
+
+    <h3>History</h3>
+    <table>
+        <thead><tr><th>Table / model</th><th>Records</th></tr></thead>
+        <tbody>
+        <tr><td><code>order_status_history</code> / <code>OrderStatusChange</code></td><td>Every <code>status</code> change (and the placement as <code>previous_status = null</code>): <code>previous_status</code>, <code>new_status</code>, <code>changed_by</code>, <code>changed_at</code>, <code>source</code> (<code>OrderStatusChangeSource</code>), <code>reason</code>, <code>internal_note</code> (staff only), <code>public_note</code> (a lang key shown to the buyer), <code>notification_status</code>.</td></tr>
+        <tr><td><code>order_fulfillment_status_history</code>, <code>order_delivery_status_history</code>, <code>order_courier_status_history</code></td><td>The same shape for the other three axes. All use <code>AppendOnlyStatusHistory</code>: the database refuses updates and deletes.</td></tr>
+        </tbody>
+    </table>
+
+    <h3>Seeded lookup tables</h3>
+    <p><code>order_statuses</code> and <code>order_status_transitions</code>, and the equivalents for fulfilment, delivery and courier, are seeded from the enums' cases and <code>transitionsTo()</code>. The tables let PostgreSQL hold each row to the same map the application uses. The enums are the authority.</p>
+
+    <h3>Platform receivable (D36)</h3>
+    <table>
+        <thead><tr><th>Table / model</th><th>Purpose</th></tr></thead>
+        <tbody>
+        <tr><td><code>order_platform_receivables</code> / <code>OrderPlatformReceivable</code></td><td>What Feriwala is owed on one Store Order, frozen at placement: <code>total</code>, <code>calculation_version</code>, <code>account_type_at_placement</code>, <code>eligibility_version</code>, <code>gateway_ownership</code>, <code>frozen_at</code>. Append-only; unique per order.</td></tr>
+        <tr><td><code>order_platform_receivable_lines</code> / <code>OrderPlatformReceivableLine</code></td><td>One immutable component: <code>component</code> (<code>product_recovery</code>, <code>product_tax</code>, <code>delivery_charge</code>, <code>delivery_tax</code>), <code>order_item_id</code>, <code>basis</code>, <code>quantity</code>, <code>unit_amount</code>, <code>line_amount</code>, <code>assessed_amount</code>, <code>rule_reference</code>.</td></tr>
+        <tr><td><code>order_receivable_collections</code> / <code>OrderReceivableCollection</code></td><td>The one mutable record beside the receivable: <code>status</code> (<code>ReceivableCollectionStatus</code>), <code>amount</code>, <code>verified_at</code>, <code>deadline_hours</code>, <code>deadline_at</code> (frozen at open), <code>collected_at</code>, <code>wallet_transaction_id</code>, and a timestamp per problem state. Moves only through <code>transitionTo()</code>; the database holds the same map in <code>feriwala_receivable_collection_move_is_allowed()</code>.</td></tr>
+        <tr><td><code>order_hold_reservations</code> / <code>OrderHoldReservation</code></td><td>A replacement stock reservation made after an order's first one lapsed (references <code>&lt;order&gt;-L&lt;line&gt;-H&lt;n&gt;</code>). Append-only.</td></tr>
+        </tbody>
+    </table>
+
+    <h3>Returns, exchanges and legacy</h3>
+    <table>
+        <thead><tr><th>Table / model</th><th>Purpose</th></tr></thead>
+        <tbody>
+        <tr><td><code>order_returns</code> / <code>OrderReturn</code></td><td>A return or exchange case: <code>case_type</code>, <code>workflow_version</code> (1 = before D35, 2 = case workflow), <code>status</code>, <code>reason</code>, who asked / on whose behalf / who is responsible, <code>original_delivery_charge</code>, <code>return_charge</code>, <code>exchange_*</code> columns, refund fields. Never deleted.</td></tr>
+        <tr><td><code>order_return_items</code> / <code>OrderReturnItem</code></td><td>Per line: asked, approved and received quantities (each capped by the one before, by the database), <code>disposition</code>, restoration movement (unique, so restoring twice is impossible).</td></tr>
+        <tr><td><code>order_return_status_history</code>, <code>order_return_responsibility_changes</code>, <code>order_return_charges</code></td><td>Append-only history, responsibility history, and the case's accounting rows (<code>ReturnCharge</code>: kind, bearer, amount, idempotency key, optional <code>reverses_charge_id</code>).</td></tr>
+        <tr><td><code>product_source_links</code> / <code>ProductSourceLink</code></td><td><strong>Legacy.</strong> Cross-catalogue source links. Kept as inactive history; allocation no longer produces candidates from them.</td></tr>
+        </tbody>
+    </table>
+
+    <h2>States &amp; lifecycle</h2>
+    <p>All status enums implement <code>TransitionableState</code>. Nothing assigns a status attribute directly. The order model exposes one move method per axis, each writing the change and its history row together and stating who did it and why:</p>
+    <table>
+        <thead><tr><th>Axis</th><th>Column</th><th>Method on <code>Order</code></th><th>Enum</th></tr></thead>
+        <tbody>
+        <tr><td>Order status</td><td><code>status</code></td><td><code>moveTo($to, StatusChange, OrderStatusChangeSource, OrderNotificationStatus)</code></td><td><code>OrderStatus</code></td></tr>
+        <tr><td>Fulfilment</td><td><code>fulfillment_status</code></td><td><code>moveFulfilmentTo()</code></td><td><code>OrderFulfillmentStatus</code></td></tr>
+        <tr><td>Delivery</td><td><code>delivery_status</code></td><td><code>moveDeliveryTo()</code></td><td><code>OrderDeliveryStatus</code></td></tr>
+        <tr><td>Courier</td><td><code>courier_status</code></td><td><code>moveCourierTo()</code></td><td><code>OrderCourierStatus</code></td></tr>
+        </tbody>
+    </table>
+    <p>The caller must already have locked the order and decided the move is allowed for <em>this</em> order now (for example, a settled payment cannot simply be cancelled); the map only says what is possible in principle. <code>moveTo()</code> has two side effects: a Store Order's storefront is told via <code>AnnounceWebsiteOrderStatus</code> in the same transaction, and an Exchange Order reaching <code>shipped</code> notifies the Partner through <code>AnnounceCaseEvent::exchangeOrder()</code>.</p>
+
+    <h3>OrderStatus (<code>orders.status</code>) - the business lifecycle</h3>
+    <p>Cases (27): <code>draft</code>, <code>new</code>, <code>pending_confirmation</code>, <code>customer_verification_pending</code>, <code>confirmed</code>, <code>payment_pending</code>, <code>paid</code>, <code>processing</code>, <code>stock_reserved</code>, <code>ready_for_fulfillment</code>, <code>picking</code>, <code>packing</code>, <code>ready_for_pickup</code>, <code>courier_assigned</code>, <code>shipped</code>, <code>in_transit</code>, <code>delivered</code>, <code>completed</code>, <code>delivery_failed</code>, <code>on_hold</code>, <code>cancelled</code>, <code>return_requested</code>, <code>return_approved</code>, <code>returning</code>, <code>returned</code>, <code>refund_pending</code>, <code>partially_refunded</code>, <code>refunded</code>. Terminal: <code>cancelled</code>, <code>refunded</code>. Admin-defined custom statuses (§18.2) are not built.</p>
+    <table>
+        <thead><tr><th>From</th><th>Legal next statuses (from <code>OrderStatus::transitionsTo()</code>)</th></tr></thead>
+        <tbody>
+        <tr><td><code>draft</code></td><td>new, pending_confirmation, payment_pending, cancelled</td></tr>
+        <tr><td><code>new</code></td><td>pending_confirmation, customer_verification_pending, confirmed, payment_pending, on_hold, cancelled</td></tr>
+        <tr><td><code>pending_confirmation</code></td><td>customer_verification_pending, confirmed, on_hold, cancelled</td></tr>
+        <tr><td><code>customer_verification_pending</code></td><td>confirmed, on_hold, cancelled</td></tr>
+        <tr><td><code>confirmed</code></td><td>payment_pending, processing, stock_reserved, ready_for_fulfillment, on_hold, cancelled</td></tr>
+        <tr><td><code>payment_pending</code></td><td>paid, on_hold, cancelled</td></tr>
+        <tr><td><code>paid</code></td><td>processing, stock_reserved, ready_for_fulfillment, on_hold, refund_pending</td></tr>
+        <tr><td><code>processing</code></td><td>stock_reserved, ready_for_fulfillment, packing, on_hold, refund_pending, cancelled</td></tr>
+        <tr><td><code>stock_reserved</code></td><td>processing, ready_for_fulfillment, packing, on_hold, refund_pending, cancelled</td></tr>
+        <tr><td><code>ready_for_fulfillment</code></td><td>picking, packing, on_hold, refund_pending, cancelled</td></tr>
+        <tr><td><code>picking</code></td><td>packing, ready_for_fulfillment, on_hold</td></tr>
+        <tr><td><code>packing</code></td><td>ready_for_pickup, picking, on_hold, refund_pending, cancelled</td></tr>
+        <tr><td><code>ready_for_pickup</code></td><td>courier_assigned, shipped, on_hold, refund_pending, cancelled</td></tr>
+        <tr><td><code>courier_assigned</code></td><td>shipped, ready_for_pickup, on_hold</td></tr>
+        <tr><td><code>shipped</code></td><td>in_transit, delivered, delivery_failed (no hold, no cancel once it has left)</td></tr>
+        <tr><td><code>in_transit</code></td><td>delivered, delivery_failed</td></tr>
+        <tr><td><code>delivery_failed</code></td><td>in_transit, returning, on_hold, cancelled</td></tr>
+        <tr><td><code>delivered</code></td><td>completed, return_requested</td></tr>
+        <tr><td><code>completed</code></td><td>return_requested</td></tr>
+        <tr><td><code>on_hold</code></td><td>new, pending_confirmation, confirmed, payment_pending, paid, processing, stock_reserved, ready_for_fulfillment, refund_pending, cancelled</td></tr>
+        <tr><td><code>return_requested</code></td><td>return_approved, completed, on_hold</td></tr>
+        <tr><td><code>return_approved</code></td><td>returning, on_hold</td></tr>
+        <tr><td><code>returning</code></td><td>returned</td></tr>
+        <tr><td><code>returned</code></td><td>refund_pending, completed</td></tr>
+        <tr><td><code>refund_pending</code></td><td>partially_refunded, refunded</td></tr>
+        <tr><td><code>partially_refunded</code></td><td>refunded</td></tr>
+        <tr><td><code>cancelled</code>, <code>refunded</code></td><td>none</td></tr>
+        </tbody>
+    </table>
+    <p>Each status has a <code>tone()</code> (success, info, warning, danger, neutral) and a translated label. Tone is shown beside the label, never instead of it (§33.9).</p>
+
+    <h3>Who actually moves OrderStatus (as the code stands)</h3>
+    <table>
+        <thead><tr><th>Move</th><th>Moved by</th></tr></thead>
+        <tbody>
+        <tr><td>→ <code>payment_pending</code> (wholesale, online Store Order), → <code>customer_verification_pending</code> (COD Store Order)</td><td>Placement: <code>PlaceWholesaleOrder</code>, <code>PlaceWebsiteOrder</code> (written by <code>recordPlacement()</code>, not a transition)</td></tr>
+        <tr><td><code>customer_verification_pending</code> → <code>confirmed</code></td><td><code>ConfirmCodOrder</code> (customer's code, or <code>withoutCode()</code> when the shop asks for none)</td></tr>
+        <tr><td><code>payment_pending</code> → <code>paid</code> or <code>on_hold</code></td><td><code>ConfirmOrderPayment</code>, or <code>CollectPartnerReceivable</code> for Partner-gateway orders</td></tr>
+        <tr><td><code>pending_confirmation</code>/<code>new</code>/... → <code>confirmed</code> → <code>processing</code> → <code>packing</code> → <code>ready_for_pickup</code> → <code>shipped</code> (Store Orders)</td><td><code>AdvanceStoreOrder</code> with a <code>StoreOrderAction</code></td></tr>
+        <tr><td>→ <code>cancelled</code> / <code>refund_pending</code></td><td><code>CancelUnpaidOrder</code> (unpaid) or <code>CancelStoreOrder</code> (before dispatch)</td></tr>
+        <tr><td>→ <code>delivered</code>, → <code>completed</code></td><td><code>RollUpOrderStatus</code>, from the delivery axis (see Gotchas)</td></tr>
+        <tr><td>Exchange Order → <code>confirmed</code> / <code>cancelled</code></td><td><code>ConfirmExchangeOrder</code> / <code>CancelExchangeOrder</code></td></tr>
+        </tbody>
+    </table>
+
+    <h3>StoreOrderStep and StoreOrderAction (Store Orders only)</h3>
+    <p><code>StoreOrderStep</code> maps statuses onto the steps a Store Order is shown moving through; nothing is stored. <code>StoreOrderAction</code> is the only way staff move one: there is no "set status".</p>
+    <table>
+        <thead><tr><th>Action (<code>StoreOrderAction</code>)</th><th>Legal from</th><th>Moves to</th></tr></thead>
+        <tbody>
+        <tr><td><code>confirm</code></td><td>new, pending_confirmation, customer_verification_pending</td><td>confirmed</td></tr>
+        <tr><td><code>start_processing</code></td><td>confirmed, paid</td><td>processing</td></tr>
+        <tr><td><code>start_packing</code></td><td>processing, stock_reserved, ready_for_fulfillment, picking</td><td>packing</td></tr>
+        <tr><td><code>mark_packed</code></td><td>packing</td><td>ready_for_pickup</td></tr>
+        <tr><td><code>dispatch</code></td><td>ready_for_pickup, courier_assigned</td><td>shipped</td></tr>
+        </tbody>
+    </table>
+    <p>Steps: Pending (draft, new, pending_confirmation, customer_verification_pending, payment_pending), Confirmed (confirmed, paid), Processing, Packing, Packed (ready_for_pickup), Dispatched (courier_assigned, shipped, in_transit, delivery_failed), Delivered, Completed. Online orders still waiting for the gateway are not in <code>confirm</code>'s list: confirming an online order is the verified payment, never a click.</p>
+
+    <h3>OrderFulfillmentStatus (<code>fulfillment_status</code>)</h3>
+    <p>Cases: <code>pending_review</code> (default), <code>source_allocation_pending</code>, <code>supplier_confirmation_pending</code>, <code>processing</code>, <code>picking</code>, <code>packing</code>, <code>ready_for_dispatch</code>, <code>partially_fulfilled</code>, <code>fulfilled</code>, <code>on_hold</code>, <code>cancelled</code>. Terminal: <code>fulfilled</code>, <code>cancelled</code>. <code>partially_fulfilled</code> is chosen by hand by staff and has no counterpart in <code>OrderStatus</code>.</p>
+    <table>
+        <thead><tr><th>From</th><th>Next</th></tr></thead>
+        <tbody>
+        <tr><td>pending_review</td><td>source_allocation_pending, on_hold, cancelled</td></tr>
+        <tr><td>source_allocation_pending</td><td>supplier_confirmation_pending, processing, on_hold, cancelled</td></tr>
+        <tr><td>supplier_confirmation_pending</td><td>processing, source_allocation_pending, on_hold, cancelled</td></tr>
+        <tr><td>processing</td><td>picking, partially_fulfilled, on_hold, cancelled</td></tr>
+        <tr><td>picking</td><td>packing, on_hold</td></tr>
+        <tr><td>packing</td><td>ready_for_dispatch, on_hold</td></tr>
+        <tr><td>ready_for_dispatch</td><td>fulfilled, partially_fulfilled, on_hold</td></tr>
+        <tr><td>partially_fulfilled</td><td>processing, ready_for_dispatch, fulfilled, on_hold, cancelled</td></tr>
+        <tr><td>on_hold</td><td>source_allocation_pending, supplier_confirmation_pending, processing, picking, packing, ready_for_dispatch, partially_fulfilled, cancelled</td></tr>
+        <tr><td>fulfilled, cancelled</td><td>none</td></tr>
+        </tbody>
+    </table>
+    <p><code>isReadyForDispatch()</code> is true for <code>ready_for_dispatch</code> and <code>fulfilled</code>. A supplier declining or missing a confirmation deadline returns a line to <code>source_allocation_pending</code> (<code>ExpireOverdueFulfilmentCommitments</code> in the Supplier module).</p>
+
+    <h3>OrderDeliveryStatus (<code>delivery_status</code>)</h3>
+    <p>Coarser than the courier axis; what a buyer cares about. Cases: <code>not_shipped</code>, <code>courier_assigned</code>, <code>shipped</code>, <code>in_transit</code>, <code>out_for_delivery</code>, <code>delivered</code>, <code>failed_delivery</code>, <code>return_requested</code>, <code>returned</code>, <code>refunded</code>, <code>on_hold</code>, <code>cancelled</code>.</p>
+    <table>
+        <thead><tr><th>From</th><th>Next</th></tr></thead>
+        <tbody>
+        <tr><td>not_shipped</td><td>courier_assigned, on_hold, cancelled</td></tr>
+        <tr><td>courier_assigned</td><td>shipped, on_hold, cancelled</td></tr>
+        <tr><td>shipped</td><td>in_transit, out_for_delivery, failed_delivery</td></tr>
+        <tr><td>in_transit</td><td>out_for_delivery, failed_delivery</td></tr>
+        <tr><td>out_for_delivery</td><td>delivered, failed_delivery</td></tr>
+        <tr><td>delivered</td><td>return_requested</td></tr>
+        <tr><td>failed_delivery</td><td>courier_assigned, return_requested, on_hold, cancelled</td></tr>
+        <tr><td>return_requested</td><td>returned, on_hold</td></tr>
+        <tr><td>returned</td><td>refunded</td></tr>
+        <tr><td>on_hold</td><td>not_shipped, courier_assigned, shipped, in_transit, out_for_delivery, cancelled</td></tr>
+        <tr><td>refunded, cancelled</td><td>none</td></tr>
+        </tbody>
+    </table>
+    <p>There is no direct <code>in_transit</code> → <code>delivered</code>; <code>RecordManualCourierStatusUpdate</code> inserts the <code>out_for_delivery</code> hop when a courier reports delivery.</p>
+
+    <h3>OrderCourierStatus (<code>courier_status</code> and <code>shipments.status</code>)</h3>
+    <p>A shipment's status <em>is</em> this enum (no separate shipment enum). Cases: <code>unassigned</code> (order has no shipment; a shipment row is never created in it), <code>assigned</code>, <code>pickup_requested</code>, <code>picked_up</code>, <code>in_transit</code>, <code>delivered</code>, <code>failed_delivery</code>, <code>returned_to_origin</code>, <code>cancelled</code>.</p>
+    <table>
+        <thead><tr><th>From</th><th>Next</th></tr></thead>
+        <tbody>
+        <tr><td>unassigned</td><td>assigned, cancelled</td></tr>
+        <tr><td>assigned</td><td>pickup_requested, cancelled</td></tr>
+        <tr><td>pickup_requested</td><td>picked_up, cancelled</td></tr>
+        <tr><td>picked_up</td><td>in_transit, failed_delivery</td></tr>
+        <tr><td>in_transit</td><td>delivered, failed_delivery</td></tr>
+        <tr><td>failed_delivery</td><td>returned_to_origin, assigned</td></tr>
+        <tr><td>delivered, returned_to_origin, cancelled</td><td>none</td></tr>
+        </tbody>
+    </table>
+    <p>The courier machinery is documented on the <a href="courier.html">Courier</a> page.</p>
+
+    <h3>How the axes relate</h3>
+    <ul>
+        <li><strong>Fulfilment gates dispatch.</strong> <code>DispatchGate</code>: for every order except a Store Order, the first move off <code>not_shipped</code> / <code>unassigned</code>, and any re-assignment, needs <code>fulfillment_status</code> to be <code>ready_for_dispatch</code> or <code>fulfilled</code>. Hold and cancel are always allowed, and a track already under way is never blocked. The gate is consulted by the manual status actions, shipment creation and the screen's offered moves.</li>
+        <li><strong>Store Orders have their own gate.</strong> <code>AdvanceOrderFulfilmentStatus</code> refuses a Store Order outright ("use the named actions"). <code>AdvanceOrderDeliveryStatus</code> and <code>AdvanceOrderCourierStatus</code> refuse a Store Order until <code>StoreOrderStep::hasDispatched()</code>, i.e. status is shipped, in_transit, delivery_failed, delivered, completed or a return stage.</li>
+        <li><strong>A shipment drives the axes.</strong> <code>RecordManualCourierStatusUpdate</code> moves the shipment, mirrors it onto the order's courier axis, and onto the delivery axis where there is an unambiguous equivalent (picked_up → shipped, in_transit → in_transit, delivered → delivered, failed_delivery → failed_delivery, cancelled → cancelled). <code>returned_to_origin</code> and <code>assigned</code>/<code>pickup_requested</code> deliberately have no delivery mapping.</li>
+        <li><strong>Delivery rolls up.</strong> <code>RollUpOrderStatus</code> runs inside every fulfilment and delivery move (see Gotchas for exactly what it does).</li>
+    </ul>
+
+    <h3>Other status-like enums</h3>
+    <table>
+        <thead><tr><th>Enum</th><th>Cases and meaning</th></tr></thead>
+        <tbody>
+        <tr><td><code>AllocationStatus</code> (not a state machine)</td><td><code>active</code> (the only live claim on stock), <code>released</code> (given up, nothing replaced it), <code>superseded</code> (replaced; <code>superseded_by_allocation_id</code> says by what), <code>cancelled</code> (order or line went away beneath it).</td></tr>
+        <tr><td><code>ReturnStatus</code></td><td>Version 1: requested → approved → received → refunded, with rejected/cancelled. Version 2 (D35): requested → approved → waiting_for_parcel → parcel_received → under_inspection → inspection_approved → settlement_pending → completed, with exits rejected, inspection_rejected, cancelled (before goods are back). <code>transitionsFor(int $version)</code> is the version-aware map; <code>transitionsTo()</code> is the union. <code>contractValue()</code> collapses v2 stages onto the six values the frozen storefront contract knows. Money and stock move only from <code>inspection_approved</code> on.</td></tr>
+        <tr><td><code>ReceivableCollectionStatus</code></td><td><code>pending_collection</code>, <code>wallet_insufficient</code>, <code>reservation_recovery_required</code>, <code>collected</code>, <code>deadline_expired_refund_required</code>; <code>partially_reversed</code> and <code>reversed</code> exist but nothing writes them yet. <code>isActive()</code> (pending or wallet_insufficient) means still collectable.</td></tr>
+        <tr><td><code>UnpaidOrderCancellation</code></td><td>Why an unpaid order was cancelled: <code>payment_failed</code>, <code>payment_cancelled</code>, <code>payment_expired</code>, <code>by_account</code>, <code>by_staff</code>, <code>by_storefront</code>, <code>confirmation_expired</code>. Each knows its payment status, change source, staff reason and buyer-facing note key.</td></tr>
+        <tr><td><code>OrderStatusChangeSource</code></td><td><code>checkout</code>, <code>payment_gateway</code>, <code>scheduler</code>, <code>account</code>, <code>staff</code>, <code>system</code>, <code>storefront</code>. "Nobody" is not an answer: the gateway and the scheduler both act as no person, and mean different things when reconciling.</td></tr>
+        <tr><td><code>OrderNotificationStatus</code></td><td><code>not_required</code> or <code>queued</code>: the decision made at the moment of the change, not a delivery outcome.</td></tr>
+        <tr><td><code>OrderPaymentState</code></td><td>A read-only folding of the payment's status for the buyer: awaiting, confirming, paid, failed, cancelled, reconciliation, refunded. An order keeps no payment status of its own.</td></tr>
+        </tbody>
+    </table>
+
+    <h2>Actions &amp; workflows</h2>
+    <p>All logic is in <code>app/Domain/Order/Actions/</code>. Controllers validate, authorize and delegate.</p>
+
+    <h3>Action catalogue</h3>
+    <table>
+        <thead><tr><th>Group</th><th>Class</th><th>Purpose</th></tr></thead>
+        <tbody>
+        <tr><td rowspan="6">Placement</td><td><code>PlaceWholesaleOrder</code></td><td>Turn a confirmed wholesale checkout into a <code>payment_pending</code> order with a payment, reservations and snapshots.</td></tr>
+        <tr><td><code>PlaceWebsiteOrder</code></td><td>Take a storefront order: price it server-side, record payment, snapshot, reserve Partner stock.</td></tr>
+        <tr><td><code>ChooseWebsiteOrderGateway</code></td><td>Decide once, at placement, whether the payment goes to Feriwala's or the Partner's gateway (D36).</td></tr>
+        <tr><td><code>FreezePlatformReceivable</code></td><td>Write the immutable receivable for a Partner-gateway order.</td></tr>
+        <tr><td><code>SendCodConfirmationCode</code></td><td>SMS a one-time code scoped to one order.</td></tr>
+        <tr><td><code>AllocateExchangeNumber</code></td><td>Next <code>EX-</code> number under a lock on the original order.</td></tr>
+        <tr><td rowspan="8">Payment and confirmation</td><td><code>InitiateOrderPayment</code></td><td>Open (or reopen) a gateway session for the order's one payment.</td></tr>
+        <tr><td><code>ChangeOrderPaymentMethod</code></td><td>Switch an unpaid order to another gateway after asking the old one whether it was paid.</td></tr>
+        <tr><td><code>PayOrderFromWallet</code></td><td>Pay a wholesale order's payment from the account wallet (debit and paid-move in one transaction).</td></tr>
+        <tr><td><code>ConfirmOrderPayment</code></td><td>What a settled payment does to its order: commit stock, move to <code>paid</code>, issue invoice, or hold.</td></tr>
+        <tr><td><code>ConfirmCodOrder</code></td><td>Customer confirms a COD order; commits held stock.</td></tr>
+        <tr><td><code>SynchronizeOnlineCollectionWithPayment</code></td><td>Record a verified online payment as each line's collection fact.</td></tr>
+        <tr><td><code>OpenReceivableCollection</code>, <code>CollectPartnerReceivable</code>, <code>SecureReceivableStock</code>, <code>ReleaseCollectableReceivables</code>, <code>SetPartnerCollectionDeadline</code></td><td>D36 collection of the platform receivable from the Partner's wallet (see below).</td></tr>
+        <tr><td><code>AnnounceWebsiteOrderStatus</code></td><td>Write the storefront webhook delivery for a Store Order move.</td></tr>
+        <tr><td rowspan="6">Cancellation and expiry</td><td><code>CancelUnpaidOrder</code></td><td>The one cancellation every unpaid order goes through.</td></tr>
+        <tr><td><code>CancelUnpaidOrderByStaff</code></td><td>Staff wrapper: <code>order.edit</code>, reason required, audited.</td></tr>
+        <tr><td><code>CancelStoreOrder</code></td><td>Cancel a Store Order that has not been dispatched.</td></tr>
+        <tr><td><code>ExpireUnpaidOrders</code></td><td>Scheduled: confirm paid-but-waiting, cancel closed or overdue.</td></tr>
+        <tr><td><code>ExpireUnconfirmedCodOrders</code></td><td>Scheduled: cancel COD orders nobody confirmed in time.</td></tr>
+        <tr><td><code>RetryCodConfirmationCodes</code></td><td>Scheduled: resend codes the SMS provider did not take.</td></tr>
+        <tr><td rowspan="6">Workflow and status</td><td><code>AdvanceStoreOrder</code></td><td>One named step of the Store Order sequence; dispatch consumes stock.</td></tr>
+        <tr><td><code>AdvanceOrderFulfilmentStatus</code></td><td>Manual fulfilment move (reason required for hold and cancel).</td></tr>
+        <tr><td><code>AdvanceOrderDeliveryStatus</code></td><td>Manual delivery move (reason required for hold, cancel, failed delivery, return) plus the delivery side effects.</td></tr>
+        <tr><td><code>AdvanceOrderCourierStatus</code></td><td>Manual courier move (reason required for cancel and failed delivery).</td></tr>
+        <tr><td><code>RollUpOrderStatus</code></td><td>Keep <code>status</code> in step with delivery.</td></tr>
+        <tr><td><code>MarkPartnerStockSold</code></td><td>On delivery, move a line's units from the processing bucket to sold.</td></tr>
+        <tr><td rowspan="2">Allocation</td><td><code>AllocateOrderLineSource</code></td><td>Commit a line (or part of it) to the source staff chose.</td></tr>
+        <tr><td><code>ConfirmProductSourceLink</code></td><td>Legacy; see Gotchas.</td></tr>
+        <tr><td rowspan="5">Delivery consequences</td><td><code>SynchronizeSupplierPayablesWithDelivery</code></td><td>Delivered marks supplier payables delivered; failed, cancelled or returned cancels the still-pending ones.</td></tr>
+        <tr><td><code>SynchronizeDeliverySuccessFeesWithDelivery</code></td><td>Delivered charges the Delivery Success Fee against every supplier payable on the order (<code>ApplyDeliverySuccessFee</code>, Supplier module).</td></tr>
+        <tr><td><code>SynchronizeOrderProceedsWithDelivery</code></td><td>Delivered records the "delivered" fact on every line that defers product cost.</td></tr>
+        <tr><td><code>EvaluateOrderProceedsEligibility</code></td><td>The idempotent two-fact gate that credits a Partner's earning.</td></tr>
+        <tr><td><code>RecordCodCollection</code>, <code>ReverseOrderProceedsSettlement</code></td><td>Staff confirm cash collected; take back profit when goods return.</td></tr>
+        <tr><td rowspan="3">Returns (D35)</td><td><code>RequestOrderReturn</code>, <code>DecideOrderReturn</code>, <code>CancelOrderReturn</code></td><td>Open, decide, withdraw a case.</td></tr>
+        <tr><td><code>ReceiveReturnParcel</code>, <code>StartReturnInspection</code>, <code>FinalizeReturnInspection</code>, <code>RestoreReturnedStock</code>, <code>StartReturnSettlement</code>, <code>CompleteReturnCase</code></td><td>The v2 stages. Nothing moves before inspection approves.</td></tr>
+        <tr><td><code>RefundOrderReturn</code>, <code>SyncReturnRefund</code>, <code>SettleReturnRefundManually</code>, <code>ChangeReturnResponsibility</code>, <code>PostReturnCharge</code>, <code>ReverseReturnCharge</code>, <code>SettleOutstandingReturnCharge</code>, <code>ReceiveReturnedItems</code> (v1 only), <code>AnnounceReturnStatus</code></td><td>Refund machinery link, responsibility and charges, storefront notice.</td></tr>
+        <tr><td>Exchanges</td><td><code>CreateExchangeOrder</code>, <code>ConfirmExchangeOrder</code>, <code>CancelExchangeOrder</code>, <code>RecordExchangeCollection</code></td><td>The replacement order's lifecycle.</td></tr>
+        </tbody>
+    </table>
+
+    <h3>Flow 1: ERP wholesale order</h3>
+    <ol>
+        <li>The Partner confirms a checkout (the Wholesale module's cart and <code>PriceCheckout</code> produce a fingerprinted quote). <code>PlaceWholesaleOrder::handle()</code> first asks <code>KycRestrictions::blocksNewOrders()</code>: an outstanding KYC re-verification can stop new orders (§7.4), checked in the action rather than by hiding a button.</li>
+        <li>Under a row lock on the cart, in one transaction: the checkout is priced again and must be ready, addressed, payable through a switched-on gateway (or the wallet), and carry the same fingerprint the Partner confirmed. A total that is not positive is refused ("nothing to pay").</li>
+        <li><code>WholesalePaymentQuote::fromCheckout()</code> builds the payment (D34: the whole server-calculated total, every account). For a wallet payment, <code>WalletPaymentMethod::canCover()</code> refuses early. <code>RecordPaymentFromQuote</code> writes the payment with purpose <code>WholesaleOrder</code> and an idempotency key derived from the cart confirmation.</li>
+        <li>The order is created: <code>source = erp_wholesale</code>, <code>status = payment_pending</code>, <code>wholesale_payment_model = full</code>, <code>account_type</code> snapshot, customer and address snapshots, every Money total from the quote, <code>cod_fee</code> zero.</li>
+        <li>Stock is reserved line by line, in a fixed product order so two orders never lock the same stock in opposite orders. <code>AllocateSupplierOrderLine</code> (Supplier module) chooses a Supplier's preferred offer where the variation is Supplier-sourced (D25), otherwise central stock; the reservation kind is <code>OnlinePayment</code>. When stock is not enforced, a refused reservation is tolerated; when it is, the order is refused.</li>
+        <li>Each line is snapshotted (<code>writeLines()</code>): price, line discount capped at the subtotal, tax at the rate in force, reservation id, and the Supplier snapshot. A <code>SupplierPayable</code> is accrued for each Supplier-backed line.</li>
+        <li>The payment gets its gateway, mode (sandbox or live, stamped now and never recalculated, §26.4) and an <code>expires_at</code> one minute before the first reservation lapses (<code>SETTLEMENT_MARGIN_SECONDS = 60</code>). A coupon use is held against the payment.</li>
+        <li><code>recordPlacement()</code> writes the first history row (source <code>checkout</code>, public note <code>orders.notes.placed</code>).</li>
+        <li><strong>Idempotency.</strong> The key is a SHA-256 of cart public id, confirmed fingerprint and confirmation time. The same confirmation submitted twice returns the first order; the database refuses a second order for the key, a second <code>payment_pending</code> order for the cart, or a second order for the payment.</li>
+        <li>The Partner pays (<code>InitiateOrderPayment</code> opens a gateway session; <code>ChangeOrderPaymentMethod</code> can switch gateway; <code>PayOrderFromWallet</code> pays from the wallet). Settlement in the Billing module calls <code>ConfirmOrderPayment</code>.</li>
+        <li><code>ConfirmOrderPayment</code>, with the order then the payment locked: every line's reservation must match its line (reference <code>&lt;order&gt;-L&lt;line&gt;</code>, quantity) and still be active; reservations are committed (Partner-sourced ones are only held until dispatch); status → <code>paid</code> with <code>paid_at</code>; <code>ReceivePartnerPurchase</code> gives the Partner the units they bought (D34); <code>IssueInvoice</code> issues the invoice (P4-11, only now); the cart is emptied; supplier payables record the payment fact; the online collection fact is recorded in its own savepoint so a bookkeeping failure never undoes a real payment.</li>
+        <li><strong>If the stock cannot be committed</strong> (missing, mismatched, ended, or a lock timeout): everything rolls back and the order moves to <code>on_hold</code> with <code>held_at</code> and <code>hold_reason</code>, supplier payables are frozen (<code>HoldSupplierPayable</code>), a critical log is written on the <code>payment</code> channel and a payment log row <code>order_held</code>. The money is real; a person must find stock or refund. No invoice is issued for a held order.</li>
+        <li>Fulfilment proceeds on the axes (Flow 5). Delivery runs Flow 6.</li>
+    </ol>
+
+    <h3>Flow 2: how a storefront order enters</h3>
+    <p>A customer of a Partner's separately installed storefront never touches the ERP. The storefront calls the signed Storefront API (<code>POST storefront/v1/orders</code>, scope <code>orders:write</code>, with the idempotent middleware). <code>PlaceWebsiteOrder::handle()</code>:</p>
+    <ol>
+        <li><code>WebsiteCheckoutRules</code> is asserted first: the website is accepting orders (an outstanding KYC re-verification answers exactly as a paused shop does), the payment request is legal (a payment the storefront calls paid is refused outright, D12), and no coupon is carried.</li>
+        <li>A distributed lock on <code>website-order:{website id}:{lower-cased storefront reference}</code> serializes duplicates. The same reference with the same request returns the existing order (<code>[order, false]</code>); the same reference with a different request is <code>WebsiteOrderRefused::duplicate</code>; a reused idempotency key is <code>keyReused</code>.</li>
+        <li><code>PriceWebsiteOrder</code> prices the cart itself. The storefront's claimed unit prices and totals must match exactly (<code>WebsiteOrderQuote::matches()</code>); any difference is refused with the authoritative figures. Nothing the storefront sends is trusted but what it bought.</li>
+        <li>In one transaction: the website's customer is found or recorded by mobile number (<code>RecordWebsiteCustomer</code>); for COD the shop's COD limit is checked; one payment is recorded (purpose <code>WebsiteOrder</code>); the order is written; a Non-Conditional account's selling prices are re-checked against the platform price rules (<code>assertPricedWithinRules</code>: the suggested price is always acceptable); stock is reserved for the website's owner.</li>
+        <li><strong>Stock.</strong> <code>reserveFromPartner()</code> draws on the Partner's own units (D34). Supplier offers are never drawn on for a Store Order. A line the owner has too few of refuses the order, except a Non-Conditional account, which sells without having bought: that line is filled from central stock and the line records <code>product_cost</code> (the wholesale price that account would have paid) and <code>platform_retained_amount</code> (suggested selling price times quantity). Every line freezes <code>suggested_unit_price</code> (what a damaged unit is worth at most, D35).</li>
+        <li><strong>Initial status.</strong> COD: <code>customer_verification_pending</code>. Online: <code>payment_pending</code>. For online payment <code>ChooseWebsiteOrderGateway</code> decides, once, between Model A (Feriwala's gateway) and Model B (the Partner's own, D36) and freezes <code>gateway</code>, <code>gateway_mode</code>, <code>gateway_ownership</code>, <code>funds_destination</code> and the configuration version on the payment; a fallback from the Partner's gateway to Feriwala's is logged with a fixed-list reason. For COD, the payment records no gateway (<code>Order::isCashOnDelivery()</code>).</li>
+        <li>The payment window closes one minute before the first reservation lapses. The placement history row has source <code>storefront</code>.</li>
+        <li>After the transaction: a COD customer is sent the code (<code>SendCodConfirmationCode</code>, never allowed to fail a taken order) unless the shop or the platform asks for no code (<code>CheckoutVerification</code>), in which case <code>ConfirmCodOrder::withoutCode()</code> confirms at once and the history says so honestly. The customer's number is never recorded as verified in that case.</li>
+    </ol>
+
+    <h3>Flow 3: customer confirmation of a COD order</h3>
+    <ol>
+        <li>The storefront posts <code>orders/{order}/confirmation/code</code> (resend) and <code>orders/{order}/confirmation</code> (the code). <code>SendCodConfirmationCode</code> uses the same <code>VerificationCodes</code> as mobile verification: hashed, short life, a budget of wrong guesses, a resend cooldown, scoped to the order. It goes by SMS (event <code>cod_confirmation</code>, see <a href="notification.html">Notification</a>) and is never returned to the storefront.</li>
+        <li><code>ConfirmCodOrder::handle()</code> takes a lock <code>cod-confirm:{order id}</code>, re-reads the order under a row lock, and is safe to repeat: an order already <code>confirmed</code> is answered as it stands. Only <code>customer_verification_pending</code> is moved. A closed window (the stock's own deadline) is <code>confirmationExpired</code>. A wrong, spent or never-issued code gets one answer, so guessing reveals nothing about whether an order exists.</li>
+        <li>Confirming commits what the order was holding (Partner-sourced reservations are held until dispatch; others are committed) and moves to <code>confirmed</code>. It does <strong>not</strong> make the order paid: the money is collected on delivery and settled through §28, so no invoice is issued.</li>
+        <li><code>ExpireUnconfirmedCodOrders</code> (scheduled every minute) cancels COD orders nobody confirmed in time, with reason <code>confirmation_expired</code>.</li>
+    </ol>
+
+    <h3>Flow 4: Store Order workflow, dispatch and cancellation</h3>
+    <ul>
+        <li><code>AdvanceStoreOrder</code> re-reads the order under a row lock. If the order is already at the target status it answers <code>[order, false]</code>: no second history row, no second stock movement, no second storefront announcement. Otherwise the action must be legal from the current status or <code>StoreOrderRefused::wrongStep</code>.</li>
+        <li><strong>Stock boundaries.</strong> <code>confirm</code> calls <code>holdUntilDispatch()</code> on each Partner-sourced reservation (staff confirmation proves the order is real, so the short window ends). Processing, packing and packed leave the hold. <code>dispatch</code> is the one boundary that consumes stock: each Partner-sourced reservation is committed exactly once, in the same transaction as the status move; a reservation that ended any other way refuses the dispatch rather than shipping goods nobody holds.</li>
+        <li><code>CancelStoreOrder</code>: only before dispatch (<code>new</code> ... <code>ready_for_pickup</code>), always with a reason. Stock is released once from the reservation still held, including any replacement from <code>order_hold_reservations</code>. An unpaid payment is closed; a settled one sends the order to <code>refund_pending</code> and the existing refund process takes over (this action never refunds). A Partner may cancel only while the order is still Pending (new, pending_confirmation, customer_verification_pending, payment_pending); once it is being processed, cancelling needs staff. A dispatched order is never cancelled here: it follows the return, failed-delivery and return-to-origin flows.</li>
+        <li><code>CancelUnpaidOrder</code> (wholesale and website): takes the lock <code>payment:settle:{payment id}</code> (the same lock settlement takes, so a cancel and a gateway confirmation queue rather than race), moves only <code>payment_pending</code> or <code>customer_verification_pending</code> orders, never one whose payment has settled, refuses a person cancelling while the gateway is still confirming, closes the open payment, releases stock once, moves to <code>cancelled</code>, withdraws the cart confirmation, cancels pending supplier payables and releases the coupon hold. A payment the gateway confirms after cancellation goes to reconciliation, never to the cancelled order.</li>
+        <li><code>ExpireUnpaidOrders</code> (every minute) handles three kinds: paid-but-waiting orders (confirmed now, or held), orders whose payment has closed (cancelled), and orders whose payment window closed (cancelled, stock returned; late money is reconciled).</li>
+    </ul>
+
+    <h3>Flow 5: allocation of lines to sources</h3>
+    <p>Allocation is staff-driven and applies to orders with Supplier or warehouse sourcing (not to Store Orders, which reserve Partner stock). The platform never chooses: <code>AllocationSourceCandidates</code> reports what every source holds and what it would earn (Supplier rate, warehouse cost, platform rate, margin), and <code>AllocateOrderLineSource::handle()</code> commits to the one a person picked.</p>
+    <ol>
+        <li>A reason is required. The call runs under a per-line distributed lock <code>order-line:allocate:{item id}</code> (30 s TTL, wait up to 10 s) and a transaction.</li>
+        <li>Locks: the line, its order, and the line's active allocations. <code>replacingAllocationId</code> names the one allocation being handed to a new source; omitted, the call either re-confirms an already-active exact source (returns it untouched, so a double click cannot reserve or owe twice) or adds a new split for the still-unallocated units. It never implicitly replaces anything.</li>
+        <li><strong>Reallocation guard.</strong> Replacing an allocation is only allowed before picking or dispatch: <code>canReallocate()</code> is an exhaustive <code>match</code> over fulfilment and delivery statuses (a new status added later fails to compile until someone states what it means). Past that point only an override works, and only when the caller has already checked <code>OrderPolicy::overrideFulfilmentState()</code>; the override (who, when, why) is recorded on the allocation.</li>
+        <li><strong>Quantity.</strong> The default is whatever is not already covered by another active allocation. A request of zero, or more than remains, is refused.</li>
+        <li>The chosen source is re-read live inside the lock via <code>AllocationSourceCandidates</code>. The panel is a view and can be minutes old; this is the decision. A source that has become unavailable is refused with its reason, never silently swapped.</li>
+        <li>If replacing, <code>standDown()</code> releases the previous reservation (or cancels its fulfilment commitment, for a non-ready-stock offer), cancels the previous pending payable, and marks the old allocation <code>superseded</code>.</li>
+        <li><code>commitTo()</code>: a Supplier offer row is locked first (taking the strongest lock first, in the same order everywhere, is what prevents a lock-upgrade deadlock that a concurrency test caught). A <code>ready_stock</code> offer or a warehouse takes a reservation (<code>reserveFromSupplier</code>, or <code>reserve</code> against the exact ordered product or the linked stock item); <code>on_demand</code> and <code>pre_order</code> offers hold no physical stock and instead record a capacity commitment (<code>RecordSupplierFulfilmentCommitment</code>; <code>FulfilmentCapacityExhausted</code> becomes a refusal).</li>
+        <li>The <code>OrderItemAllocation</code> is written with the offer's current price version, an idempotency key <code>order-line-allocation:{line public id}:{ulid}</code>, and <code>expected_margin</code> recomputed against the quantity actually committed. If the partial unique index refuses (another request won), the reservation is given straight back and the call fails with "allocated by someone else a moment ago".</li>
+        <li>A Supplier source raises the pending payable through <code>AccrueSupplierPayable::forAllocation()</code> (triggering event <code>staff_allocation</code> or <code>reallocation</code>). A warehouse line never creates a payable.</li>
+        <li>Audit: <code>order_line.allocated</code> or <code>order_line.reallocated</code>, with before/after, the reason, and module <code>order</code>. Staff figures (unit cost, margin) are in the audit row; they never reach a Partner payload.</li>
+    </ol>
+
+    <h3>Flow 6: delivery and its financial consequences</h3>
+    <p>Reaching <code>Delivered</code> on the delivery axis (by hand through <code>AdvanceOrderDeliveryStatus</code>, or through a shipment via <code>RecordManualCourierStatusUpdate</code>, which a Steadfast webhook or poll also uses) runs, in one transaction under the order's row lock, in this order:</p>
+    <ol>
+        <li><code>moveDeliveryTo()</code> writes the move and its history.</li>
+        <li><code>RollUpOrderStatus</code>: if the order's own <code>status</code> can legally move to <code>delivered</code>, <code>MarkPartnerStockSold</code> first moves a Store or Exchange Order's units from the processing bucket to sold (keyed <code>delivered-line:{item public id}</code>, so repeats move nothing), then the status moves to <code>delivered</code>. If fulfilment is <code>fulfilled</code>, delivery is <code>delivered</code>, the payment is settled and the move is legal, status moves to <code>completed</code>.</li>
+        <li><code>SynchronizeSupplierPayablesWithDelivery</code>: delivered marks every supplier payable delivered (<code>EvaluateSupplierPayableEligibility</code>); <code>failed_delivery</code>, <code>cancelled</code> and <code>returned</code> cancel the still-<code>Pending</code> ones.</li>
+        <li><code>SynchronizeDeliverySuccessFeesWithDelivery</code>: charges the Delivery Success Fee against every supplier payable on the order, identically for both account types and a no-op for a line with no Supplier.</li>
+        <li><code>SynchronizeOrderProceedsWithDelivery</code>: first asks <code>SynchronizeOnlineCollectionWithPayment</code> again (repairs a collection fact an earlier failed attempt left unwritten), then records "delivered" on every line where <code>defersProductCost()</code> is true.</li>
+        <li>Audit row <code>order.delivery_status.advanced</code>.</li>
+    </ol>
+
+    <h3>Flow 7: proceeds settlement and the Partner's earning</h3>
+    <p>A Partner's earning on a Non-Conditional line becomes real only when two <em>independent</em> facts are both recorded on its <code>OrderProceedsSettlement</code>: the order reached Delivered, and the money was actually collected. "Delivered" is not "cash collected"; crediting a wallet from delivery alone is exactly the mistake this shape prevents. It mirrors the supplier-payable shape on the other side.</p>
+    <ul>
+        <li><strong>Which lines.</strong> <code>OrderItem::defersProductCost()</code>: false for an exchange line; true when <code>platform_retained_amount</code> or <code>product_cost</code> is frozen, or for a legacy Non-Conditional wholesale line that is not on the <code>full</code> payment model.</li>
+        <li><strong>Recoverable amount.</strong> <code>recoverableAmount()</code>: zero when the order's product cost was paid in full (<code>Order::productCostWasPaid()</code>); otherwise <code>platform_retained_amount</code> (or, for older lines, <code>product_cost</code>) plus the line's <code>tax</code> and <code>tax_included</code>; a legacy wholesale line keeps its whole <code>line_total</code>. The tax collected on a line is never the Partner's.</li>
+        <li><strong>Three ways money is collected (<code>CollectionChannel</code>).</strong> <code>cod</code>: staff confirm the cash (<code>RecordCodCollection</code>, route <code>admin.orders.lines.cod-collection.store</code>; refused for a line already collected through a gateway). <code>platform_gateway</code>: a verified payment to Feriwala's gateway; the line's share is its own <code>line_total</code> (delivery charge and COD fee never become profit). <code>partner_gateway_external</code>: a verified payment to the Partner's own gateway; recorded for reporting only, the Partner already holds that money.</li>
+        <li><strong>Settling.</strong> <code>EvaluateOrderProceedsEligibility::apply()</code> is idempotent and safe under races: it creates the row if needed (the unique <code>order_item_id</code> index settles a delivered-versus-collected race; the loser retries), locks it, takes each fact once, and only when both are in does <code>settle()</code> run. The same channel again changes nothing; a different channel for an already-collected line throws a <code>LogicException</code>.</li>
+        <li><strong>Earning.</strong> <code>earning = collected - recovered_amount</code>, measured against what was actually collected, never the declared estimate. A negative result is a <strong>shortfall</strong>: <code>flagged_for_review = true</code>, earning recorded as zero, an audit row marked sensitive, and no credit. It is never silently zeroed.</li>
+        <li><strong>Credit.</strong> A positive earning is credited with <code>WalletService::credit()</code> as <code>LedgerTransactionType::SalesCredit</code>, source <code>order_proceeds_settlement</code>, idempotency key <code>order-proceeds-settlement:{settlement public id}</code>; the wallet transaction id is stored on the row. A Partner-gateway line is marked eligible with an earning of zero and an audit note ("none: the Partner collected this payment directly"); Partner margin there is order-level and reported from the frozen receivable.</li>
+        <li><strong>Reversal on return.</strong> <code>ReverseOrderProceedsSettlement::forReturn()</code>, per return line and idempotent on <code>proceeds-reversal:{return item public id}</code>: it computes the part of the credited earning belonging to <em>all</em> units returned so far (<code>Money::allocate()</code>, the last unit takes the rest) minus what was already taken back, and debits the wallet with a new <code>ReturnAdjustment</code> entry pointing at the entry it answers, out of the same kind of money it was credited as. It never fails the return: if the wallet cannot cover it (the Partner already withdrew), the settlement is flagged for review and a critical log is written on the <code>wallet</code> channel.</li>
+    </ul>
+
+    <h3>Flow 8: Partner-owned gateway receivable (D36, Model B)</h3>
+    <ol>
+        <li>At placement <code>ChooseWebsiteOrderGateway</code> grants Model B only when everything holds: Admin allows Partner gateways and this provider; the account is Non-Conditional; every line is filled from central stock and has a defined frozen amount; the storefront did not request a different provider by name; the receivable snapshot was written completely. Otherwise the order is Feriwala's, with a reason from a fixed list. The snapshot is written last, in a savepoint. The choice is final.</li>
+        <li><code>FreezePlatformReceivable</code> writes the receivable: the sum of <code>OrderItem::recoverableAmount()</code> over the lines, plus the frozen delivery charge and delivery tax as separate component lines (<code>PlatformReceivableCalculator</code>). It excludes the selling price, Partner margin, supplier fee and payables, provider fees and any commission.</li>
+        <li>When the Partner's gateway payment is verified, <code>OpenReceivableCollection</code> opens one collection (unique per order) with a deadline (<code>deadline_hours</code>, default 24 h, from <code>SetPartnerCollectionDeadline</code>, frozen on the row) counted from verification, not from when the job ran. <code>ConfirmOrderPayment</code> deliberately leaves a Partner-owned payment alone: verification proves the customer paid the Partner, not that Feriwala was paid.</li>
+        <li><code>ReleaseCollectableReceivables</code> is the single entry point (payment verified, wallet credited, the scheduled sweep <code>partner-receivable-collection-sweep</code>, and the staff "retry" action). One account at a time under the account's collection lock, oldest verified first; each receivable needs its <strong>whole</strong> amount, and nothing newer is debited while an older one still waits for money.</li>
+        <li><code>CollectPartnerReceivable</code>, in one transaction: lock order, collection, payment and wallet; answer a non-collectable one as it stands; check the payment is still the verified Partner-owned one bound to this order and the receivable equals the frozen figure; secure stock for every line (<code>SecureReceivableStock</code> keeps an active reservation or sets stock aside again under a new reference, linked through <code>order_hold_reservations</code>); then, only if the wallet can cover the whole amount, debit it (platform credit first, then withdrawable; one ledger entry per balance type), commit stock, mark the collection <code>collected</code> and move the order to <code>paid</code>.</li>
+        <li><strong>Never partial, never negative.</strong> If the wallet is short the wallet is untouched, the collection is <code>wallet_insufficient</code> and the order <code>on_hold</code> with reason <code>partner_wallet_insufficient</code>. If stock cannot be secured, nothing is debited and the collection becomes <code>reservation_recovery_required</code> for staff. Past the deadline the stock is released and the collection becomes <code>deadline_expired_refund_required</code> (reason <code>wallet_deadline_expired_refund_required</code>): nothing claims the customer was refunded and nothing is cancelled automatically; the Partner refunds through their own gateway or funds the wallet and retries.</li>
+    </ol>
+
+    <h3>Flow 9: returns and exchanges (summary)</h3>
+    <p>A return or exchange is a <em>case</em>. The case's workspace, evidence and notifications are on the <a href="cases.html">Cases</a> page; damages on <a href="damage.html">Damage</a>. In this module:</p>
+    <ol>
+        <li><code>RequestOrderReturn</code> opens a case from a Partner's panel, the storefront (<code>POST storefront/v1/orders/{order}/return-requests</code>, scope <code>returns:write</code>) or staff. It is a request only: nothing moves. The case begins as the Partner's responsibility, never Banij's. The return charge (half the order's frozen delivery charge, rounded half away from zero to the poisha, bcmath, from a locked column) is snapshotted now. What is asked for is checked against the order under a lock, counting what earlier cases already claim. An idempotency key makes a retry the same case.</li>
+        <li><code>DecideOrderReturn</code> (reason always required) approves per-line quantities, never more than asked, writing <code>approved</code> then <code>waiting_for_parcel</code> as two history rows. <code>ReceiveReturnParcel</code> records only who received a box and when. <code>StartReturnInspection</code> names who has the goods.</li>
+        <li><code>FinalizeReturnInspection</code> is the one decision that lets stock and money move: it counts each line, gives it a disposition (back on sale, damaged, held), and approves via <code>RestoreReturnedStock</code> (once per line, through the stock ledgers, into the stock the unit left: Partner units, a Supplier offer's stock with its payable reversed for the same quantity, or the warehouse). Rejecting restocks nothing and gives the claimed units back. A damaged line is the finding a damage case is opened from.</li>
+        <li><code>StartReturnSettlement</code>, under one lock on the case, posts the return charge (<code>PostReturnCharge</code>: Banij-borne is accounting only; Partner-borne is a <code>WalletService</code> debit, or an outstanding liability when the wallet cannot cover it, never a negative balance), opens the refund through <code>RefundOrderReturn::openFor()</code> and the existing refund machinery (D17), and moves to <code>settlement_pending</code>. A cash-on-delivery refund is never sent to a gateway: it is marked for manual review and recorded by <code>SettleReturnRefundManually</code> (permission <code>payment.reverse_transaction</code>, confirmed password, two-factor). <code>SyncReturnRefund</code> carries the refund's fate back. <code>CompleteReturnCase</code> closes it when the customer's side is done.</li>
+        <li><strong>Exchanges.</strong> <code>CreateExchangeOrder</code> (inside the case's transaction) creates the replacement Order (<code>source = exchange</code>, <code>pending_confirmation</code>, no stock held). <code>ConfirmExchangeOrder</code> reserves and commits its stock, Partner's own units first and central stock only for a Non-Conditional account, <em>in the same transaction as the inspection approval</em>, so an approval is refused if the replacement cannot be sent. <code>CancelExchangeOrder</code> calls it off if the case ends without goods coming back, unless it has already shipped. <code>AllocateExchangeNumber</code> allocates <code>EX-</code> numbers under a lock on the original order.</li>
+        <li><strong>Storefront and notifications.</strong> <code>AnnounceReturnStatus</code> writes <code>return.status_changed</code> (and <code>refund.completed</code> once money has actually gone back) as a webhook delivery in the same transaction. Return, exchange and damage notifications to staff and Partners come from <code>AnnounceCaseEvent</code>, which the models' <code>moveTo()</code> call.</li>
+    </ol>
+
+    <h2>Entry points</h2>
+    <h3>Admin (platform staff)</h3>
+    <p>All under the <code>admin.</code> name prefix and <code>/admin</code> URL prefix, group middleware <code>auth</code>, <code>noindex</code>, <code>two-factor</code> (<code>routes/web.php</code>). Controllers: <code>Admin\OrderController</code> unless stated. Gates are <code>OrderPolicy</code> abilities.</p>
+    <table>
+        <thead><tr><th>Name</th><th>Method</th><th>URL</th><th>Controller@method</th><th>Gate</th></tr></thead>
+        <tbody>
+        <tr><td><code>admin.orders.index</code></td><td>GET</td><td><code>/admin/orders</code></td><td>OrderController@index</td><td><code>viewAny</code> (<code>order.view</code>)</td></tr>
+        <tr><td><code>admin.orders.show</code></td><td>GET</td><td><code>/admin/orders/{order}</code></td><td>@show</td><td><code>viewAny</code></td></tr>
+        <tr><td><code>admin.orders.cancellation.store</code></td><td>POST</td><td><code>/admin/orders/{order}/cancellation</code></td><td>@cancel</td><td><code>transition</code> (<code>order.edit</code>); runs <code>CancelUnpaidOrderByStaff</code></td></tr>
+        <tr><td><code>admin.orders.lines.sources</code></td><td>GET</td><td><code>.../orders/{order}/lines/{item}/sources</code></td><td>@allocationCandidates</td><td><code>viewAllocationSources</code></td></tr>
+        <tr><td><code>admin.orders.lines.sources.search</code></td><td>GET</td><td><code>.../lines/{item}/sources/search</code></td><td>@searchAllocationSources</td><td><code>viewAllocationSources</code></td></tr>
+        <tr><td><code>admin.orders.lines.allocation.store</code></td><td>POST</td><td><code>.../lines/{item}/allocation</code></td><td>@allocate</td><td><code>transition</code> + <code>allocateSource</code>; <code>overrideFulfilmentState</code> when forcing</td></tr>
+        <tr><td><code>admin.orders.lines.fulfilment-commitments.advance</code></td><td>POST</td><td><code>.../lines/{item}/fulfilment-commitments/{commitment}/advance</code></td><td>@advanceFulfilmentCommitment</td><td><code>manageFulfilmentCommitment</code></td></tr>
+        <tr><td><code>admin.orders.lines.cod-collection.store</code></td><td>POST</td><td><code>.../lines/{item}/cod-collection</code></td><td>@recordCodCollection</td><td><code>recordCodCollection</code></td></tr>
+        <tr><td><code>admin.orders.fulfilment-status.advance</code></td><td>POST</td><td><code>.../orders/{order}/fulfilment-status/advance</code></td><td>@advanceFulfilmentStatus</td><td><code>transition</code></td></tr>
+        <tr><td><code>admin.orders.delivery-status.advance</code></td><td>POST</td><td><code>.../delivery-status/advance</code></td><td>@advanceDeliveryStatus</td><td><code>transition</code></td></tr>
+        <tr><td><code>admin.orders.courier-status.advance</code></td><td>POST</td><td><code>.../courier-status/advance</code></td><td>@advanceCourierStatus</td><td><code>transition</code></td></tr>
+        <tr><td><code>admin.store-orders.index</code> / <code>.show</code></td><td>GET</td><td><code>/admin/store-orders</code>, <code>/admin/store-orders/{order}</code></td><td>Admin\StoreOrderController@index, @show</td><td><code>viewAny</code>, <code>view</code></td></tr>
+        <tr><td><code>admin.store-orders.advance</code></td><td>POST</td><td><code>/admin/store-orders/{order}/actions/{action}</code></td><td>@advance</td><td><code>transition</code>; <code>{action}</code> is a <code>StoreOrderAction</code> value</td></tr>
+        <tr><td><code>admin.store-orders.cancel</code></td><td>POST</td><td><code>/admin/store-orders/{order}/cancellation</code></td><td>@cancel</td><td><code>transition</code></td></tr>
+        <tr><td><code>admin.shipments.*</code>, <code>admin.orders.shipments.store</code>, <code>admin.orders.steadfast-booking.store</code></td><td>-</td><td>-</td><td>ShipmentController, SteadfastBookingController</td><td>See <a href="courier.html">Courier</a></td></tr>
+        <tr><td><code>admin.cases.*</code>, <code>admin.returns.*</code></td><td>-</td><td><code>/admin/cases</code>, <code>/admin/returns/{return}/...</code></td><td>CaseController, ReturnCaseActionController, OrderReturnController</td><td>See <a href="cases.html">Cases</a>. The legacy <code>admin.returns.index</code> redirects to <code>admin.cases.index?type=return</code>.</td></tr>
+        </tbody>
+    </table>
+
+    <h3>ERP (a Partner's own account)</h3>
+    <p>Group middleware <code>auth</code>, <code>business.activated</code> (plus nested group middleware). No URL prefix; names are unprefixed. Every query is scoped to the signed-in person's own business account.</p>
+    <table>
+        <thead><tr><th>Name</th><th>Method</th><th>URL</th><th>Controller@method</th></tr></thead>
+        <tbody>
+        <tr><td><code>wholesale.orders.index</code></td><td>GET</td><td><code>/wholesale/orders</code></td><td>Erp\WholesaleOrderController@index</td></tr>
+        <tr><td><code>wholesale.orders.store</code></td><td>POST</td><td><code>/wholesale/orders</code></td><td>@store (<code>PlaceWholesaleOrder</code>)</td></tr>
+        <tr><td><code>wholesale.orders.show</code></td><td>GET</td><td><code>/wholesale/orders/{order}</code></td><td>@show</td></tr>
+        <tr><td><code>wholesale.orders.payment.store</code></td><td>POST</td><td><code>/wholesale/orders/{order}/payment</code></td><td>@pay (<code>PayOrderFromWallet</code>, <code>InitiateOrderPayment</code>, <code>ChangeOrderPaymentMethod</code>)</td></tr>
+        <tr><td><code>wholesale.orders.cancellation.store</code></td><td>POST</td><td><code>/wholesale/orders/{order}/cancellation</code></td><td>@cancel (<code>CancelUnpaidOrder</code>)</td></tr>
+        <tr><td><code>wholesale.orders.payment.return</code> / <code>.cancelled</code> / <code>.failed</code></td><td>GET</td><td><code>/wholesale/orders/{order}/payment/return</code>, <code>/cancelled</code>, <code>/failed</code></td><td>Erp\WholesaleOrderPaymentReturnController</td></tr>
+        <tr><td><code>store-orders.index</code> / <code>.show</code></td><td>GET</td><td><code>/store-orders</code>, <code>/store-orders/{order}</code></td><td>Erp\StoreOrderController</td></tr>
+        <tr><td><code>store-orders.cancel</code></td><td>POST</td><td><code>/store-orders/{order}/cancellation</code></td><td>@cancel (<code>CancelStoreOrder</code> with <code>asPartner</code>)</td></tr>
+        <tr><td><code>websites.orders.index</code> / <code>.show</code> / <code>.cancellation.store</code> / <code>.returns.store</code> / <code>.returns.cancellation.store</code></td><td>GET/POST</td><td><code>/websites/{website}/orders...</code></td><td>Erp\WebsiteOrderController</td></tr>
+        <tr><td><code>orders.index</code>, <code>orders.export</code>, <code>orders.external.show</code></td><td>GET</td><td><code>/orders</code>, <code>/orders/export</code> (throttle <code>store-actions</code>), <code>/orders/external/{order}</code></td><td>Erp\OrderController (all sources, D29; <code>BusinessOrderIndex</code>)</td></tr>
+        <tr><td><code>cases.*</code>, <code>damages.*</code></td><td>-</td><td><code>/cases</code>, <code>/my-damages</code></td><td>Erp\CaseController, Erp\DamageController</td></tr>
+        </tbody>
+    </table>
+
+    <h3>Storefront API (customers, through a Partner's storefront)</h3>
+    <p>Defined in <code>routes/api.php</code> under <code>storefront/v1</code> (names <code>storefront.v1.*</code>); authenticated per website, with rate limiting, scope checks, and idempotency on writes. Contract: <a href="../api/storefront-api.html">Storefront API</a> and <code>requirements/05-storefront-api-contract.md</code> (frozen at v1).</p>
+    <table>
+        <thead><tr><th>Name</th><th>Method</th><th>Path</th><th>Scope</th><th>Action</th></tr></thead>
+        <tbody>
+        <tr><td><code>orders.index</code>, <code>orders.show</code></td><td>GET</td><td><code>orders</code>, <code>orders/{order}</code></td><td><code>orders:read</code></td><td>Read the website's own orders</td></tr>
+        <tr><td><code>orders.store</code></td><td>POST</td><td><code>orders</code></td><td><code>orders:write</code></td><td><code>PlaceWebsiteOrder</code></td></tr>
+        <tr><td><code>orders.payment-session</code></td><td>POST</td><td><code>orders/{order}/payment-session</code></td><td><code>orders:write</code></td><td><code>InitiateOrderPayment</code></td></tr>
+        <tr><td><code>orders.cancel</code></td><td>POST</td><td><code>orders/{order}/cancellation</code></td><td><code>orders:write</code></td><td><code>CancelUnpaidOrder</code> (<code>by_storefront</code>)</td></tr>
+        <tr><td><code>orders.confirmation.code</code>, <code>orders.confirmation.store</code></td><td>POST</td><td><code>orders/{order}/confirmation/code</code>, <code>.../confirmation</code></td><td><code>orders:write</code></td><td><code>SendCodConfirmationCode</code>, <code>ConfirmCodOrder</code></td></tr>
+        <tr><td><code>orders.return-requests.store</code></td><td>POST</td><td><code>orders/{order}/return-requests</code></td><td><code>returns:write</code></td><td><code>RequestOrderReturn</code></td></tr>
+        <tr><td><code>checkout.quote</code></td><td>POST</td><td><code>checkout/quote</code></td><td><code>orders:write</code></td><td>Advisory price quote; writes nothing</td></tr>
+        </tbody>
+    </table>
+
+    <h3>Mobile API (served at <code>/api/mobile/v1</code>)</h3>
+    <table>
+        <thead><tr><th>Path</th><th>Method</th><th>Controller</th><th>Notes</th></tr></thead>
+        <tbody>
+        <tr><td><code>orders</code>, <code>orders/export</code>, <code>orders/external/{order}</code></td><td>GET</td><td>Orders\OrderController</td><td>All-source list; <code>routes/mobile/orders.php</code>; <code>mobile.activated</code></td></tr>
+        <tr><td><code>orders/store-orders</code>, <code>.../{order}</code>, <code>.../{order}/cancellation</code></td><td>GET, GET, POST</td><td>Orders\StoreOrderController</td><td>Partner's own Store Orders; cancel while Pending</td></tr>
+        <tr><td><code>wholesale/orders</code> (GET, POST), <code>wholesale/orders/{order}</code>, <code>.../cancellation</code>, <code>.../payment</code>, <code>.../payment/return|failed|cancelled</code></td><td>mixed</td><td>Wholesale\WholesaleOrderController, WholesaleOrderPaymentReturnController</td><td><code>routes/mobile/wholesale.php</code>. The app reports what the gateway said; the server decides.</td></tr>
+        <tr><td><code>websites/{website}/orders...</code></td><td>GET/POST</td><td>Websites\WebsiteOrderController</td><td><code>routes/mobile/websites.php</code></td></tr>
+        </tbody>
+    </table>
+    <p>Mobile endpoints are detailed on the <a href="../api/mobile-api.html">Mobile API</a> page.</p>
+
+    <h3>Scheduled tasks (<code>routes/console.php</code>)</h3>
+    <table>
+        <thead><tr><th>Schedule name</th><th>Frequency</th><th>Runs</th></tr></thead>
+        <tbody>
+        <tr><td><code>wholesale-order-payment-sweep</code></td><td>every minute</td><td><code>ExpireUnpaidOrders::handle()</code> (wholesale and website despite the name)</td></tr>
+        <tr><td><code>cod-confirmation-sweep</code></td><td>every minute</td><td><code>ExpireUnconfirmedCodOrders::handle()</code></td></tr>
+        <tr><td><code>cod-confirmation-code-retry</code></td><td>every five minutes</td><td><code>RetryCodConfirmationCodes::handle()</code></td></tr>
+        <tr><td><code>partner-receivable-collection-sweep</code></td><td>every minute</td><td><code>ReleaseCollectableReceivables::sweep()</code></td></tr>
+        <tr><td><code>stock-reservation-expiry</code></td><td>every minute</td><td><code>ReleaseExpiredReservations</code> (Inventory)</td></tr>
+        <tr><td><code>supplier-fulfilment-confirmation-sweep</code></td><td>hourly</td><td><code>ExpireOverdueFulfilmentCommitments</code> (Supplier)</td></tr>
+        <tr><td><code>refund-settlement-sweep</code></td><td>every 15 minutes</td><td>Billing's <code>SettleRefund</code> sweep (refunds a gateway accepted and has not confirmed)</td></tr>
+        <tr><td><code>courier:steadfast-sync</code></td><td>every five minutes</td><td>See <a href="courier.html">Courier</a></td></tr>
+        </tbody>
+    </table>
+    <p>Every sweep uses <code>onOneServer()</code> and <code>withoutOverlapping()</code> (§41); each is also idempotent on its own because every order is re-read under its payment's settlement lock and its own row lock.</p>
+
+    <h2>Permissions &amp; scoping</h2>
+    <table>
+        <thead><tr><th>Ability (<code>OrderPolicy</code>)</th><th>Who</th><th>Requires</th></tr></thead>
+        <tbody>
+        <tr><td><code>viewAny</code></td><td>Platform staff</td><td><code>order.view</code></td></tr>
+        <tr><td><code>view</code></td><td>The account that placed the order, or staff</td><td>Own account (<code>user->businessAccount->id === order->business_account_id</code>) or <code>order.view</code></td></tr>
+        <tr><td><code>transition</code></td><td>Staff only</td><td><code>order.edit</code></td></tr>
+        <tr><td><code>cancel</code></td><td>The placing account, or staff</td><td>Own account or <code>order.edit</code></td></tr>
+        <tr><td><code>viewAllocationSources</code></td><td>Staff</td><td><code>order.edit</code> and <code>supplier_pricing.view</code> and <code>catalog.view</code> (the panel shows Supplier identity and rate, warehouse cost and margin together; a partial redacted list could be mistaken for the whole)</td></tr>
+        <tr><td><code>allocateSource</code></td><td>Staff</td><td><code>order.edit</code> plus <code>supplier_pricing.view</code> for a Supplier offer or <code>catalog.view</code> for a warehouse; checked again independently of the panel</td></tr>
+        <tr><td><code>manageFulfilmentCommitment</code></td><td>Staff</td><td><code>order.edit</code> and <code>supplier_pricing.view</code></td></tr>
+        <tr><td><code>confirmSourceLink</code></td><td>Staff</td><td><code>catalog.edit</code> (and <code>supplier_pricing.view</code> for a Supplier source). Legacy.</td></tr>
+        <tr><td><code>overrideFulfilmentState</code></td><td>Staff</td><td><code>order.edit</code> and <code>order.manage_settings</code></td></tr>
+        <tr><td><code>recordCodCollection</code></td><td>Staff</td><td><code>order.edit</code></td></tr>
+        </tbody>
+    </table>
+    <p>The <code>order</code> permission module has actions view, create, edit, approve, reject, verify, archive, export and manage_settings. Shipments use the <code>courier</code> module (<code>courier.view</code>, and <code>courier.create</code> plus <code>courier.edit</code> to manage). Case steps use <code>return.*</code>, <code>exchange.*</code> and <code>damage.*</code>; see <a href="cases.html">Cases</a>.</p>
+    <ul>
+        <li><strong>A business identity never holds <code>order.*</code>.</strong> The ordered <code>Gate::before</code> refuses every <code>order.</code> ability (<code>OrderPolicy::isOrderAdministrationAbility()</code>), so a Partner given <code>order.view</code> still cannot read another account's orders. Likewise it refuses <code>return.</code>, <code>exchange.</code> and <code>damage.</code> to a business identity (D35).</li>
+        <li><strong>Self-scoping is a query concern (§31.3).</strong> Partner-facing queries start from the signed-in person's own account (<code>BusinessOrderIndex</code> restricts every arm of its <code>UNION ALL</code> to the account; Erp controllers resolve orders through the account). Another Partner's order, case or evidence is a 404.</li>
+        <li>Confidential figures (Supplier rate, <code>unit_cost</code>, <code>expected_margin</code>, <code>platform_margin</code>) never reach a Client, Partner or Storefront API payload (D25).</li>
+        <li>A Partner may cancel a Store Order only while it is still Pending, and may reach return and exchange cases through their own account, needing the right to read orders to read a case and to manage the store to ask for one.</li>
+    </ul>
+
+    <h2>Money, ledger &amp; audit effects</h2>
+    <h3>Money fields</h3>
+    <p>All order money is <code>Money</code> (flat Taka, exact decimal string, bcmath), with <code>currency_code</code>. Order totals: <code>subtotal</code>, <code>discount</code>, <code>delivery</code>, <code>tax</code> (added), <code>tax_included</code>, <code>cod_fee</code>, <code>total</code>. Supplier-rate columns use <code>MoneyCast::class.':supplier_currency_code'</code>. A client-submitted total is never trusted: a storefront that claims a price differing from the server's by any amount is refused. Allocation, refund and profit reversal use <code>Money::allocate()</code> so parts reconcile exactly.</p>
+    <h3>Ledger and wallet effects</h3>
+    <table>
+        <thead><tr><th>Event</th><th>Effect</th><th>Idempotency key</th></tr></thead>
+        <tbody>
+        <tr><td>Partner earning (Non-Conditional, both facts in, positive)</td><td><code>WalletService::credit()</code>, <code>SalesCredit</code></td><td><code>order-proceeds-settlement:{settlement public_id}</code></td></tr>
+        <tr><td>Profit reversal on returned goods</td><td><code>WalletService::debit()</code>, <code>ReturnAdjustment</code>, <code>correctsLedgerEntryId</code> set to the original entry, same balance kind</td><td><code>proceeds-reversal:{return item public_id}</code></td></tr>
+        <tr><td>Wholesale paid from wallet</td><td>Debit (platform credit first), in the same transaction as the payment's paid-move (<code>PayOrderFromWallet</code>)</td><td>Derived from the payment</td></tr>
+        <tr><td>Partner-gateway receivable collected</td><td>One debit per balance type, all-or-nothing</td><td>One deterministic key per receivable</td></tr>
+        <tr><td>Return charge (Partner-borne)</td><td>Wallet debit, or outstanding liability; reversal credits the exact kinds back</td><td>Names case, kind and attribution revision; unique on charge row, wallet transaction and ledger entry</td></tr>
+        <tr><td>Supplier payable accrual, delivery, fee, cancellation</td><td>Supplier module; triggered from the order's actions</td><td>See the Supplier module</td></tr>
+        </tbody>
+    </table>
+    <p>Ledger entries are never edited or deleted; a correction is a new row pointing at the one it answers.</p>
+    <h3>Audit action names written by this module</h3>
+    <p>Module value <code>order</code> unless noted: <code>order.fulfilment_status.advanced</code>, <code>order.delivery_status.advanced</code>, <code>order.courier_status.advanced</code>, <code>order_line.allocated</code>, <code>order_line.reallocated</code>, <code>order_item.cod_collection_recorded</code>, <code>order_proceeds_settlement.eligible</code> (sensitive on a shortfall), <code>order_proceeds_settlement.reversed</code>. Return, charge and responsibility actions write their own rows (module <code>return</code>, <code>exchange</code>, <code>damage</code>); evidence audit rows carry only the case reference and purpose.</p>
+    <p>Status history (<code>order_status_history</code> and the three siblings) is a separate append-only record of every move with source, reason, internal and public notes.</p>
+
+    <h2>Configuration</h2>
+    <table>
+        <thead><tr><th>Key / setting</th><th>Effect</th></tr></thead>
+        <tbody>
+        <tr><td><code>PlaceWholesaleOrder::SETTLEMENT_MARGIN_SECONDS</code> (60), <code>PlaceWebsiteOrder::SETTLEMENT_MARGIN_SECONDS</code></td><td>The payment window closes this long before the first reservation lapses, so a settlement that started in time finishes before the reservation sweep reaches its stock.</td></tr>
+        <tr><td><code>App\Domain\Inventory\ReservationWindows</code>, <code>StockEnforcement</code></td><td>Reservation lifetime per <code>ReservationKind</code>; whether stock blocks orders at all (affects whether a missing reservation refuses an order or is tolerated).</td></tr>
+        <tr><td>Partner collection deadline (<code>SetPartnerCollectionDeadline</code>, <code>PartnerCollectionDeadline</code>)</td><td>Hours a Partner-gateway order may wait for the Partner's wallet; default 24; not retrospective.</td></tr>
+        <tr><td>Checkout verification (<code>CheckoutVerification</code>; SMS settings screen "storefront verification")</td><td>Whether a storefront COD order needs an SMS code. Platform-wide policy can require it for every storefront.</td></tr>
+        <tr><td>Website COD limit (<code>WebsiteCheckoutRules::assertWithinCodLimit</code>)</td><td>What a shop may take on delivery.</td></tr>
+        <tr><td>Admin allow-list and global switch for Partner gateways (D36)</td><td>Eligibility for Model B.</td></tr>
+        <tr><td><code>OrderReturn</code> window and terms (<code>ReturnTerms</code>, <code>ReturnEligibility</code>)</td><td>Whether goods can still come back.</td></tr>
+        <tr><td><code>config/case_evidence.php</code></td><td>See <a href="cases.html">Cases</a>.</td></tr>
+        </tbody>
+    </table>
+    <p>No order-specific environment variables are read directly in this module's actions. Not verified here: the exact setting keys behind the COD limit and checkout verification (read the named classes).</p>
+
+    <h2>Rules, invariants &amp; gotchas</h2>
+    <div class="callout callout-rule"><p><strong>Snapshots are law.</strong> An order, its lines, its allocations' decision columns, its status histories, and the receivable are written once. The model throws and the database refuses. Never "fix" an order by updating a column: add a new row (a history entry, an adjustment, a reversal, a new case).</p></div>
+    <div class="callout callout-rule"><p><strong>Never assign a status.</strong> Use <code>moveTo()</code> / <code>moveFulfilmentTo()</code> / <code>moveDeliveryTo()</code> / <code>moveCourierTo()</code> (which call <code>transitionTo()</code>) and always write the history. The database enforces the same map from the seeded transition tables, so a bypass fails at the database.</p></div>
+    <div class="callout callout-warn"><p><strong>RollUpOrderStatus does less than its docblock says.</strong> Its docblock describes a best-effort sync for picking, packing and shipped states, but the code only handles two things: delivery <code>Delivered</code> → status <code>delivered</code> (plus <code>MarkPartnerStockSold</code>), and fulfilled+delivered+paid → <code>completed</code>. It is silently skipped when the move is not legal (<code>OrderLifecycleStateMachineTest</code> asserts this: status stays <code>new</code>). In the code read, no action moves a <em>non-Store</em> order's <code>status</code> from <code>paid</code> to <code>processing</code>/<code>packing</code>/<code>shipped</code>; only the three axes advance for wholesale orders, and <code>paid</code> cannot legally move straight to <code>delivered</code>. Treat the axes as the source of truth for wholesale fulfilment progress, and verify before relying on <code>orders.status</code> for a wholesale order after payment.</p></div>
+    <div class="callout callout-warn"><p><strong>Store Orders and the dispatch gate.</strong> <code>DispatchGate</code> does not apply to Store Orders (they have their own workflow), and the manual fulfilment action refuses them. Do not add a status-picker for Store Orders; add a <code>StoreOrderAction</code>.</p></div>
+    <div class="callout callout-warn"><p><strong>"D-new" and D34.</strong> Code comments in proceeds, allocation and delivery-fee classes cite "D-new". That is the earlier rule (a Non-Conditional wholesale order paid delivery only, with product cost recovered from COD) which D34 replaced. Orders placed before D34 have no <code>wholesale_payment_model</code>, are deliberately not backfilled, and are handled by what they stored (account-type snapshot, <code>resale_amount</code>, payment amount), never by the Partner's current type. <code>defersProductCost()</code> is true for a legacy Non-Conditional line and false for a <code>full</code> order.</p></div>
+    <div class="callout callout-warn"><p><strong>Legacy allocation by link.</strong> <code>ConfirmProductSourceLink</code> and <code>ProductSourceLink</code> are legacy: allocation offers only sources for the exact ordered product and variation, and confirmed links never produce a candidate. <code>order_items.sourcing_*</code> columns are never written now. Do not build on either.</p></div>
+    <div class="callout callout-note"><p><strong>Commission is a calculation base, not a money path (D12).</strong> There is no commission engine in this module. For a Non-Conditional storefront line, the Partner's profit is the store selling price minus the frozen <code>platform_retained_amount</code> snapshot (D34), measured by <code>OrderProceedsSettlement</code> and credited through the one wallet path. Partner margin on a Partner-gateway order is "externally verified gross customer payment minus frozen receivable" and is reporting only (D36): it is never credited to the wallet. How a Conditional account's storefront proceeds are credited is not part of the order code read for this page (no settlement row is written for lines that do not defer product cost); consult the Commission and Wallet pages.</p></div>
+    <ul>
+        <li><strong>One live allocation per line, one live payable per line.</strong> Enforced by partial unique indexes, not by action discipline. Split allocation (several active allocations on one line, each for part of the quantity, added by migration <code>2026_10_21_100000_allow_split_order_item_allocations</code>) changes the "one" to one per slot; read that migration and <code>SplitAllocationTest</code> before changing it.</li>
+        <li><strong>The panel is advisory.</strong> The allocation panel is a view; <code>AllocateOrderLineSource</code> re-reads availability under lock and refuses stale choices. Never reuse a candidate list as a decision.</li>
+        <li><strong>Lock order matters.</strong> The supplier offer is locked before the allocation insert, because an insert takes an implicit share lock on the offer and a later lock-for-update deadlocks (found by <code>OrderLineAllocationConcurrencyTest</code>). Reservations are taken in product/variant order so orders for the same products queue instead of deadlocking.</li>
+        <li><strong>Settlement lock.</strong> Cancelling an unpaid order and settling its payment both take <code>payment:settle:{payment id}</code>. Do not cancel an order without it.</li>
+        <li><strong>Partner-sourced stock is held until dispatch.</strong> <code>holdUntilDispatch()</code> on confirmation or payment; dispatch (<code>AdvanceStoreOrder</code>) commits. Non-Partner-sourced reservations commit at confirmation or payment.</li>
+        <li><strong>Payment is the payment's answer.</strong> An order keeps no payment status; read <code>payment->status</code>, or <code>OrderPaymentState::of($payment)</code>. COD is "payment recorded with no gateway" (<code>isCashOnDelivery()</code>).</li>
+        <li><strong>Held, not paid.</strong> A settled payment whose stock cannot be committed puts the order <code>on_hold</code> for a human. Do not "fix" it by forcing <code>paid</code>.</li>
+        <li><strong>Notifications for cases come from the models' <code>moveTo()</code>,</strong> after commit (<code>.ai/rules/cases.md</code> and <code>notification.md</code>). Never add a second sender in an action. Cross-links between an Order, its case and Exchange Order are built only by <code>CaseLinks</code> (a url is null when the reader may not open it).</li>
+        <li><strong>An exchange line is not a sale.</strong> <code>defersProductCost()</code> is false for it; it has no payment of its own and creates no second profit, commission or supplier payable.</li>
+        <li><strong>Public ids only.</strong> URLs use <code>public_id</code> (ULID). A webhook or API payload is a hint (identifiers, the move, when), never the order itself.</li>
+        <li><strong>Stale comments.</strong> The early <code>orders</code> migration still mentions <code>_minor</code> column names; later migrations moved to flat Taka (D26). Do not infer a minor-unit convention from them. The repository guard test fails the build if new production code reintroduces one.</li>
+    </ul>
+
+    <h2>How to...</h2>
+    <h3>Add a new order status</h3>
+    <ol>
+        <li>Add the case and its <code>transitionsTo()</code> entries (and <code>tone()</code>) in <code>app/Domain/Order/Enums/OrderStatus.php</code>. Update every other state's list that may lead to it.</li>
+        <li>Add a migration that inserts the row into <code>order_statuses</code> and the edges into <code>order_status_transitions</code> (precedent: <code>2026_11_10_100000_add_store_order_workflow_transitions.php</code>). The enum's docblock says a test fails when the enum and the tables disagree; run <code>tests/Feature/Orders/OrderStatusTest.php</code> and <code>OrderStatusTransitionTest.php</code>.</li>
+        <li>Add the label in <code>lang/en</code> and <code>lang/bn</code> under the group named by <code>statusLabelGroup()</code> (<code>order</code>).</li>
+        <li>If it is a Store Order stage, map it in <code>StoreOrderStep::for()</code>; decide whether <code>StoreOrderStep::hasDispatched()</code> and <code>CancelStoreOrder</code>'s lists include it.</li>
+        <li>Add the action that makes the move, using <code>$order->moveTo(...)</code> inside a transaction under <code>lockForUpdate()</code>, with a <code>StatusChange</code> and a <code>publicNote</code> lang key. Add a test for the move and for the refusal from a wrong status.</li>
+    </ol>
+    <h3>Add a new step to the Store Order workflow</h3>
+    <ol>
+        <li>Add a case to <code>StoreOrderAction</code> with <code>allowedFrom()</code>, <code>to()</code> and a label in <code>lang/*/store_orders.php</code> (<code>store_orders.actions.*</code>).</li>
+        <li>Make sure the underlying <code>OrderStatus</code> transition is legal (see above).</li>
+        <li>Decide its stock boundary in <code>AdvanceStoreOrder</code>: holds persist until dispatch; only dispatch consumes.</li>
+        <li>Add a <code>store_orders.notes.*</code> public note, and cover idempotency (repeat answers <code>[order, false]</code>) in <code>StoreOrderWorkflowTest</code>.</li>
+    </ol>
+    <h3>Add a field to an order or line snapshot</h3>
+    <ol>
+        <li>New migration adding the column. For money use <code>decimal(19,2)</code> with a CHECK, plus the <code>currency_code</code> that already exists on the row.</li>
+        <li>Add it to the model's <code>casts()</code> (<code>MoneyCast</code> for money) and the <code>@property</code> docblock. If it is a snapshot, add it to the migration's locked-columns trigger so it cannot change after insert.</li>
+        <li>Write it in <code>PlaceWholesaleOrder</code> / <code>PlaceWebsiteOrder</code> (<code>createOrder()</code> or the line builders). Never accept it from the client; take it from the server-side quote.</li>
+        <li>If it is a staff-only figure, keep it out of every Partner and Storefront payload (check <code>WebsiteOrderPayload</code>, <code>WholesaleOrderTracking</code>, <code>StoreOrderTimeline</code>).</li>
+    </ol>
+    <h3>Add a new order source</h3>
+    <ol>
+        <li>Add the case to <code>OrderSource</code> with a <code>label()</code>.</li>
+        <li>Add a migration widening the <code>orders_source_known</code> CHECK (D35's <code>exchange</code> did this in <code>2026_11_16_110000_add_exchange_orders.php</code>).</li>
+        <li>Decide what each source-aware class does: <code>DispatchGate::appliesTo()</code>, <code>AdvanceOrderFulfilmentStatus</code>, <code>MarkPartnerStockSold</code>, <code>SteadfastOrderRequestBuilder</code>, <code>OrderItem::defersProductCost()</code>. Search for <code>OrderSource::</code>.</li>
+    </ol>
+    <h3>Change what a delivered order triggers</h3>
+    <ol>
+        <li>Add a <code>Synchronize...WithDelivery</code> action beside the existing three, taking <code>(Order, OrderDeliveryStatus)</code> and returning early unless the target is the one you care about.</li>
+        <li>Inject it in <code>AdvanceOrderDeliveryStatus</code> and call it in the same transaction, after <code>RollUpOrderStatus</code>. It must be idempotent: a webhook and a poll can both deliver the same news.</li>
+        <li>Any wallet effect goes through <code>WalletService</code> with an idempotency key derived from a stable public id, and writes an audit row.</li>
+    </ol>
+    <h3>Change who can allocate</h3>
+    <ol>
+        <li>Edit <code>OrderPolicy::viewAllocationSources()</code> and <code>allocateSource()</code> together: both must cover every figure the panel shows, and the second must hold independently of the first.</li>
+        <li>Update <code>OrderAllocationPermissionsTest</code> and <code>OrderPolicyTest</code>.</li>
+    </ol>
+
+    <h2>Testing</h2>
+    <p>Run one slice at a time, in its own schema (see <a href="../guide/testing.html">Testing</a>):</p>
+    <pre><code>psql -c 'CREATE SCHEMA IF NOT EXISTS testing_mine'
+DB_SEARCH_PATH=testing_mine vendor/bin/pest tests/Feature/Orders
+DB_SEARCH_PATH=testing_mine vendor/bin/pest --group=orders</code></pre>
+    <table>
+        <thead><tr><th>Area</th><th>Files</th></tr></thead>
+        <tbody>
+        <tr><td>Status machines</td><td><code>tests/Feature/Orders/OrderStatusTest.php</code>, <code>OrderStatusTransitionTest.php</code>, <code>OrderFulfilmentStatusTransitionTest.php</code>, <code>OrderDeliveryStatusTransitionTest.php</code>, <code>OrderCourierStatusTransitionTest.php</code>, <code>OrderLifecycleStateMachineTest.php</code>, <code>OrderStatusHistoryTest.php</code>, <code>DispatchGateTest.php</code>, <code>OrderSchemaTest.php</code></td></tr>
+        <tr><td>Store Orders</td><td><code>StoreOrderWorkflowTest.php</code>, <code>tests/Feature/WebsiteApi/WebsiteOrderIntakeTest.php</code>, <code>WebsiteCodOrderTest.php</code>, <code>tests/Feature/Website/WebsiteOrderScreensTest.php</code></td></tr>
+        <tr><td>Wholesale</td><td><code>tests/Feature/Wholesale/WholesaleOrderPaymentTest.php</code>, <code>WholesaleOrderTrackingTest.php</code>, <code>NonConditionalOrderTest.php</code>, <code>tests/Feature/Mobile/MobileWholesaleOrderTest.php</code></td></tr>
+        <tr><td>Allocation</td><td><code>AllocateOrderLineSourceTest.php</code>, <code>AllocateOrderLineSourceReallocationGuardTest.php</code>, <code>AllocateOrderLineSourceOnDemandTest.php</code>, <code>SplitAllocationTest.php</code>, <code>AllocationSourceCandidatesTest.php</code>, <code>AllocationCandidateRemainingQuantityTest.php</code>, <code>OrderItemAllocationConstraintTest.php</code>, <code>OrderAllocationPermissionsTest.php</code>, <code>OrderAllocationScreensTest.php</code></td></tr>
+        <tr><td>Money consequences</td><td><code>DeliverySuccessFeeAndProceedsSettlementTest.php</code>, <code>OrderDeliveryTriggersSupplierPayableEligibilityTest.php</code>, <code>PlatformReceivableTest.php</code>, <code>tests/Feature/Payment/PartnerReceivableCollectionTest.php</code></td></tr>
+        <tr><td>Returns and exchanges</td><td><code>OrderReturnTest.php</code>, <code>OrderReturnScreensTest.php</code>, <code>ReturnCaseWorkflowTest.php</code>, <code>ExchangeCaseTest.php</code>, <code>tests/Feature/WebsiteApi/WebsiteReturnApiTest.php</code></td></tr>
+        <tr><td>Policy and review screens</td><td><code>OrderPolicyTest.php</code>, <code>AdminOrderReviewTest.php</code>, <code>OrderDetailFulfilmentCommitmentTest.php</code></td></tr>
+        <tr><td>Concurrency (<code>tests/Feature/Concurrency/</code>)</td><td><code>OrderLineAllocationConcurrencyTest.php</code>, <code>WholesaleOrderConcurrencyTest.php</code>, <code>CodConfirmationConcurrencyTest.php</code>, <code>StoreOrderProfitConcurrencyTest.php</code>, <code>PartnerReceivableConcurrencyTest.php</code>, <code>ReturnConcurrencyTest.php</code></td></tr>
+        </tbody>
+    </table>
+    <p>Fixtures: <code>Order::factory()</code> (<code>Database\Factories\OrderFactory</code>); <code>testBusinessAccount()</code>, <code>testPlatformStaff(PlatformRole::...)</code> and the <code>websiteTest*</code> helpers in <code>tests/Pest.php</code>; <code>legacyReturnFlow()</code> for version 1 returns. Pest shares one global function namespace, so prefix any helper you add with what it belongs to (<code>orderTest...</code>). The <code>orders</code> and <code>courier</code> groups are declared in <code>tests/Pest.php</code>; <code>Cases</code> and <code>Notification</code> have no group, run them by path.</p>
+
+    <h2>Related modules</h2>
+    <ul>
+        <li><a href="courier.html">Courier</a> - shipments, Steadfast booking, tracking.</li>
+        <li><a href="cases.html">Cases</a> and <a href="damage.html">Damage</a> - return, exchange and damage workspaces and evidence.</li>
+        <li><a href="inventory.html">Inventory</a> - reservations, Partner stock buckets, stock movements.</li>
+        <li><a href="supplier.html">Supplier</a> - offers, payables, fulfilment commitments, Delivery Success Fee.</li>
+        <li><a href="billing.html">Billing</a> - payments, settlement, invoices, refunds, delivery charge.</li>
+        <li><a href="wallet.html">Wallet</a> - credits, debits, ledger.</li>
+        <li><a href="wholesale.html">Wholesale</a> - cart and checkout feeding <code>PlaceWholesaleOrder</code>.</li>
+        <li><a href="website.html">Website</a> and <a href="external-store.html">External Store</a> - storefronts, webhooks, mirrored external orders.</li>
+        <li><a href="notification.html">Notification</a> - SMS and bell notifications sent from order events.</li>
+        <li><a href="../api/storefront-api.html">Storefront API</a>, <a href="../api/mobile-api.html">Mobile API</a>, <a href="../guide/decisions.html">Decisions</a>.</li>
+    </ul>
+</main>
+</body>
+</html>

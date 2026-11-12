@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Page title</title>
+    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+    <!-- From docs/modules/*.html, docs/guide/*.html, docs/api/*.html and docs/integrations/*.html use "../assets/docs.js". From docs/*.html use "assets/docs.js". -->
+    <script src="../assets/docs.js"></script>
+</head>
+<body>
+<main id="doc">
+    <h1>Page title</h1>
+    <p class="lead">One or two sentences: what this is and who needs it.</p>
+
+    <h2>Section</h2>
+    <p>Prose. Inline code like <code>app/Domain/Wallet/Actions/CreditWallet.php</code>.</p>
+
+    <div class="callout callout-rule"><p><strong>Rule.</strong> A non-negotiable.</p></div>
+    <div class="callout callout-warn"><p><strong>Gotcha.</strong> A trap.</p></div>
+    <div class="callout callout-note"><p><strong>Note.</strong> Context.</p></div>
+    <div class="callout callout-tip"><p><strong>Tip.</strong> A shortcut.</p></div>
+
+    <table>
+        <thead><tr><th>Term</th><th>Meaning</th></tr></thead>
+        <tbody><tr><td>x</td><td>y</td></tr></tbody>
+    </table>
+
+    <pre><code>php artisan migrate --force</code></pre>
+
+    <dl>
+        <dt>Term</dt>
+        <dd>Definition.</dd>
+    </dl>
+
+    <div class="cards">
+        <a class="card" href="modules/wallet.html"><h3>Wallet</h3><p>One-line summary.</p></a>
+    </div>
+</main>
+</body>
+</html>

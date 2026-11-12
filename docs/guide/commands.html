@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Console commands</title>
+    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+    <script src="../assets/docs.js"></script>
+</head>
+<body>
+<main id="doc">
+    <h1>Console commands</h1>
+    <p class="lead">Every Artisan command this repository defines, the scheduled tasks registered in <code>routes/console.php</code>, the <code>composer</code> and <code>npm</code> scripts, and the stock Laravel, Boost and Wayfinder commands the project relies on.</p>
+
+    <div class="callout callout-note"><p><strong>Note.</strong> Run everything in a WSL shell from the repository root. Use <code>php artisan list</code> to see all registered commands and <code>php artisan &lt;command&gt; --help</code> for options. Pass <code>--no-interaction</code> in scripts.</p></div>
+
+    <h2>Project commands (<code>app/Console/Commands</code>)</h2>
+    <p>Seven commands, all auto-discovered. None is defined inline in <code>routes/console.php</code>, and the repository defines no other <code>Command</code> subclass.</p>
+    <table>
+        <thead><tr><th>Signature</th><th>Class</th><th>Purpose and options</th><th>When to run, and safety</th></tr></thead>
+        <tbody>
+            <tr>
+                <td><code>courier:steadfast-sync {--limit=}</code></td>
+                <td><code>SyncSteadfastShipments</code></td>
+                <td>Asks Steadfast about one bounded batch of parcels that are still moving, through <code>SynchroniseSteadfastShipments</code>. <code>--limit</code> overrides <code>courier.steadfast.poll.batch</code>. Prints counts only (checked, changed, failed), never a payload, address or name. Exit code is failure only when every checked parcel failed.</td>
+                <td>The scheduler runs it every five minutes. Run by hand to catch up after an outage. It does nothing while Steadfast is switched off. Idempotent with the webhook: both apply a status through one locked action. Never books a parcel; see <a href="../modules/courier.html">Courier</a>.</td>
+            </tr>
+            <tr>
+                <td><code>bd-locations:import {--mode=import}</code></td>
+                <td><code>ImportBdLocationsCommand</code></td>
+                <td>Imports the bundled Bangladesh location directory (division, district, upazila, union) through <code>ImportBdLocations</code>. Modes: <code>validate</code> (inspects bundled files only), <code>dry-run</code> (runs the upsert inside a transaction that is always rolled back), <code>import</code> (commits and appends a row to <code>bd_location_imports</code>).</td>
+                <td>Also run by <code>SafeSeeder</code>. Upserts by natural key and only deactivates rows it no longer recognises; never deletes. Run <code>--mode=validate</code> first after editing the bundled data. Must run before <code>bd-banks:import</code> so banks can link to districts. See <a href="../modules/location.html">Location</a>.</td>
+            </tr>
+            <tr>
+                <td><code>bd-banks:import {--mode=import}</code></td>
+                <td><code>ImportBdBanksCommand</code></td>
+                <td>Imports the bundled bank and branch directory through <code>ImportBdBanks</code>. Same three modes. Warns about unmatched districts (imported with no <code>bd_locations</code> link).</td>
+                <td>Also run by <code>SafeSeeder</code>, after locations. Re-runnable. See <a href="../modules/bank.html">Bank</a>.</td>
+            </tr>
+            <tr>
+                <td><code>partners:assign-numbers {--dry-run}</code></td>
+                <td><code>AssignPartnerNumbersCommand</code></td>
+                <td>Gives every business account without a <code>BJ</code> partner number one (<code>BJ</code> plus eleven digits), including soft-deleted accounts so the register has no gaps. <code>--dry-run</code> counts what would change.</td>
+                <td>Backfill after the <code>add_partner_number_to_business_accounts</code> migration. Safe to re-run: it fills only a missing number, in one statement that re-checks the column, so a number is never replaced and two concurrent runs cannot both assign. Does not touch <code>updated_at</code>. Exit code is failure if any account could not be placed (re-run).</td>
+            </tr>
+            <tr>
+                <td><code>storage:migrate-to-r2 {--mode=inventory} {--chunk=200} {--report=}</code></td>
+                <td><code>MigrateManagedFilesToR2Command</code></td>
+                <td>Moves already-stored local files onto Cloudflare R2 through <code>RunStorageMigration</code>. Modes: <code>inventory</code> (counts only, no disk access), <code>dry-run</code> (adds how many eligible rows miss their local file; no network, no writes), <code>migrate</code> (copies; resumable because rows already on R2 are excluded next time), <code>verify</code> (re-checks every R2 row against its recorded size and checksum; never writes). <code>--chunk</code> is rows per read, <code>--report</code> a path for the JSON report (stdout by default).</td>
+                <td><code>migrate</code> and <code>verify</code> refuse to run until R2 is configured and switched on under the admin storage settings. Run <code>inventory</code> and <code>dry-run</code> first. See <a href="../modules/storage.html">Storage</a>.</td>
+            </tr>
+            <tr>
+                <td><code>catalog:verify-wholesale-pricing {--snapshot=} {--against=} {--allow-explicit-percentage} {--show-values}</code></td>
+                <td><code>VerifyWholesalePricingCommand</code></td>
+                <td>Read-only deployment check that protected prices survive a migration. <code>--snapshot=&lt;file&gt;</code> before migrating records, per row, the exact decimal text PostgreSQL stores (never a float) for the money columns of <code>products</code> and <code>product_variants</code>, plus row, null and zero counts, decimal scales and a checksum. <code>--against=&lt;file&gt;</code> after migrating compares and exits non-zero if anything changed, was nulled, zeroed, re-scaled, missing or duplicated. <code>--allow-explicit-percentage</code> (development only) tolerates a deliberate switch to the Percentage pricing method. <code>--show-values</code> prints before and after text.</td>
+                <td>Run around the deploy that introduces the pricing-method migration. The snapshot is production data: the command refuses to write it inside the repository, <code>public/</code> or <code>storage/</code>, writes it mode 0600, and prints row ids and categories only unless <code>--show-values</code> is passed. Writes nothing to the database or the log. With neither option it exits as invalid.</td>
+            </tr>
+            <tr>
+                <td><code>wallets:verify-typed-balances {--snapshot=} {--against=}</code></td>
+                <td><code>VerifyTypedWalletBalancesCommand</code></td>
+                <td>Read-only deployment check that typed wallet balances changed no balance. The snapshot records every balance bucket of <code>wallets</code> and <code>supplier_wallets</code> as exact decimal text plus what each ledger holds in total. The comparison fails if any value changed, a wallet is missing, a ledger gained or lost an entry, or a pre-existing balance is anything other than withdrawable.</td>
+                <td>Same snapshot/against workflow and the same protections as the pricing check (outside the release directory, mode 0600). Run around the typed-balances migrations. Nothing is written to the database.</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h2>Scheduled tasks (<code>routes/console.php</code>)</h2>
+    <p>Twenty-four tasks, every one with <code>onOneServer()</code> and <code>withoutOverlapping()</code> (guards held in the isolated Redis lock database, §41). They need a scheduler process; see <a href="operations.html">Operations</a> for the full table with cadence and reasons. One of them is a command; the rest call an Action.</p>
+    <table>
+        <thead><tr><th>Name</th><th>Cadence</th><th>What it runs</th></tr></thead>
+        <tbody>
+            <tr><td><code>courier:steadfast-sync</code> (command)</td><td>every 5 minutes</td><td>The Artisan command above.</td></tr>
+            <tr><td>closures named for their task, such as <code>kyc-deadline-sweep</code>, <code>wallet-balance-check</code>, <code>ledger-integrity-check</code>, <code>gateway-reconciliation</code></td><td>per task</td><td>Each calls an Action's <code>handle()</code> or <code>sweep()</code>. Closures are named because <code>onOneServer()</code> has no command string to key on.</td></tr>
+        </tbody>
+    </table>
+    <pre><code>php artisan schedule:list        # every task and its next due time
+php artisan schedule:run         # what cron runs every minute
+php artisan schedule:work        # a local foreground scheduler
+php artisan schedule:test        # pick one task and run it now</code></pre>
+    <p>There is no per-task Artisan command for the closures. To fire one by hand, use <code>schedule:test</code> or call the Action from <code>tinker</code>; every sweep is idempotent under row locks.</p>
+
+    <h2><code>php artisan dev</code></h2>
+    <p>Composite command from the framework (<code>Illuminate\Foundation\Console\DevCommand</code>), run by <code>composer dev</code>. It multiplexes <code>php artisan serve</code>, <code>php artisan queue:listen --tries=1 --timeout=0</code>, <code>php artisan pail --timeout=0</code> (when <code>pcntl</code> and Pail exist), <code>npm run dev</code> and, registered by Reverb, <code>php artisan reverb:start</code>. On Windows it uses <code>concurrently</code>; elsewhere <code>@laravel/multiplex</code>.</p>
+    <table>
+        <thead><tr><th>Option</th><th>Effect</th></tr></thead>
+        <tbody>
+            <tr><td><code>-s</code>, <code>--stream</code></td><td>Stream mode.</td></tr>
+            <tr><td><code>-t</code>, <code>--tabs</code></td><td>Tabs mode (the default).</td></tr>
+            <tr><td><code>-i</code>, <code>--inline</code></td><td>Print inline instead of rendering the TUI (the default when not a TTY).</td></tr>
+            <tr><td><code>--timestamps</code></td><td>Timestamp each line.</td></tr>
+            <tr><td><code>--no-restart</code></td><td>Do not auto-restart a crashed process.</td></tr>
+            <tr><td><code>--json</code></td><td>Newline-delimited JSON events; implies <code>--inline</code>.</td></tr>
+            <tr><td><code>--buffer-size=</code>, <code>--stream-buffer-size=</code></td><td>Output buffer limits.</td></tr>
+        </tbody>
+    </table>
+    <p><code>php artisan dev:list</code> prints the registered processes. The scheduler and queues other than <code>default</code> are not started; see <a href="getting-started.html">Getting started</a>.</p>
+
+    <h2>Composer scripts</h2>
+    <table>
+        <thead><tr><th>Script</th><th>Runs</th></tr></thead>
+        <tbody>
+            <tr><td><code>composer setup</code></td><td><code>composer install</code>, copy <code>.env.example</code> if needed, <code>key:generate</code>, <code>migrate --force</code>, <code>npm install</code>, <code>npm run build</code>.</td></tr>
+            <tr><td><code>composer dev</code></td><td><code>php artisan dev</code>, with the Composer process timeout disabled.</td></tr>
+            <tr><td><code>composer lint</code> / <code>lint:check</code></td><td><code>pint --parallel</code> / <code>pint --parallel --test</code>.</td></tr>
+            <tr><td><code>composer types:check</code></td><td><code>bash scripts/phpstan.sh</code> (PHPStan level 8; clears its cache and retries once only on the Larastan <code>LARAVEL_VERSION</code> message).</td></tr>
+            <tr><td><code>composer test</code></td><td><code>config:clear</code>, <code>lint:check</code>, <code>types:check</code>, <code>php artisan test</code>.</td></tr>
+            <tr><td><code>composer ci:check</code></td><td><code>npm run check</code>, <code>npm run types:check</code>, then <code>composer test</code>. What CI runs.</td></tr>
+            <tr><td>automatic</td><td><code>post-autoload-dump</code> runs <code>package:discover</code>; <code>post-update-cmd</code> runs <code>vendor:publish --tag=laravel-assets --force</code> and <code>boost:update</code>.</td></tr>
+        </tbody>
+    </table>
+
+    <h2>npm scripts</h2>
+    <table>
+        <thead><tr><th>Script</th><th>Runs</th></tr></thead>
+        <tbody>
+            <tr><td><code>npm run dev</code></td><td><code>vp dev</code>: Vite dev server with the Wayfinder plugin (form variants on).</td></tr>
+            <tr><td><code>npm run build</code></td><td><code>vp build</code>. <code>build:ssr</code> additionally runs <code>vp build --ssr</code> (production uses it).</td></tr>
+            <tr><td><code>npm run check</code> / <code>check:fix</code></td><td><code>vp check</code> (format, lint, types) / with <code>--fix</code>. Pass explicit paths to <code>--fix</code>.</td></tr>
+            <tr><td><code>npm run types:check</code></td><td><code>tsc --noEmit</code>.</td></tr>
+            <tr><td><code>npm run test:js</code></td><td><code>vp test run</code> (Vitest).</td></tr>
+        </tbody>
+    </table>
+
+    <h2>Stock Laravel, Boost and Wayfinder commands this repo uses</h2>
+    <table>
+        <thead><tr><th>Command</th><th>Use here</th><th>Safety</th></tr></thead>
+        <tbody>
+            <tr><td><code>key:generate</code></td><td>First install, CI.</td><td>Regenerating on an existing install invalidates sessions and breaks anything encrypted with the old key (<code>APP_PREVIOUS_KEYS</code> exists for rotation).</td></tr>
+            <tr><td><code>migrate [--force]</code></td><td>Apply migrations. <code>--force</code> is required in production.</td><td>Take a snapshot with the verify commands first when a migration touches money. Never <code>migrate:fresh</code> on a database with data.</td></tr>
+            <tr><td><code>db:seed --class=...</code></td><td>See the seeder table in <a href="getting-started.html">Getting started</a>.</td><td>Production: <code>SafeSeeder</code> only. Never <code>DatabaseSeeder</code> or <code>DemoSeeder</code>.</td></tr>
+            <tr><td><code>storage:link</code></td><td>Creates <code>public/storage</code>.</td><td>Needed locally and on each deploy target.</td></tr>
+            <tr><td><code>queue:work redis --queue=... --tries=3 --max-time=3600</code>, <code>queue:listen</code>, <code>queue:restart</code>, <code>queue:failed</code>, <code>queue:retry</code></td><td>Worker and recovery. <code>queue:restart</code> after every deploy.</td><td>A worker must listen to every queue the jobs use (<a href="operations.html">Operations</a>).</td></tr>
+            <tr><td><code>schedule:run</code>, <code>schedule:list</code>, <code>schedule:work</code>, <code>schedule:test</code></td><td>The scheduler.</td><td></td></tr>
+            <tr><td><code>optimize</code>, <code>optimize:clear</code>, <code>config:clear</code>, <code>cache:clear</code></td><td>Release steps (<code>optimize:clear</code> then <code>optimize</code>).</td><td>Never leave a cached config on a machine that runs tests (see <a href="testing.html">Testing</a>). <code>cache:clear</code> flushes only the cache database (Redis DB 1); locks and sessions survive.</td></tr>
+            <tr><td><code>down</code>, <code>up</code></td><td>Maintenance mode during release.</td><td><code>APP_MAINTENANCE_DRIVER=file</code> is per-server.</td></tr>
+            <tr><td><code>inertia:start-ssr</code></td><td>Production SSR process (<code>DEPLOY.md</code>).</td><td></td></tr>
+            <tr><td><code>reverb:start</code>, <code>reverb:install</code></td><td>WebSocket server for live notifications; port 8080.</td><td></td></tr>
+            <tr><td><code>pail</code></td><td>Live log tail (in <code>dev</code>).</td><td></td></tr>
+            <tr><td><code>about</code>, <code>route:list</code>, <code>config:show</code>, <code>tinker</code></td><td>Inspection. <code>route:list --name=... --except-vendor</code>; <code>config:show database.default</code>.</td><td>Do not create or mutate models in tinker; write a test with factories instead.</td></tr>
+            <tr><td><code>make:test --pest Name</code>, <code>make:*</code>, <code>test --compact</code></td><td>Scaffolding and running tests. Pass <code>--no-interaction</code>.</td><td>One test run at a time.</td></tr>
+            <tr><td><code>wayfinder:generate --with-form</code></td><td>Regenerates <code>resources/js/actions</code> and <code>resources/js/routes</code> (both gitignored).</td><td><strong>Always pass <code>--with-form</code>.</strong> The bare command omits the <code>.form</code> helpers that dozens of pages call, and <code>tsc</code> then reports hundreds of <code>Property 'form' does not exist</code> errors that look like a version regression. The Vite plugin adds the flag itself during <code>npm run dev</code> (<code>.ai/rules/actions.md</code>).</td></tr>
+            <tr><td><code>boost:update</code>, <code>boost:mcp</code></td><td>Laravel Boost: <code>boost:update</code> runs after <code>composer update</code>; <code>boost:mcp</code> is the MCP server the editor starts (<code>.mcp.json</code>).</td><td><code>CLAUDE.md</code>'s Boost block can be overwritten by <code>boost:update</code>; project rules sit below it on purpose.</td></tr>
+        </tbody>
+    </table>
+
+    <h2>Related</h2>
+    <p><a href="getting-started.html">Getting started</a>, <a href="operations.html">Operations</a>, <a href="testing.html">Testing</a>, <a href="database.html">Database</a>.</p>
+</main>
+</body>
+</html>

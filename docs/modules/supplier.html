@@ -1,0 +1,497 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Supplier module</title>
+    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+    <script src="../assets/docs.js"></script>
+</head>
+<body>
+<main id="doc">
+    <h1>Supplier module</h1>
+    <p class="lead">Suppliers are businesses that supply goods to Feriwala. They are a wholly separate account domain from partners: their own model, login guard, KYC, portal, wallet and mobile API. A supplier proposes products, an administrator approves them as priced offers, orders are allocated to offers, and Feriwala pays the supplier through a payable, a wallet and withdrawals. This is the second-largest module (<code>app/Domain/Supplier</code>).</p>
+
+    <h2>Purpose</h2>
+    <p>Feriwala is merchant of record. Only Feriwala's central catalogue is ever sold to partners (&sect;12); a supplier never writes to <code>products</code>. A supplier instead submits a <em>listing request</em> (a proposal), staff approve it and connect or create the central product, and the approval creates a <em>supplier offer</em> carrying two rates: the confidential <strong>Supplier Rate</strong> (what Feriwala pays the supplier) and the <strong>Platform Rate</strong> (what Feriwala charges). Orders for supplier-sourced products reserve the offer's stock, create a <em>payable</em> (a claim, not money), and when the order is delivered and paid the payable becomes eligible and staff settle it into the supplier's wallet. The supplier then requests a withdrawal.</p>
+    <p>Users: suppliers (portal at <code>/supplier</code> and the mobile API at <code>/api/mobile/v1/supplier</code>), staff (admin screens, permission-gated), and the system (order, delivery and return hooks, one scheduled sweep).</p>
+    <p>Authority: <strong>D25 &mdash; Separate Supplier Account domain</strong> (in <code>requirements/04-decisions.md</code>; it supersedes the single-account statements of &sect;5 and &sect;45 as applied to suppliers only), D26 (flat Taka), D30 (KYC batches, shared with partners), D12 (dropshipping money flow). The code comments also cite internal task labels (<code>P13-1</code> &hellip; <code>P13-28</code>) and batch names (&ldquo;Supplier Bulk Product Listing&rdquo;, &ldquo;Advanced Order Management&rdquo;, &ldquo;beta-critical batch&rdquo;).</p>
+
+    <div class="callout callout-rule"><p><strong>Rule (D25).</strong> A Supplier is not a role, permission or flag reachable from a <code>User</code> or <code>BusinessAccount</code>, and no conversion exists between the two. Never add a supplier check to the <code>web</code> guard, and never reuse Fortify controllers for suppliers. A supplier session must never gain access to partner or staff resources; this is enforced at the route/middleware boundary and by tests.</p></div>
+    <div class="callout callout-rule"><p><strong>Rule (D25, Supplier Rate confidentiality).</strong> <code>SupplierOffer.supplier_rate</code> is visible only to that supplier and to staff holding <code>supplier_pricing.view</code>. It must never reach a partner Inertia prop, a storefront API response, an export, a log or a notification. Partners only ever see the Platform Rate.</p></div>
+
+    <h2>Where it lives</h2>
+    <table>
+        <thead><tr><th>Path</th><th>Role</th></tr></thead>
+        <tbody>
+            <tr><td><code>app/Domain/Supplier/Models/</code></td><td>33 models (listed below) &mdash; identity, KYC, listings, lots, offers, stock, payables, wallet, withdrawals, commitments, histories</td></tr>
+            <tr><td><code>app/Domain/Supplier/Enums/</code></td><td>Status and vocabulary enums</td></tr>
+            <tr><td><code>app/Domain/Supplier/Actions/</code></td><td>All workflows (about 60 classes)</td></tr>
+            <tr><td><code>app/Domain/Supplier/SupplierWalletService.php</code></td><td>The only thing that moves money in a supplier wallet</td></tr>
+            <tr><td><code>app/Domain/Supplier/SupplierStockLedger.php</code>, <code>SupplierStockReservations.php</code></td><td>Stock bucket moves; the supplier half of the reservation lifecycle</td></tr>
+            <tr><td><code>app/Domain/Supplier/SupplierWithdrawalLimits.php</code></td><td>Minimum and maximum withdrawal, with per-supplier override</td></tr>
+            <tr><td><code>app/Domain/Supplier/SupplierKycDocumentStore.php</code>, <code>SupplierListingMediaStore.php</code></td><td>File storage for KYC and listing images (see <a href="storage.html">Storage</a>)</td></tr>
+            <tr><td><code>app/Domain/Supplier/Policies/</code></td><td>Seven staff-side policies (suppliers never go through Gate)</td></tr>
+            <tr><td><code>app/Domain/Supplier/Queries/</code></td><td><code>ResolvePreferredOffer</code>, <code>SupplierSourcedAvailability</code>, <code>SupplierDashboardSnapshot</code>, <code>SupplierKycOverview</code></td></tr>
+            <tr><td><code>app/Domain/Supplier/Data/</code>, <code>Exceptions/</code>, <code>Notifications/</code></td><td><code>SupplierAllocation</code>, <code>SupplierPostingContext</code>; <code>SupplierAllocationRefused</code>, <code>SupplierWithdrawalRefused</code>, <code>SupplierWalletOperationRefused</code>, <code>SupplierPayableSettlementRefused</code>, <code>FulfilmentCapacityExhausted</code>; <code>SupplierVerifyEmail</code>, <code>SupplierResetPassword</code></td></tr>
+            <tr><td><code>app/Notifications/Supplier/</code></td><td>Lifecycle notifications (approved, rejected, suspended, reactivated, listing and lot, KYC, payable settled, withdrawal status, commitment expired &hellip;)</td></tr>
+            <tr><td><code>app/Http/Controllers/Supplier/</code> (+ <code>Auth/</code>)</td><td>Supplier web portal (Inertia)</td></tr>
+            <tr><td><code>app/Http/Controllers/Api/Mobile/V1/Supplier/</code></td><td>Mobile supplier API</td></tr>
+            <tr><td><code>app/Http/Controllers/Admin/{Supplier,ManagedSupplier,SupplierListing,SupplierListingLotReview,SupplierOffer,SupplierStock,SupplierAllocation,SupplierPayable,SupplierWallet,SupplierWalletAdjustment,SupplierWithdrawal,ProductSupplier}Controller.php</code></td><td>Staff screens</td></tr>
+            <tr><td><code>app/Http/Middleware/EnsureSupplierIsOperational.php</code>, <code>EnsureMobileSupplierIsOperational.php</code></td><td>Aliases <code>supplier.operational</code> and <code>mobile.operational</code> (<code>bootstrap/app.php</code>)</td></tr>
+            <tr><td><code>routes/supplier.php</code>, <code>routes/mobile/supplier/*.php</code>, <code>routes/web.php</code> (admin section)</td><td>Routes</td></tr>
+            <tr><td><code>config/supplier.php</code>, <code>config/auth.php</code></td><td>Confirmation deadline; guard, provider, password broker</td></tr>
+            <tr><td><code>resources/js/pages/supplier/**</code>, <code>pages/admin/{suppliers,supplier-*}/**</code></td><td>Frontend</td></tr>
+            <tr><td><code>lang/{en,bn}/supplier.php</code>, <code>product_suppliers.php</code></td><td>Strings</td></tr>
+            <tr><td><code>database/migrations/2026_10_02_*</code> &hellip; <code>2026_11_02_*</code> (<code>*supplier*</code>, <code>2026_10_28_140000_create_delivery_success_fees.php</code>)</td><td>Schema, check constraints and immutability triggers</td></tr>
+            <tr><td><code>database/factories/SupplierFactory.php</code></td><td>Factory with a state per status</td></tr>
+            <tr><td><code>tests/Feature/Supplier/</code> and others (see Testing)</td><td>Tests</td></tr>
+        </tbody>
+    </table>
+
+    <h2>Key terms</h2>
+    <dl>
+        <dt>Supplier</dt>
+        <dd><code>App\Domain\Supplier\Models\Supplier</code>, an <code>Authenticatable</code> on the <code>supplier</code> guard (provider <code>suppliers</code>). Reference prefix from <code>ReferencePrefix::Supplier</code>.</dd>
+        <dt>Operational</dt>
+        <dd>Only <code>SupplierStatus::Approved</code> (<code>isOperational()</code>). Every operational route and action asks this question server-side.</dd>
+        <dt>Listing (listing request)</dt>
+        <dd>A supplier's proposal for one product, with one or more <em>items</em> (variations). Never publishes anything.</dd>
+        <dt>Lot</dt>
+        <dd>A draft-then-submit-once batch of several listings (&ldquo;product entries&rdquo;). Its status is always rolled up from its listings.</dd>
+        <dt>Offer</dt>
+        <dd><code>SupplierOffer</code>: a supplier's approved supply of one product (or variation), with Supplier Rate, Platform Rate, supply mode and stock.</dd>
+        <dt>Supplier Rate / Supplier Base Price</dt>
+        <dd>What is payable to the supplier per unit. <code>supplier_offers.supplier_rate</code>. Confidential.</dd>
+        <dt>Platform Rate</dt>
+        <dd>What Feriwala charges. Must not be below the base price (assignment refuses it). Written into the product or variant's <code>wholesale_price</code> when an offer is made preferred.</dd>
+        <dt>Preferred offer</dt>
+        <dd>The one offer per (product, variation) that orders use. Chosen by an administrator, never automatic and never &ldquo;cheapest&rdquo;.</dd>
+        <dt>Supply mode (<code>SupplyMode</code>)</dt>
+        <dd><code>ready_stock</code>, <code>on_demand</code>, <code>pre_order</code>. Non-ready-stock modes need staff confirmation at allocation and a fulfilment commitment.</dd>
+        <dt>Supplier-sourced</dt>
+        <dd>A variation with <em>any</em> supplier offer (any status). From then on its stock is only from suppliers, never partly central.</dd>
+        <dt>Payable</dt>
+        <dd>What Feriwala owes a supplier for one allocated order line. A claim; it credits no wallet until settled.</dd>
+        <dt>Settlement</dt>
+        <dd>Crediting a payable's net amount into the supplier wallet (<code>SettleSupplierPayable</code>).</dd>
+        <dt>Recovery</dt>
+        <dd>The controlled debt on a supplier wallet when a reversal arrives after settlement and not enough is available; never a negative balance.</dd>
+        <dt>Platform credit</dt>
+        <dd>The part of a wallet's total spendable in the platform but never withdrawable. Converted to withdrawable only through <code>ConvertSupplierWalletBalance</code>.</dd>
+        <dt>Delivery success fee</dt>
+        <dd>A percentage of a payable's gross amount debited from the supplier's wallet when its order is delivered.</dd>
+        <dt>Fulfilment commitment</dt>
+        <dd>The capacity reservation for one allocated non-ready-stock line.</dd>
+    </dl>
+
+    <h2>Data model</h2>
+    <p>Money columns are cast with <code>MoneyCast</code> (exact decimal Taka plus <code>currency_code</code>). The original migrations name money columns <code>*_minor</code>; <code>2026_10_05_100000_convert_monetary_storage_to_flat_taka.php</code> converted storage to flat Taka, and the models and constraints today speak flat Taka. Models marked &ldquo;public id&rdquo; use <code>HasPublicId</code> (ULID); &ldquo;ref&rdquo; use <code>HasReference</code> (human reference); &ldquo;SM&rdquo; use <code>HasStateMachine</code>; &ldquo;hist&rdquo; use <code>RecordsStatusHistory</code>.</p>
+
+    <h3>Identity and KYC</h3>
+    <table>
+        <thead><tr><th>Table / model</th><th>Notes</th></tr></thead>
+        <tbody>
+            <tr><td><code>suppliers</code> / <code>Supplier</code></td><td>public id, ref, SM, hist, <code>HasApiTokens</code>, <code>MustVerifyEmail</code>. Columns: <code>email</code> (lowercase check), <code>mobile</code> (E.164 check), <code>password</code> (hashed), <code>status</code>, <code>business_name</code>, <code>contact_person_name</code>, <code>business_address</code>, <code>trade_licence_number</code>, <code>tax_identification_number</code>, <code>payout_details</code> (<code>encrypted:array</code>, hidden), <code>locale</code>, <code>review_note</code>, <code>reviewed_by</code>, <code>submitted_at</code>, <code>reviewed_at</code>, <code>approved_at</code>, <code>suspended_at</code>, <code>closed_at</code>, <code>withdrawal_minimum_override</code>, <code>withdrawal_maximum_override</code>, <code>email_verified_at</code>, <code>mobile_verified_at</code>. Trigger <code>suppliers_locked_columns</code> and <code>suppliers_no_delete</code>: rows are never deleted.</td></tr>
+            <tr><td><code>supplier_status_history</code> / <code>SupplierStatusChange</code></td><td>Append-only (no update/delete triggers). <code>previous_status</code>, <code>new_status</code>, <code>changed_by</code> (staff <code>User</code>), <code>source</code> (<code>SupplierStatusChangeSource</code>: supplier, staff, system, scheduler), <code>reason</code>, <code>internal_note</code>, <code>public_note</code>.</td></tr>
+            <tr><td><code>supplier_password_reset_tokens</code></td><td>The <code>suppliers</code> password broker's own table (<code>config/auth.php</code>); never <code>password_reset_tokens</code>.</td></tr>
+            <tr><td><code>supplier_kyc_submissions</code> / <code>SupplierKycSubmission</code></td><td>public id, SM. One round per supplier in this beta (<code>round</code>), <code>kyc_batch_id</code>, <code>kyc_batch_version_id</code>, <code>selections</code>, <code>status</code> (<code>SupplierKycStatus</code>), reviewer, <code>decision_note</code>.</td></tr>
+            <tr><td><code>supplier_kyc_documents</code> / <code>SupplierKycDocument</code></td><td><code>disk</code>, <code>path</code>, <code>document_type</code>, <code>slot_key</code>. Exposes no public URL; read through <code>SupplierKycDocumentStore</code> (disk <code>kyc</code>, app-level encrypted).</td></tr>
+            <tr><td><code>supplier_kyc_requirements</code> / <code>SupplierKycRequirement</code></td><td>Snapshot of what the round was opened against (key, name, <code>is_required</code>, <code>requires_file</code>, <code>requires_value</code>, accepted mime types, batch fields), so later catalogue edits do not change how a round is judged.</td></tr>
+            <tr><td><code>supplier_kyc_fields</code> / <code>SupplierKycField</code></td><td>Typed non-file answers (TIN, licence number), encrypted at rest.</td></tr>
+            <tr><td><code>SupplierKycEvidenceReview</code></td><td>A reviewer's verdict on one slot of one requirement (D30), the supplier twin of the partner model.</td></tr>
+        </tbody>
+    </table>
+
+    <h3>Listings, lots, offers, stock</h3>
+    <table>
+        <thead><tr><th>Table / model</th><th>Notes</th></tr></thead>
+        <tbody>
+            <tr><td><code>supplier_product_listings</code> / <code>SupplierProductListing</code></td><td>public id, ref, SM, hist. <code>supplier_id</code>, <code>lot_id</code>, <code>status</code> (<code>ListingStatus</code>), <code>product_name</code>, <code>description</code>, <code>category_id</code>/<code>category_suggestion</code>, <code>brand_id</code>/<code>brand_suggestion</code>, <code>supplier_note</code>, <code>connected_product_id</code>, review fields. Triggers lock columns and forbid delete. <code>isEditableBySupplier()</code> is true for <code>draft</code> and <code>correction_required</code>.</td></tr>
+            <tr><td><code>supplier_product_listing_items</code> / <code>SupplierProductListingItem</code></td><td>public id. <code>variant_label</code>, <code>supplier_sku</code>, <code>supplier_rate</code> (check &ge; 0), <code>available_quantity</code>, <code>minimum_supply_quantity</code>, <code>lead_time_days</code>, <code>warranty</code>, <code>return_conditions</code>, <code>status</code> (<code>ListingItemStatus</code>), <code>supply_mode</code> (checks: on-demand needs lead time, pre-order needs ETA), <code>fulfilment_capacity</code>, <code>expected_availability_at</code>, <code>connected_product_variant_id</code>, <code>supplier_offer_id</code>, and a set of <code>proposed_*</code> logistics columns (weights in grams, dimensions in cm, box packing, fragility; all checked positive). Option values via a pivot to <code>ProductAttributeValue</code> (<code>attributeValues()</code>). Cannot be deleted.</td></tr>
+            <tr><td><code>supplier_product_listing_status_history</code></td><td>Append-only history of a listing.</td></tr>
+            <tr><td><code>supplier_listing_media</code> / <code>SupplierListingMedia</code></td><td>public id. <code>role</code> (<code>primary</code> or <code>gallery</code>), <code>disk</code>, <code>path</code>, mime, size, <code>width</code>, <code>height</code>, <code>alt_text</code> (required, non-blank), <code>position</code> &ge; 1; partial unique index <code>supplier_listing_media_one_primary_per_listing</code>; triggers freeze rows once the parent listing is submitted.</td></tr>
+            <tr><td><code>supplier_product_listing_lots</code> / <code>SupplierProductListingLot</code></td><td>public id, ref, SM, hist. <code>status</code> (<code>LotStatus</code>), <code>title</code>, review fields. <code>rollupStatus()</code> derives the status from the listings' statuses. History table <code>supplier_product_listing_lot_status_history</code>.</td></tr>
+            <tr><td><code>supplier_offers</code> / <code>SupplierOffer</code></td><td>public id, ref. <code>supplier_id</code>, <code>product_id</code>, <code>product_variant_id</code>, <code>originating_listing_item_id</code>, <code>status</code> (<code>OfferStatus</code>: <code>active</code>, <code>suspended</code>), <code>origin</code> (<code>OfferOrigin</code>: <code>supplier_listing</code>, <code>admin_assignment</code>), <code>assigned_by</code>/<code>assigned_at</code>, <code>is_preferred</code> (partial unique index <code>supplier_offers_one_preferred_per_variation</code>), <code>wholesale_enabled</code>, <code>dropshipping_enabled</code>, <code>supplier_rate</code>, <code>platform_rate</code>, <code>currency_code</code>, <code>supply_mode</code>, <code>lead_time_days</code>, <code>fulfilment_capacity</code>, <code>expected_availability_at</code>, activation and suspension actors and times.</td></tr>
+            <tr><td><code>supplier_offer_price_changes</code> / <code>SupplierOfferPriceChange</code></td><td>Append-only price versions: <code>supplier_rate</code>, <code>platform_rate</code>, <code>effective_from</code>, <code>changed_by</code>, <code>reason</code>. Orders snapshot the version in force.</td></tr>
+            <tr><td><code>supplier_offer_stock</code> / <code>SupplierOfferStock</code></td><td>One row per offer, six buckets: <code>quantity</code> (the available bucket), <code>reserved_quantity</code>, <code>processing_quantity</code>, <code>sold_quantity</code>, <code>returned_quantity</code>, <code>damaged_quantity</code> (bucket names from <code>StockBucket</code>). Check constraints refuse negatives. Only opened for ready-stock offers with an approved quantity.</td></tr>
+            <tr><td><code>supplier_stock_updates</code> / <code>SupplierStockUpdate</code></td><td>public id. A supplier's proposed availability: <code>requested_quantity</code>, <code>status</code> (<code>StockUpdateStatus</code>: pending, approved, rejected), decision fields.</td></tr>
+            <tr><td><code>supplier_stock_movements</code> / <code>SupplierStockMovement</code></td><td>Immutable (update/delete triggers). <code>quantity_before</code>/<code>quantity_after</code> (available bucket), <code>moved_quantity</code>, <code>from_bucket</code>, <code>to_bucket</code>, <code>buckets_before</code>/<code>buckets_after</code> (JSON), <code>source</code> (checked list), <code>actor_type</code>, <code>stock_reservation_id</code>, unique <code>idempotency_key</code>.</td></tr>
+            <tr><td><code>supplier_fulfilment_commitments</code> / <code>SupplierFulfilmentCommitment</code></td><td>public id, ref, SM, hist. <code>order_item_allocation_id</code> (unique, 1:1), <code>supplier_offer_id</code>, <code>quantity</code>, <code>status</code> (<code>FulfilmentCommitmentStatus</code>), <code>due_at</code>, <code>confirmation_due_at</code>, confirmation, failure and cancellation fields. History table <code>supplier_fulfilment_commitment_status_history</code>.</td></tr>
+        </tbody>
+    </table>
+
+    <h3>Payables, wallet, withdrawals</h3>
+    <table>
+        <thead><tr><th>Table / model</th><th>Notes</th></tr></thead>
+        <tbody>
+            <tr><td><code>supplier_payables</code> / <code>SupplierPayable</code></td><td>public id, ref, SM, hist. <code>supplier_id</code>, <code>order_id</code>, <code>order_item_id</code> (unique), <code>supplier_offer_id</code>, <code>supplier_offer_price_change_id</code>, <code>quantity</code>, <code>supplier_rate</code>, <code>gross_amount</code> (= rate &times; quantity), <code>status</code> (<code>PayableStatus</code>), <code>triggering_event</code>, unique <code>idempotency_key</code>, <code>delivered_at</code>, <code>payment_settled_at</code>, <code>eligible_at</code>, <code>held_at</code>/<code>hold_reason</code>, <code>cancelled_at</code>, <code>settled_at</code>, <code>settlement_reference</code>. The figures are locked by the database; only workflow columns move, via <code>transitionTo()</code> inside the payable actions. <code>netAmount()</code> = gross minus reversals. History table <code>supplier_payable_status_history</code>.</td></tr>
+            <tr><td><code>supplier_payable_reversals</code> / <code>SupplierPayableReversal</code></td><td>Append-only compensating rows: <code>order_return_item_id</code>, <code>quantity</code>, <code>amount</code> (exactly quantity &times; the payable's rate), <code>reason</code>, unique <code>idempotency_key</code>, <code>settlement_reversal_reference</code>. The database refuses reversals that together exceed the payable.</td></tr>
+            <tr><td><code>delivery_success_fees</code> / <code>DeliverySuccessFee</code></td><td>public id. One row per payable (unique <code>supplier_payable_id</code>): <code>base_amount</code>, <code>rate_percent</code> (frozen), <code>fee_amount</code>, <code>supplier_ledger_entry_id</code>. Immutable.</td></tr>
+            <tr><td><code>supplier_wallets</code> / <code>SupplierWallet</code></td><td>public id. One per supplier per currency (unique). <code>total</code>, <code>platform_credit</code>, <code>reserved</code>, <code>reserved_platform_credit</code>, <code>recovery</code> (checks: non-negative, reserved &le; total, ISO currency). A trigger locks identity columns. No method on the model writes.</td></tr>
+            <tr><td><code>supplier_ledger_entries</code> / <code>SupplierLedgerEntry</code></td><td>public id, ref. <b>Immutable</b>: model guard plus <code>supplier_ledger_entries_no_update</code> / <code>_no_delete</code> triggers. <code>type</code> (<code>SupplierLedgerEntryType</code>), <code>balance_type</code>, <code>conversion_reference</code>, <code>source</code>, links to payable, reversal, withdrawal, <code>debit</code>/<code>credit</code> (check: one direction), before/after for balance, reserved and recovery (check: balances add up), <code>idempotency_key</code>, <code>corrects_ledger_entry_id</code>, <code>created_by</code>.</td></tr>
+            <tr><td><code>supplier_withdrawals</code> / <code>SupplierWithdrawal</code></td><td>public id, ref, SM, hist. <code>supplier_wallet_id</code>, <code>payout_method_id</code> (the shared <code>payout_methods</code>, owner type Supplier), <code>payout_snapshot</code> (frozen copy of the destination), <code>amount</code> (&gt; 0), <code>status</code> (<code>SupplierWithdrawalStatus</code>), <code>requested_at</code>, decision and processing fields, <code>paid_at</code>, <code>external_reference</code> (required when paid: <code>supplier_withdrawals_paid_is_complete</code>), <code>failure_reason</code>, unique <code>idempotency_key</code>. Identity, amount and snapshot are trigger-locked; never deleted. History table <code>supplier_withdrawal_status_history</code>.</td></tr>
+        </tbody>
+    </table>
+    <p>Payout methods and addresses are shared modules: see <a href="payout.html">Payout</a>, <a href="bank.html">Bank</a> and <a href="address.html">Address</a>. The supplier portal has its own <code>AddressController</code> and <code>PayoutMethodController</code> over those shared models. Admin assignment of a product to a supplier lives in the Sourcing module (<code>Sourcing\Policies\ProductSupplierPolicy</code>, admin <code>ProductSupplierController</code>).</p>
+
+    <h2>States &amp; lifecycle</h2>
+
+    <h3><code>SupplierStatus</code> (the account)</h3>
+    <table>
+        <thead><tr><th>From</th><th>To</th></tr></thead>
+        <tbody>
+            <tr><td><code>draft</code></td><td>verification_pending, closed</td></tr>
+            <tr><td><code>verification_pending</code></td><td>kyc_pending, closed</td></tr>
+            <tr><td><code>kyc_pending</code></td><td>under_review, closed</td></tr>
+            <tr><td><code>under_review</code></td><td>approved, rejected, correction_required, closed</td></tr>
+            <tr><td><code>correction_required</code></td><td>under_review, rejected, closed</td></tr>
+            <tr><td><code>rejected</code></td><td>correction_required, closed</td></tr>
+            <tr><td><code>approved</code></td><td>suspended, closed</td></tr>
+            <tr><td><code>suspended</code></td><td>approved, closed</td></tr>
+            <tr><td><code>closed</code></td><td>(terminal)</td></tr>
+        </tbody>
+    </table>
+    <p>Registration creates the supplier at <code>draft</code> and moves it to <code>verification_pending</code> in the same step. <code>AdvanceSupplierPastVerification</code> moves it to <code>kyc_pending</code> when email (always) and mobile (only while the admin's mobile-verification requirement is on) are verified; it is called from every place a verification can complete, and is a no-op for anyone not at <code>verification_pending</code>. <code>SubmitSupplierKyc</code> moves to <code>under_review</code>; <code>ApproveSupplierKyc</code> to <code>approved</code>; <code>RejectSupplierKyc</code> to <code>rejected</code>; <code>RequestSupplierKycCorrection</code> to <code>correction_required</code>; <code>SuspendSupplier</code> / <code>ReactivateSupplier</code> toggle <code>approved</code> &harr; <code>suspended</code>. Every move goes through <code>transitionWithHistory()</code> and writes <code>supplier_status_history</code>.</p>
+
+    <h3><code>SupplierKycStatus</code> (the KYC round)</h3>
+    <p><code>draft</code> &rarr; <code>submitted</code> &rarr; <code>under_review</code> &rarr; (<code>approved</code> | <code>rejected</code> | <code>correction_required</code>); <code>correction_required</code> &rarr; <code>submitted</code>. Editable while <code>draft</code> or <code>correction_required</code> (<code>isEditable()</code>). <code>SubmitSupplierKyc</code> performs <code>submitted</code> and <code>under_review</code> in one step (no separate &ldquo;start review&rdquo; click in this beta).</p>
+
+    <h3><code>ListingStatus</code> (a listing request)</h3>
+    <table>
+        <thead><tr><th>From</th><th>To</th></tr></thead>
+        <tbody>
+            <tr><td><code>draft</code></td><td>submitted, archived</td></tr>
+            <tr><td><code>submitted</code></td><td>under_review</td></tr>
+            <tr><td><code>under_review</code></td><td>approved, partially_approved, rejected, correction_required, archived</td></tr>
+            <tr><td><code>correction_required</code></td><td>submitted, archived</td></tr>
+            <tr><td><code>approved</code>, <code>partially_approved</code></td><td>suspended, archived</td></tr>
+            <tr><td><code>suspended</code></td><td>approved, partially_approved, archived</td></tr>
+            <tr><td><code>rejected</code></td><td>archived</td></tr>
+            <tr><td><code>archived</code></td><td>(terminal)</td></tr>
+        </tbody>
+    </table>
+    <p>No listing status means &ldquo;live on the catalogue&rdquo;. <code>ListingItemStatus</code> (<code>pending</code>, <code>approved</code>, <code>rejected</code>, <code>correction_required</code>) is a plain enum, not a state machine; the listing's status is rolled up from its items in <code>DecideSupplierListing</code>: all approved with none rejected or in correction &rarr; <code>approved</code>; some approved &rarr; <code>partially_approved</code>; else any correction &rarr; <code>correction_required</code>; else <code>rejected</code>.</p>
+
+    <h3><code>LotStatus</code></h3>
+    <p><code>draft</code> &rarr; <code>submitted</code> or <code>closed</code>; <code>submitted</code> &rarr; <code>under_review</code> &rarr; (<code>approved</code> | <code>partially_approved</code> | <code>rejected</code> | <code>returned</code>); <code>returned</code> &rarr; <code>submitted</code>; <code>approved</code>/<code>partially_approved</code>/<code>rejected</code> &rarr; <code>closed</code>. The status is derived from the child listings via <code>SupplierProductListingLot::rollupStatus()</code>, never set freehand.</p>
+
+    <h3><code>PayableStatus</code></h3>
+    <table>
+        <thead><tr><th>From</th><th>To</th></tr></thead>
+        <tbody>
+            <tr><td><code>pending</code></td><td>eligible, cancelled, on_hold, partially_reversed, reversed</td></tr>
+            <tr><td><code>on_hold</code></td><td>pending, cancelled</td></tr>
+            <tr><td><code>eligible</code></td><td>settled, on_hold, partially_reversed, reversed</td></tr>
+            <tr><td><code>partially_reversed</code></td><td>settled, reversed</td></tr>
+            <tr><td><code>settled</code></td><td>partially_reversed, reversed</td></tr>
+            <tr><td><code>reversed</code>, <code>cancelled</code></td><td>(terminal)</td></tr>
+        </tbody>
+    </table>
+    <p>Pending at order placement; <em>eligible</em> only when <strong>both</strong> delivery and payment settlement are recorded (<code>EvaluateSupplierPayableEligibility</code>; the second fact to arrive makes the move); <em>settled</em> by staff. Note <code>SettleSupplierPayable</code> settles only <code>Eligible</code> payables even though the state machine would also allow <code>PartiallyReversed</code> &rarr; <code>Settled</code>: a deliberately smaller scope (docblock).</p>
+
+    <h3><code>SupplierWithdrawalStatus</code></h3>
+    <p><code>requested</code> &rarr; (<code>under_review</code> | <code>rejected</code>); <code>under_review</code> &rarr; (<code>approved</code> | <code>rejected</code>); <code>approved</code> &rarr; <code>processing</code>; <code>processing</code> &rarr; (<code>paid</code> | <code>failed</code>); <code>rejected</code>, <code>failed</code>, <code>paid</code>, <code>reversed</code> terminal (no code path reaches <code>reversed</code>; it exists for a later payout-channel reversal). <code>holdsReservation()</code> is true for <code>requested</code>, <code>under_review</code>, <code>approved</code>, <code>processing</code>.</p>
+
+    <h3><code>FulfilmentCommitmentStatus</code></h3>
+    <p><code>awaiting_confirmation</code> &rarr; (<code>confirmed</code> | <code>cancelled</code>); <code>confirmed</code> &rarr; (<code>preparing</code> | <code>failed</code> | <code>cancelled</code>); <code>preparing</code> &rarr; (<code>ready</code> | <code>failed</code> | <code>cancelled</code>); <code>ready</code>, <code>failed</code>, <code>cancelled</code> terminal. Reaching any terminal status frees the capacity the commitment held (capacity counts only non-terminal rows). A supplier &ldquo;declining&rdquo; is <code>cancel()</code> recorded with the supplier source; there is no Declined status.</p>
+
+    <h3>Plain enums</h3>
+    <ul>
+        <li><code>OfferStatus</code>: <code>active</code>, <code>suspended</code> (not a state machine; <code>SuspendSupplierOffer</code> / <code>ActivateSupplierOffer</code>).</li>
+        <li><code>OfferOrigin</code>: <code>supplier_listing</code>, <code>admin_assignment</code>.</li>
+        <li><code>SupplyMode</code>: <code>ready_stock</code>, <code>on_demand</code> (&ldquo;Available on demand&rdquo;), <code>pre_order</code> (&ldquo;Subject to Supplier confirmation&rdquo;). <code>requiresStaffConfirmationAtAllocation()</code> is true for everything except <code>ready_stock</code>.</li>
+        <li><code>StockUpdateStatus</code>: <code>pending</code>, <code>approved</code>, <code>rejected</code>.</li>
+        <li><code>SupplierLedgerEntryType</code>: <code>settlement_credit</code>, <code>payable_reversal_debit</code>, <code>withdrawal_reserved</code>, <code>withdrawal_reservation_released</code>, <code>withdrawal_paid_debit</code>, <code>manual_adjustment</code>, <code>delivery_success_fee_debit</code>, <code>balance_conversion_debit</code>, <code>balance_conversion_credit</code>. <code>direction()</code> is null for reserve, release and manual adjustment. <code>requiresReason()</code> is true for reversal, release, manual adjustment and both conversions.</li>
+        <li>Change-source enums for histories: <code>SupplierStatusChangeSource</code>, <code>PayableChangeSource</code> (system, staff, scheduler, payment_gateway), <code>SupplierWithdrawalChangeSource</code> (supplier, staff, system, scheduler, payment_gateway).</li>
+    </ul>
+
+    <h2>Actions &amp; workflows</h2>
+
+    <h3>Account, verification, KYC</h3>
+    <table>
+        <thead><tr><th>Class</th><th>Purpose</th></tr></thead>
+        <tbody>
+            <tr><td><code>RegisterSupplier</code></td><td>Validates and creates the identity (E.164 mobile, unique email/mobile), starts at <code>draft</code> then <code>verification_pending</code>. Touches no <code>User</code> or <code>BusinessAccount</code>.</td></tr>
+            <tr><td><code>CreateManagedSupplier</code></td><td>Staff-created supplier via <code>RegisterSupplier</code>; random unseen password; supplier gets a setup link on the <code>suppliers</code> broker. Audit <code>supplier.created_by_staff</code>.</td></tr>
+            <tr><td><code>SendSupplierMobileVerificationCode</code>, <code>VerifySupplierMobile</code></td><td>Code via the shared <code>VerificationCodes</code> store with purpose <code>supplier-mobile</code> (a code cannot be replayed against partner verification); SMS event <code>SmsEvent::SupplierMobileVerification</code>.</td></tr>
+            <tr><td><code>AdvanceSupplierPastVerification</code></td><td><code>isComplete()</code> and <code>handle()</code>: <code>verification_pending</code> &rarr; <code>kyc_pending</code>.</td></tr>
+            <tr><td><code>OpenSupplierKycRound</code>, <code>CaptureSupplierKycRequirements</code></td><td>Opens (or returns) the supplier's single round; snapshots requirements from the admin document catalogue (types whose audience includes suppliers; package/country rules do not apply). With nothing configured, falls back to a built-in vocabulary with every item optional so the supplier is never stranded.</td></tr>
+            <tr><td><code>SubmitSupplierKyc</code></td><td>Checks required items (batch-version rounds use <code>KycCompletion</code>), then round &rarr; <code>under_review</code> and supplier &rarr; <code>under_review</code>. Audit <code>supplier_kyc.submitted</code> / <code>.resubmitted</code>. Notifies and announces to the <code>StaffQueue::SupplierKyc</code> queue.</td></tr>
+            <tr><td><code>ApproveSupplierKyc</code>, <code>RejectSupplierKyc</code>, <code>RequestSupplierKycCorrection</code></td><td>Staff decisions. Approve is the one action that makes a supplier operational. Reject needs an internal reason (a separate applicant-facing note exists). Correction needs user-visible feedback. Audit <code>supplier.approved</code>, <code>supplier.rejected</code>, <code>supplier_kyc.correction_requested</code>.</td></tr>
+            <tr><td><code>SuspendSupplier</code>, <code>ReactivateSupplier</code></td><td>Reversible; reason required. A suspended supplier keeps its login; only operational routes refuse it. Audit <code>supplier.suspended</code>, <code>supplier.reactivated</code>.</td></tr>
+        </tbody>
+    </table>
+
+    <h3>Listings and lots</h3>
+    <table>
+        <thead><tr><th>Class</th><th>Purpose</th></tr></thead>
+        <tbody>
+            <tr><td><code>SaveSupplierListingDraft</code></td><td>Create or edit a listing while editable. Items are synchronised in place by public id (the database refuses deleting items once submitted); a draft may drop a variation, a listing sent back for correction may only fix or add. Can attach a listing to a draft lot.</td></tr>
+            <tr><td><code>ManageSupplierListingItemAttributes</code></td><td>Sets structured option values (Size, Colour, &hellip;) by selecting existing <code>ProductAttributeValue</code> rows; one value per attribute; replaced wholesale.</td></tr>
+            <tr><td><code>ManageSupplierListingMedia</code></td><td><code>add</code>, <code>describe</code>, <code>reorder</code>, <code>remove</code> images. Ownership and editability checked in the action; every image needs alt text; one primary image per listing; per-scope image cap. File written before the transaction and removed if the save fails; a removed file is deleted only after commit.</td></tr>
+            <tr><td><code>SubmitSupplierListing</code></td><td>Operational supplier only (re-checked in the action). Lands at <code>under_review</code>; needs at least one variation. Audit <code>supplier_listing.submitted</code>/<code>.resubmitted</code>.</td></tr>
+            <tr><td><code>ArchiveSupplierListingDraft</code></td><td>Draft only.</td></tr>
+            <tr><td><code>CreateSupplierListingLot</code>, <code>RemoveSupplierListingLotItem</code>, <code>ArchiveSupplierListingLotDraft</code></td><td>Lot container; removing an entry is the <code>archived</code> transition (listings are never hard-deleted); a lot can only be discarded while empty and in <code>draft</code>.</td></tr>
+            <tr><td><code>ValidateSupplierListingLotForSubmission</code>, <code>SubmitSupplierListingLot</code></td><td>All-or-nothing: validates every submittable entry first (read-only; includes &ldquo;has a primary image&rdquo;), and if any entry is invalid writes nothing and returns item-keyed <code>ValidationException</code> errors. Idempotent on an already submitted lot.</td></tr>
+            <tr><td><code>DecideSupplierListing</code></td><td>Staff decision per item: <code>approve</code>, <code>reject</code> or <code>correction</code>. Needs a reason. Resolves the product (existing connected product is kept; <code>connect_product_id</code>; or <code>create_product</code> through <code>ManageProducts::create()</code> with a category and SKU). Each approval needs a Platform Rate; the supplier's proposed rate is used unless the reviewer confirms a different Supplier Base Price (must be &gt; 0). Creates a <code>SupplierOffer</code> (<code>origin = supplier_listing</code>, <code>active</code>) plus the first <code>supplier_offer_price_changes</code> row, copies supply terms from the item, and opens a stock row only for ready-stock with an approved quantity. If the same supplier already has an offer on that product/variation the one offer is updated (never a second). Optional <code>logistics</code> input is written to the central product/variant through the ordinary catalogue write path; otherwise logistics are untouched. Notifies the supplier.</td></tr>
+            <tr><td><code>DecideSupplierListingLot</code></td><td>Applies reviewer decisions per entry, each skipped and reported if invalid (per-item independence, unlike supplier submission), then rolls the lot up.</td></tr>
+            <tr><td><code>RequestSupplierListingCorrection</code></td><td>Sends a listing back with user-visible feedback.</td></tr>
+            <tr><td><code>MatchSupplierListingItemToVariant</code></td><td>Reviewer hint only: ranks existing variants by attribute overlap, then SKU. Never writes.</td></tr>
+        </tbody>
+    </table>
+
+    <h3>Offers, pricing, assignment</h3>
+    <table>
+        <thead><tr><th>Class</th><th>Purpose</th></tr></thead>
+        <tbody>
+            <tr><td><code>AssignProductToSupplier</code></td><td>Staff assigns an existing product or variant to an approved supplier (<code>origin = admin_assignment</code>). Requires <code>ProductSupplierPolicy::canAssign</code> (<code>product_supplier.create</code> and <code>supplier_pricing.edit</code>). Base price must be positive and in the product's currency; platform rate is seeded from the product's wholesale price (read, not changed) and the assignment is refused when it would sit below the base price. A second live offer for the same supplier and product/variation is refused; a suspended one must be reactivated instead. Audit <code>supplier_offer.assigned</code>.</td></tr>
+            <tr><td><code>SetSupplierOfferRates</code>, <code>ChangeSupplierBasePrice</code></td><td>Append a new effective-dated price version (reason required, same currency, non-negative). <code>ChangeSupplierBasePrice</code> changes only the base price and carries the platform rate over. Audit <code>supplier_offer.rates_changed</code>. Never rewrites an allocation or payable already made from an earlier version.</td></tr>
+            <tr><td><code>ActivateSupplierOffer</code>, <code>SuspendSupplierOffer</code></td><td>Scoped to that offer alone.</td></tr>
+            <tr><td><code>SetPreferredSupplierOffer</code></td><td>Marks one active offer preferred (unsetting the previous one in the same transaction; the partial unique index backs it up). Writes the <strong>Platform Rate only</strong> into the connected product's or variant's <code>wholesale_price</code>, the column the existing partner catalogue already reads. Audit <code>supplier_offer.preferred_selected</code>.</td></tr>
+        </tbody>
+    </table>
+
+    <h3>Stock</h3>
+    <table>
+        <thead><tr><th>Class</th><th>Purpose</th></tr></thead>
+        <tbody>
+            <tr><td><code>SubmitSupplierStockUpdate</code></td><td>Supplier proposes an availability figure for its own offer. Changes nothing until staff approve.</td></tr>
+            <tr><td><code>DecideSupplierStockUpdate</code></td><td><code>approve</code> sets <code>supplier_offer_stock.quantity</code> and writes a <code>SupplierStockMovement</code>; <code>reject</code> records the decision. Audit <code>supplier_stock.approved</code>/<code>.rejected</code>.</td></tr>
+            <tr><td><code>AdjustSupplierOfferStock</code></td><td>Staff set a figure directly (reason required, non-negative). Movement source <code>staff_adjustment</code>. Audit <code>supplier_stock.adjusted</code>.</td></tr>
+            <tr><td><code>SupplierStockLedger::move()</code></td><td>Moves units between buckets under a row lock; refuses if the source bucket is short; writes the movement in the same transaction; idempotent by key. Never touches central <code>stock_items</code>.</td></tr>
+            <tr><td><code>SupplierStockReservations::hold()</code> / <code>end()</code></td><td>Called by <code>Inventory\StockReservations</code>. <code>hold</code> locks the stock row, checks the approved available quantity, creates a <code>StockReservation</code> and moves available &rarr; reserved. <code>end</code> moves reserved &rarr; processing on commit, or back to available on release or expiry. Audit <code>supplier_stock.reserved</code>, <code>.committed</code>, <code>.released</code> (system actor, no rate or customer).</td></tr>
+        </tbody>
+    </table>
+
+    <h3>Order integration</h3>
+    <table>
+        <thead><tr><th>Hook (where called)</th><th>Supplier action</th></tr></thead>
+        <tbody>
+            <tr><td><code>Order\Actions\PlaceWholesaleOrder</code></td><td><code>AllocateSupplierOrderLine</code> then <code>AccrueSupplierPayable::handle()</code></td></tr>
+            <tr><td><code>Order\Actions\AllocateOrderLineSource</code> (staff allocation)</td><td><code>AccrueSupplierPayable::forAllocation()</code>, <code>RecordSupplierFulfilmentCommitment::forAllocation()</code>, <code>CancelSupplierPayable</code> on reallocation</td></tr>
+            <tr><td><code>Order\Actions\ConfirmOrderPayment</code></td><td><code>QualifySupplierPayablePayment</code> (payment settled) or <code>HoldSupplierPayable</code> (order held)</td></tr>
+            <tr><td><code>Order\Actions\CancelUnpaidOrder</code></td><td><code>CancelSupplierPayable</code></td></tr>
+            <tr><td><code>Order\Actions\SynchronizeSupplierPayablesWithDelivery</code></td><td>Delivered &rarr; <code>EvaluateSupplierPayableEligibility::markDelivered</code>; Failed delivery, Cancelled, Returned &rarr; <code>CancelSupplierPayable</code> (only <code>pending</code> payables move)</td></tr>
+            <tr><td><code>Order\Actions\SynchronizeDeliverySuccessFeesWithDelivery</code></td><td><code>ApplyDeliverySuccessFee</code></td></tr>
+            <tr><td><code>Order\Actions\RestoreReturnedStock</code> (return received)</td><td><code>ReverseSupplierPayable</code></td></tr>
+            <tr><td><code>Inventory\StockReservations</code></td><td><code>SupplierStockReservations</code> for supplier-sourced reservations</td></tr>
+        </tbody>
+    </table>
+    <p>I found <code>AllocateSupplierOrderLine</code> referenced from <code>PlaceWholesaleOrder</code> only (not from <code>PlaceWebsiteOrder</code>); website orders reach suppliers through staff allocation (<code>AllocateOrderLineSource</code>). See the <a href="order.html">Order</a> page for the order side.</p>
+
+    <h3>Flow: order to payable to wallet</h3>
+    <ol>
+        <li><strong>Allocation (placement).</strong> <code>AllocateSupplierOrderLine</code> asks <code>ResolvePreferredOffer</code> which offer serves the line. A variation with no offer at all returns null and takes the unchanged central-stock path. A supplier-sourced variation must be served whole by its <em>preferred</em> offer: no fallback to another supplier, no split, no central top-up; otherwise <code>SupplierAllocationRefused</code> in words that name no supplier. On success it reserves via <code>reserveFromSupplier()</code> and returns a <code>SupplierAllocation</code> (the offer plus the exact price version in force). Audit <code>supplier_offer.allocated</code>.</li>
+        <li><strong>Accrual.</strong> <code>AccrueSupplierPayable</code> (same transaction as the order line) creates a <code>pending</code> payable: gross = snapshotted Supplier Rate &times; allocated quantity, key <code>supplier-payable:&lt;order item public id&gt;</code> (or <code>supplier-payable:allocation:&lt;allocation public id&gt;</code> for staff allocation). Idempotent; unique-violation races return the existing row. Audit <code>supplier_payable.created</code>.</li>
+        <li><strong>Fulfilment commitment</strong> (non-ready-stock only). <code>RecordSupplierFulfilmentCommitment::forAllocation()</code> locks the offer, sums non-terminal commitments, and throws <code>FulfilmentCapacityExhausted</code> if a bounded <code>fulfilment_capacity</code> would be exceeded (null capacity never refuses). <code>due_at</code> = the offer's expected availability, else now + lead time days, else null. <code>confirmation_due_at</code> = now + <code>supplier.fulfilment_confirmation_deadline_hours</code> (default 48). The supplier confirms, prepares, marks ready, fails or declines through <code>AdvanceSupplierFulfilmentCommitment</code> (source supplier, actor null, since a supplier has no <code>users</code> row).</li>
+        <li><strong>Unconfirmed commitments.</strong> The hourly <code>ExpireOverdueFulfilmentCommitments</code> sweep, per commitment under a lock: cancels it (freeing capacity), cancels its pending payable, marks the allocation <code>Released</code>, and returns the line to <code>SourceAllocationPending</code> for staff to choose again. All moves are system-sourced.</li>
+        <li><strong>Payment and delivery.</strong> Payment settlement calls <code>QualifySupplierPayablePayment</code>; delivery calls <code>markDelivered</code>. <code>EvaluateSupplierPayableEligibility</code> records each fact under a row lock, idempotently, and moves <code>pending</code> &rarr; <code>eligible</code> only when both exist. Audit <code>supplier_payable.eligible</code>. <code>RecordSupplierPayableDelivery</code> (needs <code>order.edit</code>) is the original manual stand-in for the delivery event, still present.</li>
+        <li><strong>Delivery success fee.</strong> On delivered, <code>ApplyDeliverySuccessFee</code> computes <code>gross_amount</code> &times; the configured percent (<code>HalfAwayFromZero</code>, via <code>Money::percentage</code>) and debits it with <code>SupplierWalletService::debitFee()</code>, independent of whether the payable has settled. A 0% rate (or a fee that rounds to zero) writes nothing. The rate is frozen on the <code>delivery_success_fees</code> row.</li>
+        <li><strong>Settlement.</strong> Staff run <code>SettleSupplierPayable</code> (single) or <code>BulkSettleSupplierPayables</code> (each payable in its own transaction so one failure does not roll back the rest). It locks the payable, returns it unchanged if <code>settled_at</code> is set, refuses non-<code>eligible</code> or not-earned payables, opens the wallet (<code>OpenSupplierWallet</code>, race-safe get-or-create), credits <code>netAmount()</code> with key <code>supplier-payable-settlement:&lt;public id&gt;</code> and source <code>payable_settlement</code>, sets <code>settled_at</code>/<code>settlement_reference</code>, transitions to <code>settled</code>, audits <code>supplier_payable.settled</code> and notifies the supplier.</li>
+        <li><strong>Returns.</strong> <code>ReverseSupplierPayable</code> never edits the payable: it appends a <code>supplier_payable_reversals</code> row (quantity &times; the payable's rate), moves the payable to <code>partially_reversed</code> or <code>reversed</code>, and if it had already been settled claws the amount back (<code>debitForReversal</code>: debit what is available, raise the rest as <code>recovery</code>). A line with no supplier payable is left alone. Audit <code>supplier_payable.reversed</code>.</li>
+    </ol>
+
+    <h3>Flow: wallet and withdrawal</h3>
+    <ol>
+        <li>A supplier requests a withdrawal in the portal or mobile app with an idempotency key. <code>RequestSupplierWithdrawal</code> requires an operational supplier, a usable payout method owned by that supplier (<code>PayoutOwnerType::Supplier</code>, active), and an amount within <code>SupplierWithdrawalLimits</code> (<code>supplier.withdrawal_minimum</code> default <code>500.00</code>, <code>supplier.withdrawal_maximum</code> default none; floor <code>1.00</code>, ceiling <code>1000000000.00</code>; per-supplier overrides win). The key is durable (a unique index on the row), not the 24-hour cache-based <code>IdempotencyService</code>.</li>
+        <li>In one transaction: the payout destination is snapshotted into <code>payout_snapshot</code>; the wallet is locked and the amount reserved (<code>reserve()</code> writes a <code>withdrawal_reserved</code> ledger entry, drawing from withdrawable money only); the first history row is written; audit <code>supplier_withdrawal.requested</code> (module <code>withdrawal</code>); the supplier is notified; the staff queue is announced.</li>
+        <li>Staff move it with <code>AdvanceSupplierWithdrawalStatus</code> (requested &rarr; under review &rarr; approved &rarr; processing); no money moves in these steps.</li>
+        <li><code>RejectOrFailSupplierWithdrawal</code> (reject from requested/under review, or mark a processing one failed) releases the reservation exactly once (<code>release()</code> entry <code>withdrawal_reservation_released</code>, reason required).</li>
+        <li><code>PaySupplierWithdrawal</code> pays a <code>processing</code> withdrawal: requires the external reference the payout channel returned, and consumes the reservation once (<code>pay()</code>: <code>total</code> and <code>reserved</code> fall together; entry <code>withdrawal_paid_debit</code>). Audit <code>supplier_withdrawal.paid</code>.</li>
+    </ol>
+    <p>Other wallet operations: <code>AdjustSupplierWallet</code> (manual credit or debit; checked with <code>WalletPolicy::canAdjust</code>; a credit must state its balance type; idempotent on the caller's key; audit <code>supplier_wallet.manual_adjustment</code>, sensitive) and <code>ConvertSupplierWalletBalance</code> (<code>WalletPolicy::canConvertBalance</code>, reason, two entries <code>balance_conversion_debit</code>/<code>_credit</code> sharing a <code>conversion_reference</code>, no reverse; audit <code>supplier_wallet.balance_converted</code>). <code>SetSupplierWithdrawalLimits</code> (<code>setDefault</code>, <code>setOverride</code>) audits <code>supplier.withdrawal_limits_default_set</code> and <code>supplier.withdrawal_limit_override_set</code>.</p>
+
+    <h2>Entry points</h2>
+
+    <h3>Supplier web portal (<code>routes/supplier.php</code>)</h3>
+    <p>Prefix <code>/supplier</code>, names <code>supplier.*</code>, middleware <code>noindex</code>; guests use <code>guest:supplier</code>, the rest <code>auth:supplier</code>. Everything under the inner <code>supplier.operational</code> group returns 403 &ldquo;Your Supplier account is not yet approved for this action.&rdquo; unless the supplier is <code>approved</code>. Route parameters are public ids (strings), resolved through the supplier's own relations in the controllers.</p>
+    <table>
+        <thead><tr><th>Area</th><th>Route names (method, URL)</th><th>Controller</th><th>Gate</th></tr></thead>
+        <tbody>
+            <tr><td>Auth (guest)</td><td><code>register</code>, <code>register.store</code>, <code>login</code>, <code>login.store</code>, <code>password.request</code>, <code>password.email</code>, <code>password.reset</code>, <code>password.update</code> (under <code>/supplier/&hellip;</code>)</td><td><code>Supplier\Auth\RegisteredSupplierController</code>, <code>AuthenticatedSupplierSessionController</code>, <code>SupplierPasswordResetLinkController</code>, <code>NewSupplierPasswordController</code></td><td><code>guest:supplier</code></td></tr>
+            <tr><td>Session and verification</td><td><code>logout</code> (POST), <code>verification.notice</code>, <code>verification.verify</code> (signed, <code>throttle:6,1</code>), <code>verification.send</code> (<code>throttle:6,1</code>), <code>verification.mobile</code>, <code>verification.mobile.send</code>, <code>verification.mobile.verify</code></td><td><code>Supplier\Auth\*</code></td><td><code>auth:supplier</code></td></tr>
+            <tr><td>Account</td><td><code>dashboard</code>, <code>notifications.index</code>, <code>notifications.read</code>, <code>notifications.read-one</code>, <code>profile.edit</code>, <code>profile.update</code>, <code>security.edit</code>, <code>security.password.update</code>, <code>account-deletion.store</code> (<code>throttle:5,1</code>), <code>account-deletion.destroy</code></td><td><code>DashboardController</code>, <code>AccountController</code>, <code>AccountDeletionController</code></td><td><code>auth:supplier</code> (deletion is a request that staff decide)</td></tr>
+            <tr><td>KYC</td><td><code>kyc.create</code> (GET <code>/supplier/kyc</code>), <code>kyc.documents.store</code>, <code>kyc.submit</code>, <code>kyc.documents.show</code>, <code>kyc.evidence.{file,value,remove,choose,deselect}</code></td><td><code>KycController</code>, <code>KycDocumentController</code>, <code>KycEvidenceController</code></td><td><code>auth:supplier</code> only, so draft and correction-required suppliers can use it</td></tr>
+            <tr><td>Listings</td><td><code>listings.{index,create,store,show,edit,update}</code>, <code>listings.submission.store</code>, <code>listings.archive</code>, <code>listings.media.{store,update,reorder,destroy,download}</code></td><td><code>ListingController</code>, <code>ListingMediaController</code>, <code>ListingMediaDownloadController</code></td><td><code>supplier.operational</code></td></tr>
+            <tr><td>Lots</td><td><code>listing-lots.{index,create,store,show}</code>, <code>listing-lots.submission.store</code>, <code>listing-lots.archive</code>, <code>listing-lots.items.{store,update,archive}</code></td><td><code>ListingLotController</code>, <code>ListingLotItemController</code></td><td><code>supplier.operational</code></td></tr>
+            <tr><td>Offers and stock</td><td><code>offers.{index,show}</code>, <code>stock.index</code>, <code>stock.updates.store</code> (POST <code>offers/{offer}/stock-updates</code>)</td><td><code>OfferController</code>, <code>StockController</code></td><td><code>supplier.operational</code></td></tr>
+            <tr><td>Orders and money</td><td><code>allocations.{index,show}</code>, <code>payables.{index,show}</code>, <code>fulfilment.{index,show}</code>, <code>fulfilment.advance</code>, <code>wallet.show</code>, <code>wallet.transactions</code>, <code>withdrawals.{index,create,store,show}</code></td><td><code>AllocationController</code>, <code>PayableController</code>, <code>FulfilmentController</code>, <code>WalletController</code>, <code>WithdrawalController</code></td><td><code>supplier.operational</code></td></tr>
+            <tr><td>Payout methods, banks, addresses, locations</td><td><code>payout-methods.{index,store,update,default,archive}</code>, <code>banks.index</code>, <code>banks.branches</code>, <code>addresses.{index,store,update,default,archive}</code>, <code>locations.divisions</code>, <code>locations.children</code></td><td><code>PayoutMethodController</code>, shared <code>BankLookupController</code> and <code>LocationLookupController</code>, <code>AddressController</code></td><td><code>supplier.operational</code></td></tr>
+        </tbody>
+    </table>
+
+    <h3>Mobile supplier API (<code>routes/mobile.php</code> &rarr; <code>routes/mobile/supplier/*.php</code>)</h3>
+    <p>Served under <code>/api/mobile/v1/supplier</code>, names <code>mobile.v1.supplier.*</code>. Sign-in is outside the token group; everything else is <code>auth:sanctum</code> + <code>mobile.access:supplier</code> (a supplier token opens only <code>/supplier/*</code>; a user token never does). Operational routes add <code>mobile.operational</code>. See the <a href="../api/mobile-api.html">Mobile API</a> reference.</p>
+    <table>
+        <thead><tr><th>Route name (suffix)</th><th>Method and path</th><th>Controller</th></tr></thead>
+        <tbody>
+            <tr><td><code>auth.login</code></td><td>POST <code>auth/login</code> (guest; failed attempts throttled by <code>LoginRateLimiter</code>: the docblock says 5 per minute per email, 30 per quarter-hour per address; 429)</td><td><code>Supplier\Auth\SupplierSessionController@store</code>; replaces a same-named device token and issues a Sanctum token</td></tr>
+            <tr><td><code>auth.me</code>, <code>auth.logout</code></td><td>GET <code>auth/me</code>, POST <code>auth/logout</code></td><td><code>SupplierSessionController</code></td></tr>
+            <tr><td><code>listings.*</code></td><td>GET <code>listings</code>, GET <code>listings/options</code>, POST <code>listings</code>, GET/PATCH <code>listings/{listing}</code>, POST <code>listings/{listing}/submission</code>, POST <code>listings/{listing}/archive</code>, media: POST <code>listings/{listing}/media</code>, POST <code>.../media/reorder</code>, PATCH/DELETE <code>.../media/{media}</code>, GET <code>listings/media/{media}/download</code></td><td><code>Listings\ListingController</code>, <code>ListingMediaController</code>, <code>ListingMediaDownloadController</code></td></tr>
+            <tr><td><code>listing-lots.*</code></td><td>GET/POST <code>listing-lots</code>, GET <code>listing-lots/{lot}</code>, POST <code>.../submission</code>, POST <code>.../archive</code>, POST <code>.../items</code>, PATCH <code>.../items/{item}</code>, POST <code>.../items/{item}/archive</code></td><td><code>ListingLots\ListingLotController</code>, <code>ListingLotItemController</code></td></tr>
+            <tr><td><code>offers.*</code>, <code>stock.*</code></td><td>GET <code>offers</code>, GET <code>offers/{offer}</code>, GET <code>stock</code>, POST <code>offers/{offer}/stock-updates</code></td><td><code>Offers\OfferController</code>, <code>Stock\StockController</code></td></tr>
+            <tr><td><code>allocations.*</code>, <code>payables.*</code>, <code>fulfilment.*</code></td><td>GET <code>allocations</code>, <code>allocations/{item}</code>, <code>payables</code>, <code>payables/{payable}</code>, <code>fulfilment</code>, <code>fulfilment/{commitment}</code>; POST <code>fulfilment/{commitment}/advance</code></td><td><code>Allocations\AllocationController</code>, <code>Payables\PayableController</code>, <code>Fulfilment\FulfilmentController</code></td></tr>
+            <tr><td><code>wallet.*</code>, <code>withdrawals.*</code></td><td>GET <code>wallet</code>, GET <code>wallet/transactions</code>; GET <code>withdrawals</code>, GET <code>withdrawals/options</code>, POST <code>withdrawals</code>, GET <code>withdrawals/{withdrawal}</code></td><td><code>Wallet\WalletController</code>, <code>Withdrawals\WithdrawalController</code></td></tr>
+        </tbody>
+    </table>
+    <div class="callout callout-warn"><p><strong>Gotcha (observed, not decided).</strong> The mobile controller directories <code>Registration</code>, <code>Verification</code>, <code>Kyc</code>, <code>Password</code>, <code>Addresses</code>, <code>PayoutMethods</code>, <code>Banks</code>, <code>Locations</code> and <code>Account</code> (profile, security, notifications, dashboard, deletion) exist under <code>app/Http/Controllers/Api/Mobile/V1/Supplier/</code>, but I found no route referencing them in <code>routes/mobile/supplier/**</code> (the only files that mention <code>V1\Supplier\</code> are the eleven listed there). Until routes are added they are unreachable, so a mobile supplier cannot register, verify, submit KYC or reset a password from the app. Confirm with the team before relying on them.</p></div>
+
+    <h3>Staff (admin) routes (<code>routes/web.php</code>, inside the <code>admin</code> group: <code>auth</code>, <code>noindex</code>, <code>two-factor</code>)</h3>
+    <table>
+        <thead><tr><th>Area</th><th>Route names (<code>admin.</code> prefix)</th><th>Controller; guard</th></tr></thead>
+        <tbody>
+            <tr><td>Suppliers</td><td><code>suppliers.{index,create,store,show}</code>, <code>suppliers.setup-link.{store,destroy}</code>, <code>suppliers.verify-contact</code>, <code>suppliers.approval.store</code>, <code>suppliers.rejection.store</code>, <code>suppliers.suspension.store</code>, <code>suppliers.reactivation.store</code></td><td><code>SupplierController</code>, <code>ManagedSupplierController</code>; <code>SupplierPolicy</code></td></tr>
+            <tr><td>Supplier KYC</td><td><code>suppliers.kyc.documents.show</code>, <code>suppliers.kyc.correction.store</code>, <code>suppliers.kyc.evidence-review</code>, <code>suppliers.kyc.evidence-value</code>, <code>suppliers.kyc.batch.store</code>; upload on behalf: <code>suppliers/{supplier}/kyc-upload[/targets]</code> (<code>KycUploadOnBehalfController</code>); open the supplier's dashboard: <code>suppliers/{supplier}/open-dashboard</code> (<code>DashboardAccessController</code>)</td><td><code>SupplierController</code>; <code>SupplierKycSubmissionPolicy</code> plus the shared <code>KycBatch</code> policy</td></tr>
+            <tr><td>Listings</td><td><code>supplier-listings.{index,show}</code>, <code>.correction.store</code>, <code>.decision.store</code>; <code>supplier-listing-lots.{index,show}</code>, <code>.decision.store</code></td><td><code>SupplierListingController</code>, <code>SupplierListingLotReviewController</code></td></tr>
+            <tr><td>Offers</td><td><code>supplier-offers.{index,show}</code>, <code>.rates.store</code>, <code>.activation.store</code>, <code>.suspension.store</code>, <code>.preferred.store</code>, <code>.stock-adjustment.store</code>; <code>product-suppliers/&hellip;</code> (assign, change price)</td><td><code>SupplierOfferController</code> (<code>SupplierOfferPolicy</code>), <code>SupplierStockController</code>, <code>ProductSupplierController</code></td></tr>
+            <tr><td>Stock</td><td><code>supplier-stock.index</code>, <code>supplier-stock.decision.store</code></td><td><code>SupplierStockController</code>; <code>supplier_stock.view</code> / <code>.edit</code></td></tr>
+            <tr><td>Allocations and payables</td><td><code>supplier-allocations.{index,show}</code>, <code>supplier-payables.{index,show}</code>, <code>supplier-payables.settle</code>, <code>supplier-payables.bulk-settle</code> (the last two behind <code>RequirePassword</code>)</td><td><code>SupplierAllocationController</code>, <code>SupplierPayableController</code>; <code>SupplierPayablePolicy</code></td></tr>
+            <tr><td>Wallets</td><td><code>supplier-wallets.{index,show}</code>, <code>supplier-wallets.adjustments.store</code>, <code>supplier-wallets.conversions.store</code> (the last two behind <code>RequirePassword</code>)</td><td><code>SupplierWalletController</code>, <code>SupplierWalletAdjustmentController</code></td></tr>
+            <tr><td>Withdrawals</td><td><code>supplier-withdrawals.{index,show,approve,reject,process,paid,failed}</code>; <code>paid</code> behind <code>RequirePassword</code></td><td><code>SupplierWithdrawalController</code>; <code>SupplierWithdrawalPolicy</code></td></tr>
+            <tr><td>Limits</td><td><code>withdrawal-limits/supplier</code> (PUT), <code>withdrawal-limits/supplier/override</code> (POST)</td><td><code>WithdrawalLimitsController</code></td></tr>
+        </tbody>
+    </table>
+    <p><strong>Scheduled:</strong> <code>supplier-fulfilment-confirmation-sweep</code> (<code>ExpireOverdueFulfilmentCommitments</code>), hourly, <code>onOneServer()</code>, <code>withoutOverlapping()</code> (<code>routes/console.php</code>). No Supplier console commands.</p>
+
+    <h2>Permissions &amp; scoping</h2>
+    <h3>Supplier-side scoping</h3>
+    <p>Suppliers are never evaluated by a policy or Gate (a supplier is not a <code>User</code>). Self-scoping is a query concern: controllers start from the authenticated supplier's own relations (<code>$request->user('supplier')-&gt;listings()</code>, <code>offers()</code>, <code>lots()</code>, <code>wallets()</code>, <code>withdrawals()</code>) and never take a bare route-bound model, so a supplier cannot reach another's data by guessing or editing a URL (&sect;31.3). Actions also re-check ownership (&ldquo;This listing does not belong to this Supplier.&rdquo;). The operational gate is <code>supplier.operational</code> / <code>mobile.operational</code>.</p>
+
+    <h3>Staff permissions</h3>
+    <table>
+        <thead><tr><th>Policy / action</th><th>Permission (module.action)</th></tr></thead>
+        <tbody>
+            <tr><td><code>SupplierPolicy</code> view, viewAny</td><td><code>supplier.view</code></td></tr>
+            <tr><td>create / update / verify contact</td><td><code>supplier.create</code> / <code>supplier.edit</code> / <code>supplier.verify</code></td></tr>
+            <tr><td>decide (approve or reject KYC)</td><td><code>supplier.approve</code></td></tr>
+            <tr><td>suspend, reactivate</td><td><code>supplier.suspend</code></td></tr>
+            <tr><td>open the supplier's dashboard</td><td><code>account.view_sensitive_data</code></td></tr>
+            <tr><td><code>SupplierKycSubmissionPolicy</code> view / review; upload on behalf</td><td><code>supplier.kyc.view</code> / <code>supplier.kyc.review</code> (the module value is <code>supplier.kyc</code>)</td></tr>
+            <tr><td><code>SupplierProductListingPolicy</code> and <code>SupplierProductListingLotPolicy</code></td><td><code>supplier_listing.view</code>, <code>.review</code> (request correction), <code>.approve</code> (decide)</td></tr>
+            <tr><td><code>SupplierOfferPolicy</code></td><td><code>supplier_pricing.view</code> / <code>supplier_pricing.edit</code> (rates, activate, suspend, preferred). Not granted to ordinary catalogue roles by default.</td></tr>
+            <tr><td>Stock review</td><td><code>supplier_stock.view</code> / <code>supplier_stock.edit</code></td></tr>
+            <tr><td><code>SupplierPayablePolicy</code></td><td><code>supplier_payable.view</code>; settle = <code>supplier_payable.approve</code></td></tr>
+            <tr><td><code>SupplierWithdrawalPolicy</code></td><td>Reuses the <code>withdrawal.*</code> strings: <code>view</code>; <code>approve</code> (approve, process); <code>reject</code> (reject, mark failed); <code>release_payment</code> (mark paid). The docblock states <code>SupplierManager</code> may view, advance and reject but only <code>WithdrawalApprover</code> may release a payment.</td></tr>
+            <tr><td>Assign a product to a supplier</td><td><code>product_supplier.create</code> and <code>supplier_pricing.edit</code> (<code>ProductSupplierPolicy::canAssign</code>)</td></tr>
+            <tr><td>Wallet adjustment, conversion</td><td><code>wallet.adjust_wallet</code>, <code>wallet.convert_balance</code></td></tr>
+            <tr><td>Record a delivery manually</td><td><code>order.edit</code></td></tr>
+            <tr><td>Account erasure request</td><td><code>supplier.delete</code> (per the routes comment in <code>web.php</code>)</td></tr>
+        </tbody>
+    </table>
+
+    <h2>Money, ledger &amp; audit effects</h2>
+    <ul>
+        <li><strong>Money type.</strong> Supplier rates, platform rates, gross amounts, fees and wallet columns are <code>Money</code> (exact decimal Taka strings). Withdrawal limits are decimal strings parsed at the boundary. Platform rate vs base price comparison and the fee percentage use <code>Money</code> methods, never floats.</li>
+        <li><strong>The ledger is <code>supplier_ledger_entries</code>.</strong> Every balance change goes through <code>SupplierWalletService</code>, which writes the immutable entry in the same transaction under <code>lockForUpdate</code>, idempotent by key. Never write a wallet column elsewhere. Methods: <code>credit</code>, <code>debitForReversal</code>, <code>debitFee</code>, <code>reserve</code>, <code>release</code>, <code>pay</code>, <code>adjust</code>, <code>convertToWithdrawable</code>.</li>
+        <li><strong>Two kinds of money.</strong> Every entry carries a <code>balance_type</code>. A supplier's earnings (settlement) are <em>withdrawable</em>. A debit inside the platform (fee or reversal) spends platform credit first and, when it takes both kinds, writes one entry for each under keys carrying the command key as a prefix. A withdrawal's reservation is withdrawable money only.</li>
+        <li><strong>Formulas</strong> (<code>.ai/rules/wallet.md</code>): Withdrawable Available = <code>max(0, (total - platform_credit) - reserved_w - recovery)</code>; Available to Spend = <code>max(0, total - reserved - recovery)</code>; recovery stands against withdrawable money. <code>SupplierWallet::availableBalance()</code> is <code>total - reserved - recovery</code> floored at zero. Never compute withdrawable as <code>total - platform_credit</code>: that is a holding.</li>
+        <li><strong>Idempotency keys.</strong> <code>supplier-payable:&hellip;</code>, <code>supplier-payable-settlement:&lt;payable public id&gt;</code>, <code>supplier-withdrawal-reserve:&lt;withdrawal public id&gt;</code>, <code>delivery-success-fee:&lt;payable public id&gt;</code>, <code>supplier-wallet-adjustment:&lt;wallet public id&gt;:&lt;caller key&gt;</code>, <code>supplier-reservation:&lt;reference&gt;</code> (stock), plus the unique keys on payables, reversals, withdrawals and movements.</li>
+        <li><strong>Immutability.</strong> Ledger entries, status histories, stock movements, price changes, reversals and delivery success fees are append-only (model guards and database triggers). Corrections are new rows (<code>corrects_ledger_entry_id</code>).</li>
+        <li><strong>Audit actions</strong> (<code>AuditEntry</code>; module is a <code>PermissionModule</code> value): <code>supplier.approved</code>, <code>supplier.rejected</code>, <code>supplier.suspended</code>, <code>supplier.reactivated</code>, <code>supplier.created_by_staff</code>, <code>supplier.withdrawal_limits_default_set</code>, <code>supplier.withdrawal_limit_override_set</code>; <code>supplier_kyc.submitted</code>, <code>.resubmitted</code>, <code>.correction_requested</code>; <code>supplier_listing.submitted</code>, <code>.resubmitted</code>, <code>.correction_requested</code>, <code>supplier_listing.&lt;decided status&gt;</code>; <code>supplier_listing_lot.submitted</code>, <code>.resubmitted</code>, <code>supplier_listing_lot.&lt;status&gt;</code>; <code>supplier_offer.allocated</code>, <code>.assigned</code>, <code>.rates_changed</code>, <code>.preferred_selected</code>, <code>.activated</code>, <code>.suspended</code>; <code>supplier_stock.adjusted</code>, <code>.approved</code>, <code>.rejected</code>, <code>.reserved</code>, <code>.committed</code>, <code>.released</code>; <code>supplier_payable.created</code>, <code>.eligible</code>, <code>.settled</code>, <code>.cancelled</code>, <code>.on_hold</code>, <code>.reversed</code>; <code>supplier_fulfilment_commitment.created</code>; <code>supplier_withdrawal.requested</code>, <code>supplier_withdrawal.&lt;status&gt;</code>, <code>.paid</code>; <code>supplier_wallet.manual_adjustment</code>, <code>.balance_converted</code>. Supplier-initiated entries use <code>actorType: 'supplier'</code> with the business name as label and no actor id.</li>
+    </ul>
+
+    <h2>Configuration</h2>
+    <table>
+        <thead><tr><th>Key</th><th>Meaning</th></tr></thead>
+        <tbody>
+            <tr><td>Env <code>SUPPLIER_FULFILMENT_CONFIRMATION_DEADLINE_HOURS</code> (<code>config('supplier.fulfilment_confirmation_deadline_hours')</code>)</td><td>Hours a supplier has to confirm a non-ready-stock commitment. Default 48.</td></tr>
+            <tr><td>Setting <code>supplier.withdrawal_minimum</code> / <code>supplier.withdrawal_maximum</code></td><td>Global withdrawal limits (default <code>500.00</code> / none; bounded by <code>1.00</code> and <code>1000000000.00</code>). Per-supplier <code>withdrawal_minimum_override</code> / <code>withdrawal_maximum_override</code> on <code>suppliers</code>. Admin: <code>withdrawal-limits/supplier</code>.</td></tr>
+            <tr><td>Setting <code>delivery_success_fee_percent</code> (<code>DeliveryChargeSettings</code>, Billing)</td><td>Percentage charged on delivery. Validated 0&ndash;100 with at most 2 decimals in <code>Admin\DeliverySettingsController</code>.</td></tr>
+            <tr><td>Admin setting: mobile-verification requirement (shared with partners)</td><td>When off, suppliers are not held at verification waiting for a mobile code.</td></tr>
+            <tr><td><code>config/auth.php</code>: guard <code>supplier</code>, provider <code>suppliers</code>, broker <code>suppliers</code> (table <code>supplier_password_reset_tokens</code>; <code>AUTH_PASSWORD_RESET_EXPIRE</code>, <code>AUTH_PASSWORD_RESET_THROTTLE</code>)</td><td>Separate authentication boundary (D25).</td></tr>
+            <tr><td><code>config/filesystems.php</code> disks <code>kyc</code>, <code>supplier-media</code>; env <code>SUPPLIER_MEDIA_DISK_DRIVER</code>, <code>KYC_DISK_DRIVER</code></td><td>Private storage; see <a href="storage.html">Storage</a>.</td></tr>
+        </tbody>
+    </table>
+
+    <h2>Rules, invariants &amp; gotchas</h2>
+    <ul>
+        <li><strong>Two separate identities.</strong> The <code>supplier</code> and <code>web</code> guards share the one Redis-backed session but namespace their logins separately. A browser can hold both logins; what is guaranteed is <em>authorisation</em> (D25 explicitly rejected a separate cookie for this batch). Never gate a supplier route with <code>auth</code> or a partner route with <code>auth:supplier</code>.</li>
+        <li><strong>Suppliers are never deleted.</strong> <code>suppliers_no_delete</code>, listings, items, withdrawals and payout methods all have never-delete triggers. A supplier asks for erasure; staff with <code>supplier.delete</code> decide (<code>deletions.*</code> routes).</li>
+        <li><strong>Supplier KYC is its own small engine</strong> (D25), but rounds can be placed on a shared KYC batch version (D30); evidence reviews, <code>KycCompletion</code> and <code>KycApprovalReadiness</code> are shared, with <code>SupplierKycRound</code> adapting. Approving a batch round is refused until groups are met and evidence is reviewed (<code>KycReviewRefused::notReadyToApprove</code>).</li>
+        <li><strong>Immutability windows.</strong> Listing media, listing columns and items freeze when the listing leaves <code>draft</code>/<code>correction_required</code> (database triggers as well as <code>isEditableBySupplier()</code>). A rejected, approved or archived entry can no longer be edited away.</li>
+        <li><strong>Lot submission is all-or-nothing; lot review is per-entry.</strong> This asymmetry is intentional.</li>
+        <li><strong>Supplier-sourced is sticky.</strong> The moment a variation has any offer (even suspended), central stock is no longer used for it, and <code>SupplierSourcedAvailability</code> returns zero when the preferred offer is suspended, its supplier is not operational, or none is preferred. Suspending the only offer therefore makes the product unavailable rather than falling back to central stock.</li>
+        <li><strong>Preferred offer is manual.</strong> There is no cheapest-supplier algorithm anywhere. Making one preferred writes the Platform Rate into <code>wholesale_price</code>; the supplier's rate and identity never reach the catalogue.</li>
+        <li><strong>Price versions are what orders snapshot.</strong> Changing a rate afterwards does not restate any allocation or payable. A payable's amount is always the snapshotted rate &times; quantity.</li>
+        <li><strong>Payable &ne; money.</strong> A payable credits no wallet. Reversing a settled payable can leave <code>recovery</code> on the wallet, which is never paid down explicitly; it is netted out of every later availability calculation.</li>
+        <li><strong>Delivery success fee is charged at delivery</strong> regardless of settlement and is not reversed here when an order later returns (the decisions file notes a later return does not reverse a delivery-success fee on the supplier side; confirm in D35 before changing).</li>
+        <li><strong>Withdrawal reservations are exactly-once.</strong> Release and pay both lock the wallet first and rely on the withdrawal's own state machine to refuse a repeat. Never add a path that changes <code>reserved</code> outside <code>SupplierWalletService</code>.</li>
+        <li><strong>Settle needs a re-entered password</strong> (<code>RequirePassword</code>) in the admin, as do mark-paid, wallet adjustment and conversion.</li>
+        <li><strong>The web supplier login has no throttle.</strong> <code>AuthenticatedSupplierSessionController@store</code> calls <code>Auth::guard('supplier')-&gt;attempt()</code> directly and its route has no throttle middleware, unlike the mobile login which uses <code>LoginRateLimiter</code>. See the report.</li>
+        <li><strong>Mobile controllers without routes</strong> (see the callout above).</li>
+        <li><strong>Pest helper prefix.</strong> Supplier test helpers are prefixed <code>supplier*</code>; keep new ones prefixed (global function namespace).</li>
+    </ul>
+
+    <h2>How to&hellip;</h2>
+    <h3>Add a field to a supplier's listing item</h3>
+    <ol>
+        <li>Add a migration for <code>supplier_product_listing_items</code> (and a check constraint if it has a rule). If the column must be frozen after submission, extend the <code>supplier_product_listing_items_locked_columns</code> trigger.</li>
+        <li>Add it to <code>SupplierProductListingItem</code> (docblock, cast).</li>
+        <li>Accept it in <code>SaveSupplierListingDraft</code> and the validators of <code>Supplier\ListingController</code> / <code>ListingLotItemController</code> and their mobile twins; show it in <code>ValidateSupplierListingLotForSubmission</code> if it affects submittability.</li>
+        <li>Show it on the supplier pages (<code>pages/supplier/listings/form.tsx</code>, <code>listing-lots/entry-dialog.tsx</code>) and the admin review page; copy it to the offer in <code>DecideSupplierListing::approveItem()</code> if it should live on the offer.</li>
+        <li>Add strings to <code>lang/{en,bn}/supplier.php</code>. Never expose <code>supplier_rate</code> to a partner prop.</li>
+    </ol>
+    <h3>Add a new supply mode</h3>
+    <ol>
+        <li>Add the case to <code>SupplyMode</code> with <code>label()</code>, <code>buyerFacingLabel()</code>, and decide <code>requiresStaffConfirmationAtAllocation()</code>.</li>
+        <li>Update the check constraints on <code>supplier_product_listing_items</code>, <code>supplier_offers</code> (<code>supply_mode_known</code> and the mode-specific requirements).</li>
+        <li>Review <code>DecideSupplierListing</code> (stock opened only for <code>ReadyStock</code>), <code>RecordSupplierFulfilmentCommitment</code> and <code>SupplierSourcedAvailability</code>.</li>
+    </ol>
+    <h3>Add a new ledger entry type to the supplier wallet</h3>
+    <ol>
+        <li>Add the case to <code>SupplierLedgerEntryType</code> and fill <code>direction()</code>, <code>creditBalanceType()</code>, <code>requiresReason()</code>, <code>requiresActor()</code>, <code>label()</code>.</li>
+        <li>Add a method (or extend one) in <code>SupplierWalletService</code>; never write wallet columns from an action.</li>
+        <li>Widen any database check on the <code>type</code> or <code>source</code> column in a new migration, and add an idempotency key.</li>
+        <li>Wrap the caller in a transaction with the locked source row, and write an audit entry.</li>
+    </ol>
+    <h3>Add a status transition</h3>
+    <ol>
+        <li>Edit the enum's <code>transitionsTo()</code> (and its <code>status_known</code> check in the migration for new cases); move through <code>transitionTo()</code> or <code>transitionWithHistory()</code>.</li>
+        <li>Update the matching <code>*_status_history</code> source/consistency checks if you add a change source.</li>
+    </ol>
+    <h3>Add a new supplier notification</h3>
+    <ol>
+        <li>Create the class under <code>app/Notifications/Supplier/</code> (extend <code>SupplierLifecycleNotification</code> where it fits) and send it with <code>$supplier-&gt;notify((new X)-&gt;locale($supplier-&gt;locale))</code> from the action, after the transaction commits where possible. Do not include rates.</li>
+    </ol>
+    <h3>Expose a new supplier screen on mobile</h3>
+    <ol>
+        <li>Add the controller under <code>Api/Mobile/V1/Supplier/&lt;Area&gt;</code>, a route file <code>routes/mobile/supplier/&lt;area&gt;.php</code> (auto-loaded by the glob) inside <code>Route::middleware('mobile.operational')</code> if it is operational-only, and scope queries through the authenticated supplier.</li>
+        <li>Add a test with <code>mobile.v1.supplier.&lt;area&gt;.&lt;action&gt;</code> route names and update the API docs.</li>
+    </ol>
+
+    <h2>Testing</h2>
+    <pre><code>vendor/bin/pest tests/Feature/Supplier         # or --group=supplier, in its own schema (see the Testing page)
+vendor/bin/pest tests/Feature/Mobile/MobileSupplier*
+vendor/bin/pest tests/Feature/Api/Mobile/Supplier
+vendor/bin/pest tests/Feature/Concurrency/Supplier*</code></pre>
+    <table>
+        <thead><tr><th>Area</th><th>Files</th></tr></thead>
+        <tbody>
+            <tr><td>Auth isolation, KYC</td><td><code>SupplierAuthIsolationTest</code>, <code>SupplierKycLifecycleTest</code>, <code>SupplierDynamicKycTest</code>, <code>SupplierMobileVerificationRequirementTest</code>, <code>SupplierLocaleTest</code></td></tr>
+            <tr><td>Listings and lots</td><td><code>SupplierListingTest</code>, <code>SupplierListingMediaTest</code>, <code>SupplierListingVariantAttributesTest</code>, <code>SupplierListingLogisticsTest</code>, <code>SupplierListingBatchConsistencyTest</code>, <code>SupplierListingLotSchemaTest</code>, <code>SupplierListingLotWorkspaceTest</code>, <code>SupplierListingLotAtomicSubmissionTest</code>, <code>DecideSupplierListingLotTest</code></td></tr>
+            <tr><td>Offers, pricing, assignment, stock</td><td><code>SupplierOffersPerProductTest</code>, <code>SupplierOfferSupplyModeTest</code>, <code>SupplierPricingTest</code>, <code>SupplierBasePriceAllocationTest</code>, <code>SupplierProductAssignmentTest</code>, <code>SupplierProductAssignmentScreensTest</code>, <code>SupplierStockTest</code></td></tr>
+            <tr><td>Orders and fulfilment</td><td><code>SupplierOrderAllocationTest</code>, <code>SupplierFulfilmentWorkspaceTest</code>, <code>SupplierFulfilmentCommitmentStateMachineTest</code>, <code>tests/Feature/Orders/OrderDeliveryTriggersSupplierPayableEligibilityTest.php</code></td></tr>
+            <tr><td>Wallet and finance</td><td><code>SupplierWalletTest</code>, <code>SupplierTypedBalanceTest</code>, <code>SupplierFinanceAdminTest</code>, <code>SupplierFinanceScreensTest</code>, <code>SupplierDashboardTest</code></td></tr>
+            <tr><td>Concurrency</td><td><code>tests/Feature/Concurrency/Supplier{Stock,FulfilmentCommitment,Wallet}ConcurrencyTest.php</code></td></tr>
+            <tr><td>Mobile</td><td><code>tests/Feature/Mobile/MobileSupplier{Auth,OffersAndStock,OrderLines,Wallet,Withdrawal}Test.php</code>, <code>tests/Feature/Api/Mobile/Supplier/MobileSupplier{Listing,ListingLot,ListingMedia}Test.php</code></td></tr>
+        </tbody>
+    </table>
+    <p>Helpers in <code>tests/Pest.php</code>: <code>supplierTestSignIn()</code>, <code>supplierTestListing()</code>, <code>supplierTestOffer()</code>, <code>supplierTestConnect()</code>, <code>supplierTestOfferPriceVersion()</code>. <code>SupplierFactory</code> has states <code>draft</code>, <code>verificationPending</code>, <code>kycPending</code>, <code>underReview</code>, <code>correctionRequired</code>, <code>rejected</code>, <code>suspended</code>, <code>closed</code>, <code>unverified</code> (the default definition is the approved supplier, as far as I read; not verified). Concurrency suites must be run one at a time in their own schema.</p>
+
+    <h2>Related modules</h2>
+    <ul>
+        <li><a href="order.html">Order</a> &mdash; placement, allocation, delivery, returns hooks</li>
+        <li><a href="inventory.html">Inventory</a> &mdash; <code>StockReservations</code>, stock buckets and ledger</li>
+        <li><a href="catalog.html">Catalog</a> &mdash; products, variants, wholesale price, <code>ManageProducts</code></li>
+        <li><a href="sourcing.html">Sourcing</a> &mdash; product-supplier assignment policy</li>
+        <li><a href="wallet.html">Wallet</a> &mdash; the partner twin of the supplier wallet; two kinds of money</li>
+        <li><a href="withdrawal.html">Withdrawal</a>, <a href="payout.html">Payout</a>, <a href="bank.html">Bank</a>, <a href="address.html">Address</a></li>
+        <li><a href="kyc.html">KYC</a> &mdash; batches (D30) shared with supplier KYC</li>
+        <li><a href="storage.html">Storage</a> &mdash; <code>kyc</code> and <code>supplier-media</code> disks</li>
+        <li><a href="access.html">Access</a>, <a href="audit.html">Audit</a>, <a href="notification.html">Notification</a>, <a href="billing.html">Billing</a> (delivery settings)</li>
+        <li><a href="../api/mobile-api.html">Mobile API</a>, <a href="../guide/decisions.html">Decisions</a></li>
+    </ul>
+</main>
+</body>
+</html>

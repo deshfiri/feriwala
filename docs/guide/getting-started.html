@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Getting started</title>
+    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+    <script src="../assets/docs.js"></script>
+</head>
+<body>
+<main id="doc">
+    <h1>Getting started</h1>
+    <p class="lead">From a fresh WSL Ubuntu shell to a running Feriwala ERP you can log into: prerequisites, installation, environment, Redis layout, seeding, local media, the dev processes and the errors people hit on the first run.</p>
+
+    <div class="callout callout-rule"><p><strong>Rule.</strong> Local development is native: PHP, PostgreSQL, Redis and Node run directly in WSL Ubuntu and the app is served by <code>php artisan serve</code> (decision <a href="decisions.html">D5</a>, amended twice). Docker and Sail are not a development path and nothing may come to require them. <code>compose.yaml</code> is a production-parity reference only.</p></div>
+
+    <h2>Prerequisites</h2>
+    <table>
+        <thead><tr><th>Component</th><th>Version</th><th>Notes</th></tr></thead>
+        <tbody>
+            <tr><td>PHP</td><td>8.5 (CI and the Boost MCP config use 8.5); <code>composer.json</code> allows <code>^8.3</code></td><td>Extensions: <code>pdo_pgsql</code>, <code>pgsql</code>, <code>mbstring</code>, <code>bcmath</code>, <code>intl</code> (the CI list), plus the usual xml/curl/zip. <code>bcmath</code> is mandatory: <code>Money</code> does all arithmetic through it. The <code>phpredis</code> extension is not required; the app uses <code>predis</code> (<code>REDIS_CLIENT=predis</code>).</td></tr>
+            <tr><td>PostgreSQL</td><td>18</td><td>Required. SQLite and MySQL are not supported (requirements.txt §2, §37). The schema uses triggers, partial unique indexes and CHECK constraints (see <a href="database.html">Database</a>).</td></tr>
+            <tr><td>Redis</td><td>8</td><td>Cache, sessions, queues, rate limiting, locks. Five logical databases are used, see below.</td></tr>
+            <tr><td>Node</td><td>22 (CI)</td><td>Frontend tooling runs on <code>vite-plus</code> (<code>vp</code>), Vite 8, React 19, Inertia 3, Tailwind 4.</td></tr>
+            <tr><td>Composer</td><td>2</td><td></td></tr>
+        </tbody>
+    </table>
+    <p>The framework is Laravel 13 (<code>laravel/framework ^13.17</code> in <code>composer.json</code>), not 12.</p>
+
+    <div class="callout callout-note"><p><strong>Windows plus WSL.</strong> Keep the checkout inside the WSL filesystem (<code>~/projects/feriwala</code>) and run every <code>php</code>, <code>composer</code>, <code>npm</code> and <code>psql</code> command in a WSL shell. Windows editors can open it through <code>\\wsl.localhost\Ubuntu\home\&lt;you&gt;\projects\feriwala</code>. Do not run PHP from a Windows path, and do not install a second set of dependencies from Windows: <code>vendor/</code> and <code>node_modules/</code> are built for the platform that installed them (<code>package.json</code> lists both linux and win32 native optional dependencies, but only the installing platform's are used). The Laravel Boost MCP server is started through <code>wsl.exe /usr/bin/php8.5 .../artisan boost:mcp</code> (<code>.mcp.json</code>). If your editor formats on save, see the note about <code>vp check</code> in <a href="testing.html">Testing</a>.</p></div>
+
+    <h2>Install the services</h2>
+    <p><code>scripts/setup-dev-environment.sh</code> installs PostgreSQL and Redis from Ubuntu apt, enables both services, creates the <code>feriwala</code> role and database, and creates the <code>testing</code> schema the test suite uses. It is safe to re-run. It asks for your sudo password once.</p>
+    <pre><code>bash scripts/setup-dev-environment.sh</code></pre>
+    <p>The script's database password defaults to a placeholder and can be overridden with <code>DB_PASS=... bash scripts/setup-dev-environment.sh</code>. Whatever it is, <code>DB_PASSWORD</code> in your <code>.env</code> must match it. The role owns the database, so it can create schemas without <code>CREATEDB</code>.</p>
+
+    <h2>Clone and install</h2>
+    <pre><code>git clone &lt;repo&gt; ~/projects/feriwala
+cd ~/projects/feriwala
+composer setup</code></pre>
+    <p><code>composer setup</code> is a script in <code>composer.json</code>. In order it runs:</p>
+    <ol>
+        <li><code>composer install</code></li>
+        <li>copies <code>.env.example</code> to <code>.env</code> if <code>.env</code> does not exist</li>
+        <li><code>php artisan key:generate</code></li>
+        <li><code>php artisan migrate --force</code></li>
+        <li><code>npm install</code></li>
+        <li><code>npm run build</code> (<code>vp build</code>)</li>
+    </ol>
+    <div class="callout callout-warn"><p><strong>Gotcha.</strong> Step 4 needs PostgreSQL running and the <code>DB_*</code> values in the freshly copied <code>.env</code> to be right. <code>.env.example</code> already points at <code>127.0.0.1:5432</code>, database and user <code>feriwala</code>, so it works as-is after the setup script if the password matches. If step 4 fails, fix <code>.env</code> and run the remaining steps by hand; the script is not resumable.</p></div>
+    <p><code>.env</code> is gitignored along with every <code>.env.*</code> except <code>.env.example</code>; a test (<code>TrackedEnvironmentFilesTest</code>) fails the build if another environment file is ever tracked. Never commit one.</p>
+
+    <h2>Environment variables</h2>
+    <p>Only names are listed here. Defaults and comments live in <code>.env.example</code> and in the <code>config/*.php</code> file that reads each variable.</p>
+    <table>
+        <thead><tr><th>Group</th><th>Variables</th><th>Notes</th></tr></thead>
+        <tbody>
+            <tr><td>Application</td><td><code>APP_NAME</code>, <code>APP_ENV</code>, <code>APP_KEY</code>, <code>APP_DEBUG</code>, <code>APP_TIMEZONE</code>, <code>APP_URL</code>, <code>APP_PREVIOUS_KEYS</code></td><td><code>APP_TIMEZONE</code> is <code>Asia/Dhaka</code>; scheduled sweeps use it so "overdue today" means the account holder's day. <code>APP_NAME</code> is <code>Banij</code> (the product's brand name). <code>APP_URL</code> matters for media, see below.</td></tr>
+            <tr><td>Locale</td><td><code>APP_LOCALE</code>, <code>APP_FALLBACK_LOCALE</code>, <code>APP_FAKER_LOCALE</code></td><td>English default with a Bangla toggle; UI strings are in <code>lang/en</code> and <code>lang/bn</code>.</td></tr>
+            <tr><td>Maintenance</td><td><code>APP_MAINTENANCE_DRIVER</code>, <code>APP_MAINTENANCE_STORE</code></td><td><code>file</code> locally. A multi-server deployment would need a shared store.</td></tr>
+            <tr><td>Server</td><td><code>PHP_CLI_SERVER_WORKERS</code></td><td>Commented out. Raises <code>php artisan serve</code> concurrency.</td></tr>
+            <tr><td>Hashing and auth</td><td><code>BCRYPT_ROUNDS</code>, <code>AUTH_PASSWORD_RESET_EXPIRE</code>, <code>AUTH_PASSWORD_RESET_THROTTLE</code>, <code>AUTH_GUARD</code>, <code>AUTH_MODEL</code>, <code>AUTH_PASSWORD_BROKER</code>, <code>AUTH_PASSWORD_TIMEOUT</code>, <code>PASSKEYS_USER_HANDLE_SECRET</code></td><td>The reset-window and throttle are called out in §6.</td></tr>
+            <tr><td>Logging</td><td><code>LOG_CHANNEL</code>, <code>LOG_STACK</code>, <code>LOG_LEVEL</code>, <code>LOG_DEPRECATIONS_CHANNEL</code>, <code>LOG_DAILY_DAYS</code> and the Slack/Papertrail/syslog variables</td><td>Dedicated channels (<code>payment</code>, <code>wallet</code>, <code>sms</code>, <code>integration</code>, <code>security</code>) are fixed in <code>config/logging.php</code>.</td></tr>
+            <tr><td>Database</td><td><code>DB_CONNECTION</code>, <code>DB_HOST</code>, <code>DB_PORT</code>, <code>DB_DATABASE</code>, <code>DB_USERNAME</code>, <code>DB_PASSWORD</code>, <code>DB_SEARCH_PATH</code>, <code>DB_SSLMODE</code>, <code>DB_URL</code></td><td><code>DB_CONNECTION=pgsql</code>. <code>DB_SEARCH_PATH</code> defaults to <code>public</code>; tests set it to <code>testing</code>.</td></tr>
+            <tr><td>Sessions</td><td><code>SESSION_DRIVER</code>, <code>SESSION_LIFETIME</code>, <code>SESSION_ENCRYPT</code>, <code>SESSION_PATH</code>, <code>SESSION_DOMAIN</code>, <code>SESSION_SAME_SITE</code>, <code>SESSION_CONNECTION</code>, <code>SESSION_SECURE_COOKIE</code></td><td><code>SESSION_SECURE_COOKIE</code> is left unset locally because <code>artisan serve</code> is plain HTTP. <code>SESSION_LIFETIME</code> is a floor: the <code>security.session_lifetime_minutes</code> setting overrides it at runtime.</td></tr>
+            <tr><td>Redis</td><td><code>REDIS_CLIENT</code>, <code>REDIS_HOST</code>, <code>REDIS_PASSWORD</code>, <code>REDIS_PORT</code>, <code>REDIS_DB</code>, <code>REDIS_CACHE_DB</code>, <code>REDIS_QUEUE_DB</code>, <code>REDIS_LOCK_DB</code>, <code>REDIS_SESSION_DB</code>, <code>REDIS_QUEUE_CONNECTION</code>, <code>REDIS_CACHE_LOCK_CONNECTION</code>, <code>REDIS_PREFIX</code>, <code>REDIS_URL</code></td><td>See "Redis databases" below.</td></tr>
+            <tr><td>Cache, queue, limiter</td><td><code>CACHE_STORE</code>, <code>CACHE_PREFIX</code>, <code>CACHE_LIMITER</code>, <code>QUEUE_CONNECTION</code>, <code>QUEUE_FAILED_DRIVER</code>, <code>FILESYSTEM_DISK</code></td><td>All Redis. Never <code>file</code>, <code>sync</code> or <code>database</code> (see the rule below).</td></tr>
+            <tr><td>Broadcasting (Reverb)</td><td><code>BROADCAST_CONNECTION</code>, <code>REVERB_APP_ID</code>, <code>REVERB_APP_KEY</code>, <code>REVERB_APP_SECRET</code>, <code>REVERB_HOST</code>, <code>REVERB_PORT</code>, <code>REVERB_SCHEME</code>, <code>REVERB_SERVER_HOST</code>, <code>REVERB_SERVER_PORT</code>, <code>VITE_REVERB_*</code></td><td>Live notifications and panel updates. The three <code>REVERB_APP_*</code> values are blank in the template and must be filled in for the bell to update live.</td></tr>
+            <tr><td>Mail</td><td><code>MAIL_MAILER</code>, <code>MAIL_SCHEME</code>, <code>MAIL_HOST</code>, <code>MAIL_PORT</code>, <code>MAIL_USERNAME</code>, <code>MAIL_PASSWORD</code>, <code>MAIL_FROM_ADDRESS</code>, <code>MAIL_FROM_NAME</code></td><td><code>MAIL_MAILER=log</code> locally: mail is written to the log.</td></tr>
+            <tr><td>Object storage</td><td><code>AWS_ACCESS_KEY_ID</code>, <code>AWS_SECRET_ACCESS_KEY</code>, <code>AWS_DEFAULT_REGION</code>, <code>AWS_BUCKET</code>, <code>AWS_ENDPOINT</code>, <code>AWS_URL</code>, <code>AWS_USE_PATH_STYLE_ENDPOINT</code>, <code>KYC_DISK_DRIVER</code>, <code>PRIVATE_DISK_DRIVER</code>, <code>SUPPLIER_MEDIA_DISK_DRIVER</code></td><td>S3-compatible (Cloudflare R2). Blank locally; media then lives on local disks. See <a href="../modules/storage.html">Storage</a>.</td></tr>
+            <tr><td>SMS</td><td><code>SMS_PROVIDER</code>, <code>SMS_ENABLED</code>, <code>SMS_QUEUE</code>, <code>SMS_GENNET_TIMEOUT</code></td><td>Default provider is <code>log</code>, which writes to the <code>sms</code> log channel instead of sending.</td></tr>
+            <tr><td>Payments</td><td><code>PAYMENT_QUEUE</code>, <code>PAYMENT_WEBHOOK_RATE_LIMIT</code>, <code>PAYMENT_SSLCOMMERZ_ENABLED</code>, <code>PAYMENT_SSLCOMMERZ_SANDBOX_HOST</code></td><td>Gateway credentials are not env variables; they are encrypted rows entered in admin screens. <code>PAYMENT_SSLCOMMERZ_SANDBOX_HOST</code> is a local stub address, ignored in production.</td></tr>
+            <tr><td>Storefront and websites</td><td><code>STOREFRONT_DOMAIN</code>, <code>STOREFRONT_TLS_ASK_TOKEN</code>, <code>STOREFRONT_TLS_ASK_ALLOWED_IPS</code>, <code>STOREFRONT_ROTATION_GRACE_MINUTES</code>, <code>WEBSITE_WEBHOOK_QUEUE</code>, <code>WEBSITE_ALLOW_LOCAL_ADDRESSES</code></td><td>See <a href="../modules/website.html">Website</a> and <a href="../api/storefront-api.html">Storefront API</a>.</td></tr>
+            <tr><td>External stores</td><td><code>STORES_QUEUE</code>, <code>STORES_WEBHOOK_RATE_LIMIT</code></td><td>See <a href="../modules/external-store.html">External store</a>.</td></tr>
+            <tr><td>Mobile API and Sanctum</td><td><code>MOBILE_API_RATE_LIMIT</code>, <code>SANCTUM_STATEFUL_DOMAINS</code>, <code>SANCTUM_TOKEN_EXPIRATION_MINUTES</code>, <code>SANCTUM_TOKEN_PREFIX</code></td><td>See <a href="../api/mobile-api.html">Mobile API</a>.</td></tr>
+            <tr><td>Domain tuning</td><td><code>SUPPLIER_FULFILMENT_CONFIRMATION_DEADLINE_HOURS</code>, <code>CASE_EVIDENCE_LINK_MINUTES</code>, <code>CASE_EVIDENCE_MAX_BYTES</code>, <code>CASE_EVIDENCE_MAX_PER_CASE</code></td><td>Supplier fulfilment deadline and case-evidence limits.</td></tr>
+            <tr><td>API docs</td><td><code>API_DOCS_PUBLIC</code>, <code>API_VERSION</code>, <code>SCRAMBLE_DEV_TOOLS</code></td><td>Generated API reference (Scramble).</td></tr>
+            <tr><td>Frontend</td><td><code>VITE_APP_NAME</code>, <code>VITE_REVERB_APP_KEY</code>, <code>VITE_REVERB_HOST</code>, <code>VITE_REVERB_PORT</code>, <code>VITE_REVERB_SCHEME</code></td><td>Derived from the variables above with <code>${...}</code>.</td></tr>
+        </tbody>
+    </table>
+
+    <h2>Redis databases</h2>
+    <p>One Redis server, five logical databases, defined in <code>config/database.php</code>:</p>
+    <table>
+        <thead><tr><th>Connection</th><th>Env variable</th><th>Default DB</th><th>Carries</th></tr></thead>
+        <tbody>
+            <tr><td><code>default</code></td><td><code>REDIS_DB</code></td><td>0</td><td>Anything that uses the unnamed connection.</td></tr>
+            <tr><td><code>cache</code></td><td><code>REDIS_CACHE_DB</code></td><td>1</td><td>The cache store and, through <code>CACHE_LIMITER=redis</code>, the rate limiter.</td></tr>
+            <tr><td><code>queue</code></td><td><code>REDIS_QUEUE_DB</code></td><td>2</td><td>Queued jobs.</td></tr>
+            <tr><td><code>locks</code></td><td><code>REDIS_LOCK_DB</code></td><td>3</td><td>Distributed locks and idempotency guards (<code>DistributedLock</code>, <code>onOneServer</code>, <code>withoutOverlapping</code>).</td></tr>
+            <tr><td><code>session</code></td><td><code>REDIS_SESSION_DB</code></td><td>4</td><td>Sessions.</td></tr>
+        </tbody>
+    </table>
+    <p><strong>Why separate.</strong> <code>cache:clear</code> flushes a whole Redis database. Locks have their own database so a cache flush cannot drop a lock guarding a financial operation or a duplicate-payment guard. Sessions have their own so a routine cache flush on deploy does not sign every user out. The rate limiter sits on Redis, not the local node, so adding web servers does not multiply the attempts an attacker gets (§6, §40).</p>
+    <div class="callout callout-warn"><p><strong>Gotcha.</strong> The connection <em>names</em> are chosen by env variables whose code defaults are <code>default</code>: <code>REDIS_CACHE_LOCK_CONNECTION</code> (<code>config/cache.php</code>) and <code>REDIS_QUEUE_CONNECTION</code> (<code>config/queue.php</code>). <code>.env.example</code> sets them to <code>locks</code> and <code>queue</code>. An environment that omits those two lines quietly puts cache locks and the queue on database 0. Copy them from <code>.env.example</code> into every environment. <code>SESSION_CONNECTION=session</code> is likewise set in the template.</p></div>
+    <div class="callout callout-rule"><p><strong>Rule.</strong> Never switch session, cache or queue to <code>file</code>, <code>sync</code> or <code>database</code> drivers, even temporarily to dodge a local problem. The application must stay stateless and horizontally scalable (§40, D10). Diagnose the real problem (Redis not running, wrong port) instead.</p></div>
+
+    <h2>Key, migrate, seed</h2>
+    <pre><code>php artisan key:generate        # composer setup already did this
+php artisan migrate             # or migrate --force, as composer setup does
+php artisan db:seed --class=DemoSeeder</code></pre>
+    <p>Do <strong>not</strong> run a bare <code>php artisan db:seed</code> expecting demo data: <code>DatabaseSeeder</code> is still the starter kit's and only creates one test user through the factory. Pick a seeder explicitly.</p>
+    <table>
+        <thead><tr><th>Seeder</th><th>Run with</th><th>What it does</th><th>Safe in production?</th></tr></thead>
+        <tbody>
+            <tr><td><code>RolesAndPermissionsSeeder</code></td><td><code>--class=RolesAndPermissionsSeeder</code></td><td>Creates every permission in <code>PermissionCatalogue</code> and the twenty-one <code>PlatformRole</code> roles (<code>super_admin</code>, <code>admin</code>, <code>kyc_manager</code>, <code>finance_manager</code>, ...), syncing each role's grants. Marks them <code>is_system</code>. Idempotent; never deletes a permission.</td><td>Yes</td></tr>
+            <tr><td><code>SafeSeeder</code></td><td><code>--class=SafeSeeder</code></td><td>Calls <code>RolesAndPermissionsSeeder</code>, defines the <code>kyc.deadline_days</code>, <code>kyc.deadline_warning_days</code> and session-lifetime settings, seeds the KYC document-type catalogue, then imports the bundled Bangladesh locations and banks. Creates no user, payment or package. Idempotent.</td><td>Yes. This is what <code>DEPLOY.md</code> runs.</td></tr>
+            <tr><td><code>DemoSeeder</code></td><td><code>--class=DemoSeeder</code></td><td>Three packages (starter, growth, enterprise), then <code>SafeSeeder</code>, then staff logins and business accounts at different funnel stages, then <code>StandardKycBatchSeeder</code>. Throws if the environment is production.</td><td>No: creates logins with a shared known password.</td></tr>
+            <tr><td><code>StandardKycBatchSeeder</code></td><td><code>--class=StandardKycBatchSeeder</code></td><td>One example KYC batch (identity group, business group), published as version 1 but switched off. Refuses to run in production.</td><td>No</td></tr>
+            <tr><td><code>FakeDataSeeder</code></td><td><code>--class=FakeDataSeeder</code></td><td>Five approved Suppliers and five active Partners with generated names, each Partner with an open wallet. Re-runnable: existing logins are skipped.</td><td>No (development data)</td></tr>
+            <tr><td><code>FakeOrderSeeder</code></td><td><code>--class=FakeOrderSeeder</code></td><td>Seeds the fake Partners and Suppliers if missing, creates two fake products if needed, and adds one paid wholesale order for Partner 1 each run. Books no stock and takes no money.</td><td>No</td></tr>
+            <tr><td><code>CategorySeeder</code></td><td><code>--class=CategorySeeder</code></td><td>The initial category tree (§11.3): parent categories with subcategories, matched by name and parent with <code>updateOrCreate</code>.</td><td>Yes (re-runnable; documented as safe for production)</td></tr>
+        </tbody>
+    </table>
+    <p>The bundled location and bank directories can also be loaded on their own, see <a href="commands.html">Commands</a> (<code>bd-locations:import</code>, <code>bd-banks:import</code>).</p>
+    <div class="callout callout-tip"><p><strong>Tip.</strong> Recommended local setup: <code>php artisan db:seed --class=DemoSeeder</code> (it includes <code>SafeSeeder</code>), then optionally <code>FakeDataSeeder</code>, <code>CategorySeeder</code> and <code>FakeOrderSeeder</code> for volume.</p></div>
+
+    <h2>Local media: <code>storage:link</code> and <code>APP_URL</code></h2>
+    <p>With R2 not configured, product images go to the local <code>public</code> disk and their URLs are <code>{APP_URL}/storage/catalog/products/...</code>. Three things must hold for those URLs to load:</p>
+    <ol>
+        <li><code>php artisan storage:link</code> has created <code>public/storage</code> (the link is gitignored, so every checkout needs it).</li>
+        <li><code>APP_URL</code> is the origin the app is actually served on, port included: <code>http://127.0.0.1:8000</code> for <code>php artisan serve</code>, not a bare <code>http://localhost</code>. The <code>public</code> disk builds its URL from <code>APP_URL</code> (<code>config/filesystems.php</code>).</li>
+        <li>Anything outside your machine, such as a preview storefront, can load them only if that origin is reachable from it over HTTPS.</li>
+    </ol>
+    <p>Each <code>product_media</code> row records its own disk, so a later move to R2 changes new uploads only; the storefront payload resolves every URL from the row's disk. KYC, supplier-media and generic private files use private disks with <code>serve</code> off and are only ever read through a controller that checks permission.</p>
+
+    <h2>Run it</h2>
+    <pre><code>composer dev        # same as: php artisan dev</code></pre>
+    <p><code>composer dev</code> runs <code>php artisan dev</code>, the framework's multiplexer (<code>Illuminate\Foundation\Console\DevCommand</code>). It starts these processes, each with its own tab (on Windows it falls back to <code>concurrently</code>):</p>
+    <table>
+        <thead><tr><th>Name</th><th>Command</th><th>Notes</th></tr></thead>
+        <tbody>
+            <tr><td><code>server</code></td><td><code>php artisan serve</code></td><td><code>http://127.0.0.1:8000</code> by default.</td></tr>
+            <tr><td><code>queue</code></td><td><code>php artisan queue:listen --tries=1 --timeout=0</code></td><td>Listens on the default queue only. Jobs that use the <code>payments</code>, <code>sms</code> or <code>webhooks</code> queues are not processed by it. See below.</td></tr>
+            <tr><td><code>logs</code></td><td><code>php artisan pail --timeout=0</code></td><td>Only when <code>pcntl</code> and Pail are present.</td></tr>
+            <tr><td><code>vite</code></td><td><code>npm run dev</code> (<code>vp dev</code>)</td><td>Vite dev server; it also runs the Wayfinder plugin (with form variants) and writes <code>public/hot</code>.</td></tr>
+            <tr><td><code>reverb</code></td><td><code>php artisan reverb:start</code></td><td>Registered by <code>laravel/reverb</code>; port 8080.</td></tr>
+        </tbody>
+    </table>
+    <p>Flags: <code>-s</code> stream mode, <code>-t</code> tabs, <code>-i</code> inline, <code>--timestamps</code>, <code>--no-restart</code>, <code>--json</code>. <code>php artisan dev:list</code> shows what would start. The scheduler is not part of <code>dev</code>; run <code>php artisan schedule:work</code> in another terminal when you need a sweep to fire.</p>
+    <div class="callout callout-warn"><p><strong>Gotcha.</strong> Online-payment settlement, SMS and website webhooks are queued on named queues. To exercise them locally run a worker for those queues in a spare terminal: <code>php artisan queue:work --queue=payments,default,sms,webhooks</code>. See <a href="operations.html">Operations</a> for the queue list.</p></div>
+
+    <h2>Log in</h2>
+    <p>Open <code>http://127.0.0.1:8000</code>. After <code>DemoSeeder</code> these logins exist (all verified, all sharing one password defined as <code>DemoSeeder::PASSWORD</code>, a development-only value):</p>
+    <table>
+        <thead><tr><th>Login</th><th>Who</th></tr></thead>
+        <tbody>
+            <tr><td><code>admin@feriwala.test</code></td><td>Platform Administrator, role <code>super_admin</code></td></tr>
+            <tr><td><code>kyc@feriwala.test</code></td><td>KYC Manager role (reviews applications and configures the catalogue)</td></tr>
+            <tr><td><code>reviewer@feriwala.test</code></td><td>Direct permissions only: view, approve, view documents on KYC. Shows the §7.2 separation in the navigation.</td></tr>
+            <tr><td><code>owner@feriwala.test</code></td><td>Owner of an <em>Active</em> business account (Karim Traders) with an approved KYC round</td></tr>
+            <tr><td><code>applicant@feriwala.test</code></td><td>Owner of an account in <code>KycPending</code> with a draft round</td></tr>
+            <tr><td><code>resubmit@feriwala.test</code></td><td>Owner of an account in <code>KycResubmissionRequired</code> with reviewer feedback</td></tr>
+        </tbody>
+    </table>
+    <p><code>FakeDataSeeder</code> adds <code>partner1@banij.test</code> to <code>partner5@banij.test</code> (active Partners) and a Supplier login <code>supplier1@banij.test</code> to <code>supplier5@banij.test</code> (Suppliers sign in on their own guard and login screen, <code>supplier.login</code>).</p>
+    <div class="callout callout-note"><p><strong>Note.</strong> The admin panel requires a second factor for sensitive platform roles (<code>RequireTwoFactorForSensitiveRoles</code>, §36), so the first sign-in as <code>admin@feriwala.test</code> redirects to two-factor enrolment. Enrol with an authenticator app before expecting any admin page to open.</p></div>
+    <h3>Creating a Super Admin outside the demo data</h3>
+    <p>No console command creates one. <code>SafeSeeder</code> creates no users and <code>DemoSeeder</code> refuses to run in production. The mechanism the demo seeder itself uses is a plain Spatie role assignment: create or pick a verified <code>User</code> with no business account (<a href="../modules/account.html">Account</a>, decision D23) and call <code>$user-&gt;assignRole('super_admin')</code> after <code>RolesAndPermissionsSeeder</code> has run. How the first production Super Admin is provisioned is not documented in the repository (not verified).</p>
+
+    <h2>Common first-run errors</h2>
+    <table>
+        <thead><tr><th>Symptom</th><th>Cause</th><th>Fix</th></tr></thead>
+        <tbody>
+            <tr><td><code>ViteException: Unable to locate file in Vite manifest</code> on any page</td><td>No <code>public/build/manifest.json</code> (never built) and no <code>public/hot</code> (dev server not running), or a page added since the last build.</td><td>Run <code>composer dev</code> (or <code>npm run dev</code>), or <code>npm run build</code>. Do not build while the test suite is running.</td></tr>
+            <tr><td>Product images 404 or show broken</td><td>Missing <code>public/storage</code> link, or <code>APP_URL</code> does not match the served origin and port.</td><td><code>php artisan storage:link</code>; set <code>APP_URL=http://127.0.0.1:8000</code>.</td></tr>
+            <tr><td><code>SQLSTATE[08006] ... connection refused</code> or "database system is starting up"</td><td>PostgreSQL not running, wrong <code>DB_*</code>, or recovering after an unclean WSL stop.</td><td><code>sudo systemctl start postgresql</code>; check with <code>pg_isready</code>; if it says "starting up" wait for recovery rather than debugging code.</td></tr>
+            <tr><td><code>could not find driver</code></td><td>PHP <code>pdo_pgsql</code> missing.</td><td>Install <code>php8.5-pgsql</code> (or your PHP version's package).</td></tr>
+            <tr><td>Redis connection refused, or <code>Class "Redis" not found</code></td><td>Redis not running, or <code>REDIS_CLIENT</code> not <code>predis</code> without the phpredis extension.</td><td><code>sudo systemctl start redis-server</code>; keep <code>REDIS_CLIENT=predis</code>.</td></tr>
+            <tr><td>Locks or queue seem to use database 0</td><td><code>REDIS_CACHE_LOCK_CONNECTION</code> and <code>REDIS_QUEUE_CONNECTION</code> missing from <code>.env</code>.</td><td>Copy both lines from <code>.env.example</code>.</td></tr>
+            <tr><td>Hundreds of TypeScript errors like <code>Property 'form' does not exist</code></td><td>Wayfinder output (<code>resources/js/actions</code>, <code>resources/js/routes</code>, both gitignored) regenerated without form variants.</td><td><code>php artisan wayfinder:generate --with-form</code> (or run <code>npm run dev</code>, which does it).</td></tr>
+            <tr><td>Imports from <code>@/actions</code> or <code>@/routes</code> not found</td><td>The generated folders do not exist yet.</td><td>Same command, or start <code>npm run dev</code> / <code>npm run build</code>.</td></tr>
+            <tr><td>Config changes ignored; tests touch the wrong schema</td><td>A cached config (<code>bootstrap/cache/config.php</code>) from <code>php artisan optimize</code> or <code>config:cache</code>.</td><td><code>php artisan config:clear</code> before running tests or changing <code>.env</code>. See <a href="testing.html">Testing</a>.</td></tr>
+            <tr><td>Everyone is signed out after a cache clear</td><td>Sessions are not on their own Redis database.</td><td>Check <code>SESSION_CONNECTION=session</code> and <code>REDIS_SESSION_DB</code>.</td></tr>
+            <tr><td>Login works but you bounce back to the login page over plain HTTP</td><td><code>SESSION_SECURE_COOKIE=true</code> set while serving HTTP.</td><td>Leave it unset locally.</td></tr>
+            <tr><td>Live notifications never update</td><td><code>REVERB_APP_ID</code>, <code>REVERB_APP_KEY</code>, <code>REVERB_APP_SECRET</code> blank, or Reverb not running.</td><td>Fill them in and run <code>php artisan reverb:start</code> (included in <code>artisan dev</code>).</td></tr>
+            <tr><td>PHPStan dies with <code>Undefined constant "Larastan\Larastan\LARAVEL_VERSION"</code></td><td>Stale result cache in <code>build/phpstan</code>.</td><td>Run PHPStan through <code>composer types:check</code>, which clears the cache and retries once on exactly that message.</td></tr>
+            <tr><td>Payments queued but never settle; SMS or webhooks stay pending</td><td>No worker is listening on the <code>payments</code>, <code>sms</code> or <code>webhooks</code> queues.</td><td>Run a worker for those queues (see above).</td></tr>
+        </tbody>
+    </table>
+
+    <h2>Where to go next</h2>
+    <ul>
+        <li><a href="architecture.html">Architecture</a> and <a href="conventions.html">Conventions</a> before changing code.</li>
+        <li><a href="testing.html">Testing</a> before running the suite for the first time; it can wipe your development schema if misconfigured.</li>
+        <li><a href="commands.html">Commands</a> for the custom Artisan commands and the scheduler.</li>
+        <li><a href="glossary.html">Glossary</a> for the vocabulary (Partner, Supplier, Ledger entry, Selection ...).</li>
+    </ul>
+</main>
+</body>
+</html>

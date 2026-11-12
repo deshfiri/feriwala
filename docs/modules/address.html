@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Address module</title>
+    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+    <script src="../assets/docs.js"></script>
+</head>
+<body>
+<main id="doc">
+    <h1>Address module</h1>
+    <p class="lead">One shared, polymorphic address book for business accounts and Suppliers. Each address ties to the Bangladesh location directory, freezes its place names at save time, has at most one default per owner and type, and is archived, never deleted.</p>
+
+    <h2>Purpose</h2>
+    <p>A <code>BusinessAccount</code> keeps business and operational addresses; a Supplier keeps registered, pickup and return addresses. One table (<code>shared_addresses</code>) serves both, resolved by <code>owner_type</code> plus <code>owner_id</code> (§31.3 self-scoping by an explicit owner column, not framework polymorphism). Consumers include damaged-item delivery (<code>DamageDispatch</code>, <code>RequestDamageDelivery</code>) and the partner/Supplier address screens. Do not confuse it with <code>user_addresses</code> (<a href="account.html">Account</a>), the per-user address used for wholesale checkout snapshots.</p>
+
+    <h2>Where it lives</h2>
+    <table>
+        <thead><tr><th>Path</th><th>Role</th></tr></thead>
+        <tbody>
+        <tr><td><code>app/Domain/Address/Models/SharedAddress.php</code></td><td>The model</td></tr>
+        <tr><td><code>app/Domain/Address/Enums/</code></td><td><code>AddressOwnerType</code>, <code>AddressStatus</code>, <code>ClientAddressType</code>, <code>SupplierAddressType</code></td></tr>
+        <tr><td><code>app/Domain/Address/Actions/</code></td><td><code>SaveSharedAddress</code>, <code>SetDefaultSharedAddress</code>, <code>ArchiveSharedAddress</code></td></tr>
+        <tr><td><code>app/Domain/Address/Queries/SharedAddressesForOwner.php</code></td><td>Self-scoped reads</td></tr>
+        <tr><td><code>app/Domain/Address/Policies/SharedAddressPolicy.php</code>, <code>Data/AddressSnapshot.php</code></td><td>Authorisation; immutable copy</td></tr>
+        <tr><td><code>app/Http/Controllers/Erp/AddressController.php</code> (name inferred from the routes file), <code>Supplier/AddressController.php</code>, <code>Api/Mobile/V1/Addresses/AddressController.php</code>, <code>.../Supplier/Addresses/AddressController.php</code></td><td>Entry points (the Erp controller path was not opened)</td></tr>
+        <tr><td><code>resources/js/pages/erp/addresses/index.tsx</code>, <code>supplier/addresses/index.tsx</code></td><td>Screens</td></tr>
+        <tr><td><code>lang/{en,bn}/address.php</code></td><td>Labels</td></tr>
+        <tr><td><code>database/migrations/2026_10_09_120000_take_shared_addresses.php</code>, <code>2026_10_10_100000_enforce_shared_address_invariants</code></td><td>Schema; partial unique index on the default</td></tr>
+        <tr><td><code>tests/Feature/Address/</code></td><td><code>SharedAddressActionsTest</code>, <code>SharedAddressPolicyTest</code>, <code>ErpAddressScreensTest</code>, <code>SupplierAddressScreensTest</code></td></tr>
+        </tbody>
+    </table>
+
+    <h2>Key terms</h2>
+    <dl>
+        <dt>Owner type</dt><dd><code>AddressOwnerType</code>: <code>business_account</code> or <code>supplier</code>. <code>allowedAddressTypes()</code> gives the valid <code>type</code> values per owner.</dd>
+        <dt>Address type</dt><dd>Client/Partner: <code>business</code>, <code>operational</code>. Supplier: <code>registered</code>, <code>pickup</code>, <code>return</code>.</dd>
+        <dt>Location snapshot</dt><dd>Bilingual names of division, district, upazila and union frozen into <code>location_snapshot</code> on save.</dd>
+        <dt>Default</dt><dd>The address a future order or shipment falls back to; one per (owner, type).</dd>
+    </dl>
+
+    <h2>Data model</h2>
+    <table>
+        <thead><tr><th>Column (<code>shared_addresses</code>)</th><th>Notes</th></tr></thead>
+        <tbody>
+        <tr><td><code>public_id</code> (ULID, unique)</td><td><code>HasPublicId</code>; the URL identifier</td></tr>
+        <tr><td><code>owner_type</code> (32), <code>owner_id</code></td><td>Plain pair; indexed. A trigger locks <code>public_id</code>, <code>owner_type</code>, <code>owner_id</code> after insert. Check: owner_type in (<code>business_account</code>, <code>supplier</code>).</td></tr>
+        <tr><td><code>type</code> (16), <code>status</code> (16, default <code>active</code>)</td><td>Checks restrict values (<code>business</code>, <code>operational</code>, <code>registered</code>, <code>pickup</code>, <code>return</code>; <code>active</code>, <code>archived</code>). The check does not tie a type to an owner type; the form request does via <code>allowedAddressTypes()</code>.</td></tr>
+        <tr><td><code>contact_name</code>, <code>contact_mobile</code> (20)</td><td>Check: E.164 (<code>^\+[1-9][0-9]{7,14}$</code>)</td></tr>
+        <tr><td><code>division_id</code>, <code>district_id</code>, <code>upazila_id</code>, <code>union_id</code> (nullable)</td><td>FKs to <code>bd_locations</code>, restrict on delete</td></tr>
+        <tr><td><code>detailed_address</code>, <code>landmark</code>, <code>postcode</code></td><td></td></tr>
+        <tr><td><code>location_snapshot</code></td><td>JSON, cast to array</td></tr>
+        <tr><td><code>is_default</code></td><td>One per (owner, type): enforced in <code>SetDefaultSharedAddress</code> inside a locking transaction <em>and</em> by a partial unique index added in the follow-up migration (the index definition itself was not opened)</td></tr>
+        </tbody>
+    </table>
+    <p>Relations: <code>division()</code>, <code>district()</code>, <code>upazila()</code>, <code>union()</code> to <code>BdLocation</code>. <code>ownedBy($type, $id)</code>. <code>toSnapshot()</code> returns an <code>AddressSnapshot</code> (type, contact, detailed address, landmark, postcode, location snapshot) for consumers that must keep what the address said when used.</p>
+
+    <h2>States &amp; lifecycle</h2>
+    <table>
+        <thead><tr><th>Status</th><th>Next</th></tr></thead>
+        <tbody>
+        <tr><td><code>active</code></td><td>archived</td></tr>
+        <tr><td><code>archived</code></td><td>none (terminal)</td></tr>
+        </tbody>
+    </table>
+    <p>Only <code>ArchiveSharedAddress</code> reaches archived, via <code>transitionTo()</code>, and it clears <code>is_default</code>. An archived address cannot be edited or made default (<code>RuntimeException</code>).</p>
+
+    <h2>Actions &amp; workflows</h2>
+    <table>
+        <thead><tr><th>Class</th><th>Behaviour</th></tr></thead>
+        <tbody>
+        <tr><td><code>SaveSharedAddress</code></td><td>Create or update. In a transaction: builds the attributes and resolves the snapshot from the validated location ids, then for an update locks the row and refuses if archived. New rows start <code>active</code>, not default. If <code>makeDefault</code>, then calls <code>SetDefaultSharedAddress</code>. The caller must already have validated the ids with <code>ValidBdLocationHierarchy</code>; the action does not.</td></tr>
+        <tr><td><code>SetDefaultSharedAddress</code></td><td>Locks the row, refuses if archived, clears <code>is_default</code> on the owner's other addresses of the same type, sets this one.</td></tr>
+        <tr><td><code>ArchiveSharedAddress</code></td><td>Locks, <code>transitionTo(Archived)</code>, unsets default.</td></tr>
+        <tr><td><code>SharedAddressesForOwner</code></td><td><code>forOwner()</code> (default first, then newest) and <code>findForOwner($type, $ownerId, $publicId)</code>. The owner is always a parameter; the controller resolves it from its own guard.</td></tr>
+        </tbody>
+    </table>
+    <p>Edit then default, in order: the save transaction commits before the default step runs, so a failure in the second leaves a saved, non-default address.</p>
+
+    <h2>Entry points</h2>
+    <table>
+        <thead><tr><th>Surface</th><th>Routes</th></tr></thead>
+        <tbody>
+        <tr><td>Partner web, prefix <code>addresses</code>, names <code>addresses.*</code> (inside <code>business.activated</code>)</td><td>GET <code>/addresses</code> (index); POST <code>/addresses</code> (store); PUT <code>/addresses/{address}</code> (update); POST <code>/addresses/{address}/default</code>; POST <code>/addresses/{address}/archive</code></td></tr>
+        <tr><td>Mobile (<code>mobile.activated</code>)</td><td><code>/api/mobile/v1/addresses</code>: index, store, <code>PUT {address}</code>, <code>POST {address}/default</code>, <code>POST {address}/archive</code>; names <code>mobile.v1.addresses.*</code></td></tr>
+        <tr><td>Supplier web and mobile</td><td>Supplier controllers; they scope inline to the signed-in Supplier</td></tr>
+        </tbody>
+    </table>
+    <p>The location cascade endpoints are in <a href="location.html">Location</a>. No scheduled work.</p>
+
+    <h2>Permissions &amp; scoping</h2>
+    <ul>
+        <li><code>SharedAddressPolicy</code> (registered for <code>SharedAddress</code>) is the Client/Partner side only: <code>viewAny</code> needs a business account; <code>view</code> needs the address to belong to that account; <code>create</code>, <code>update</code>, <code>archive</code>, <code>setDefault</code> additionally need <code>AccountPermission::UpdateAccount</code> (owner only by default), "speaking for the business rather than working in it", the same bar as <code>WebsitePolicy</code>.</li>
+        <li>The Supplier side is <strong>never routed through a policy</strong>: Supplier controllers scope every query to the signed-in Supplier's own guard identity (D25). The guard boundary already refuses another Supplier's session.</li>
+        <li>Lookups by public id always include the owner pair in the query, so a guessed id from another owner returns nothing (§31.3).</li>
+    </ul>
+
+    <h2>Money, ledger &amp; audit effects</h2>
+    <p>None. These Actions write no audit entries. On account erasure, <code>EraseAccount</code> purges contact, address, landmark, postcode and snapshot columns of the owner's rows. A damaged-item dispatch address snapshot is locked by a database guard and is reported as retained.</p>
+
+    <h2>Configuration</h2>
+    <p>None.</p>
+
+    <h2>Rules, invariants &amp; gotchas</h2>
+    <ul>
+        <li><strong>Archive, never delete</strong>; a default is never archived.</li>
+        <li><strong>The snapshot is written once per save.</strong> A later rename or deactivation in the directory never rewrites an address on file; show <code>location_snapshot</code> for history and the relations for live editing.</li>
+        <li>Consumers that must keep what an address said at use time should store <code>toSnapshot()</code> output, not the foreign key.</li>
+        <li>Default uniqueness is per owner <em>and type</em>: a business may have a default business address and a default operational address.</li>
+        <li>Owner and public id cannot change after insert (database trigger).</li>
+    </ul>
+
+    <h2>How to&hellip;</h2>
+    <h3>Add an address type</h3>
+    <ol>
+        <li>Add the case to <code>ClientAddressType</code> or <code>SupplierAddressType</code> (they feed <code>allowedAddressTypes()</code>).</li>
+        <li>Add a migration changing <code>shared_addresses_type_known</code> to include the new value.</li>
+        <li>Add labels in <code>lang/en/address.php</code> and <code>lang/bn/address.php</code>.</li>
+    </ol>
+    <h3>Add a new owner kind</h3>
+    <ol>
+        <li>Add a case to <code>AddressOwnerType</code> and its allowed types; migrate the <code>shared_addresses_owner_type_known</code> check.</li>
+        <li>Scope every read through <code>SharedAddressesForOwner</code> with the owner id from the controller's guard; write a policy or guard-scoped controller.</li>
+    </ol>
+    <h3>Save an address from a new screen</h3>
+    <ol>
+        <li>Validate the four location ids with <code>ValidBdLocationHierarchy</code> and the E.164 mobile; check <code>type</code> with <code>Rule::in($ownerType-&gt;allowedAddressTypes())</code>.</li>
+        <li>Call <code>SaveSharedAddress::handle(...)</code>; authorize with the policy first.</li>
+    </ol>
+
+    <h2>Testing</h2>
+    <p>Pest group <code>address</code>: <code>vendor/bin/pest tests/Feature/Address</code> in its own schema, one suite at a time. Tests need location rows; the location tests show how to create them.</p>
+
+    <h2>Related modules</h2>
+    <div class="cards">
+        <a class="card" href="location.html"><h3>Location</h3><p>The directory addresses point at.</p></a>
+        <a class="card" href="account.html"><h3>Account</h3><p>Owner and <code>account:update</code>.</p></a>
+        <a class="card" href="supplier.html"><h3>Supplier</h3><p>Supplier address types.</p></a>
+        <a class="card" href="damage.html"><h3>Damage</h3><p>Dispatch uses a shared address.</p></a>
+    </div>
+</main>
+</body>
+</html>

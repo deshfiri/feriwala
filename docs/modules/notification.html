@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Notification module</title>
+    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+    <script src="../assets/docs.js"></script>
+</head>
+<body>
+<main id="doc">
+    <h1>Notification module</h1>
+    <p class="lead">How Feriwala tells people things: the header bell (database notifications, pushed live), staff work-queue alerts, case and courier announcements, and SMS as a Laravel notification channel with a queued, deduplicated delivery log. Read it before adding any notification or text message.</p>
+
+    <h2>Purpose</h2>
+    <p>The platform uses Laravel's own notification system rather than a parallel one (§30: SMS is a delivery channel for notifications the platform already sends). This module supplies what Laravel does not: the <code>sms</code> channel, the SMS log (<code>sms_messages</code>), the global/provider/per-event SMS switches (§30, §30.2), the bell presentation (§33.2, D20), live updates over Reverb, and the helper actions that find the right recipients and write idempotent notifications.</p>
+    <p>Audiences: any signed-in person (their own bell), platform staff (queue alerts, SMS settings), Partners (outcomes of their cases and parcels), Suppliers (a separate notifiable with its own channel and routes), and customers (SMS only, e.g. a COD confirmation code).</p>
+
+    <h2>Where it lives</h2>
+    <table>
+        <thead><tr><th>Path</th><th>Role</th></tr></thead>
+        <tbody>
+        <tr><td><code>app/Domain/Notification/Channels/SmsChannel.php</code></td><td>The <code>sms</code> channel: writes the log row, dispatches delivery.</td></tr>
+        <tr><td><code>app/Domain/Notification/Jobs/DeliverSmsMessage.php</code></td><td>Queued job that hands one message to the provider.</td></tr>
+        <tr><td><code>app/Domain/Notification/Models/SmsMessageRecord.php</code></td><td>Table <code>sms_messages</code>.</td></tr>
+        <tr><td><code>app/Domain/Notification/Enums/</code></td><td><code>SmsEvent</code>, <code>SmsStatus</code>, <code>StaffQueue</code>.</td></tr>
+        <tr><td><code>app/Domain/Notification/SmsEventSwitch.php</code></td><td>Per-event on/off, read at delivery.</td></tr>
+        <tr><td><code>app/Domain/Notification/Actions/</code></td><td><code>AnnounceCaseEvent</code>, <code>AnnounceCourierEvent</code>, <code>NotifyStaffOfSubmission</code>, <code>NotifyRequesterOfDecision</code>, <code>MarkNotificationsRead</code>, <code>ConfigureSms</code>, <code>ConfigureSmsCredentials</code>, <code>ToggleSmsEvent</code>, <code>SendTestSms</code>, <code>CheckSmsBalance</code>.</td></tr>
+        <tr><td><code>app/Domain/Notification/Queries/</code></td><td><code>RecentNotifications</code> (the bell), <code>SubmissionVolume</code> (dashboard trend).</td></tr>
+        <tr><td><code>app/Domain/Notification/Events/NotificationsChanged.php</code>, <code>Listeners/BroadcastStoredNotification.php</code></td><td>Live push to open tabs.</td></tr>
+        <tr><td><code>app/Domain/Notification/Data/HeaderNotification.php</code>, <code>Policies/SmsSettingsPolicy.php</code>, <code>Exceptions/SmsEventSwitchedOff.php</code></td><td>Bell row shape; SMS settings policy; refusal when a one-time-code event is off.</td></tr>
+        <tr><td><code>app/Notifications/**</code></td><td>The notification classes themselves, grouped by area (<code>Account</code>, <code>Billing</code>, <code>Cases</code>, <code>Courier</code>, <code>Staff</code>, <code>Supplier</code>, <code>Kyc</code>, <code>Package</code>, <code>Website</code>, <code>Wallet</code>, <code>Inventory</code>, <code>Orders</code>, <code>Referral</code>, <code>Requests</code>, <code>Access</code>).</td></tr>
+        <tr><td><code>app/Integrations/Sms/</code></td><td><code>SmsProviderManager</code>, <code>SmsGateway</code>, <code>SmsCredentials</code>, <code>Contracts/SmsProvider</code>, <code>Data/{SmsMessage,SmsResult}</code>, <code>Providers/LogSmsProvider</code>, <code>Providers/GenNet/*</code>.</td></tr>
+        <tr><td><code>app/Providers/SmsServiceProvider.php</code>, <code>AppServiceProvider.php</code></td><td>Registers the channel and the broadcast listener.</td></tr>
+        <tr><td><code>app/Domain/Sms/</code></td><td>Exists as a directory; not read for this page.</td></tr>
+        <tr><td><code>config/sms.php</code></td><td>Providers, global switch, queue name.</td></tr>
+        <tr><td><code>app/Http/Controllers/Admin/SmsController.php</code>, <code>Erp/NotificationController.php</code>, <code>Api/Mobile/V1/Account/NotificationController.php</code>, <code>Api/Mobile/V1/Supplier/Account/NotificationController.php</code></td><td>Admin SMS screen, ERP bell actions, mobile bell for users and Suppliers.</td></tr>
+        <tr><td><code>resources/js/pages/admin/sms.tsx</code></td><td>Admin SMS screen.</td></tr>
+        <tr><td><code>lang/en/notification.php</code>, <code>sms.php</code> (and <code>bn</code>)</td><td>Bell wording (<code>notification.events</code>) and SMS event titles, templates and test text.</td></tr>
+        <tr><td><code>database/migrations/2026_09_03_130000_create_kyc_deadline_events_and_notifications.php</code>, <code>2026_09_15_100000_create_sms_messages.php</code></td><td><code>notifications</code> and <code>sms_messages</code> tables.</td></tr>
+        <tr><td><code>tests/Feature/Notification/</code></td><td>See Testing.</td></tr>
+        </tbody>
+    </table>
+
+    <h2>Key terms</h2>
+    <dl>
+        <dt>Event</dt>
+        <dd>A dotted name such as <code>account.activated</code>. Stored in a database notification's <code>event</code> key, and used as the SMS event for switches and dedupe. The two vocabularies overlap but are separate: bell events are lang keys under <code>notification.events</code>; SMS events are the <code>SmsEvent</code> enum.</dd>
+        <dt>Bell</dt>
+        <dd>The header notification centre: the latest 10 database notifications for the signed-in user (<code>RecentNotifications::LIMIT</code>).</dd>
+        <dt>Staff queue</dt>
+        <dd>A <code>StaffQueue</code> case: a kind of work arriving from outside the team that waits for staff (KYC, supplier listings, withdrawals, returns, exchanges, damages, refunds, website requests, deletion requests).</dd>
+        <dt>Dedupe key</dt>
+        <dd>SHA-256 of an SMS's key plus recipient; unique, so a retried notification adds no second text.</dd>
+        <dt>Suppressed</dt>
+        <dd>An SMS the platform deliberately did not send because a setting said so. Not a failure.</dd>
+        <dt>One-time-code event</dt>
+        <dd><code>mobile_verification</code>, <code>supplier_mobile_verification</code>, <code>cod_confirmation</code>. Switching them off blocks the flow that waits for the code.</dd>
+    </dl>
+
+    <h2>Data model</h2>
+    <table>
+        <thead><tr><th>Table / model</th><th>Purpose and columns</th><th>Notes</th></tr></thead>
+        <tbody>
+        <tr><td><code>notifications</code> (Laravel <code>DatabaseNotification</code>)</td><td>The bell. UUID id, <code>type</code>, notifiable, <code>data</code> JSON (always includes <code>event</code>), <code>read_at</code>, timestamps.</td><td>Timestamps are nullable in this schema; the bell shows no time rather than "just now" when missing. The id is set deterministically (uuid5) by the announcers so repeats write one row.</td></tr>
+        <tr><td><code>sms_messages</code> / <code>SmsMessageRecord</code></td><td><code>public_id</code>, <code>user_id</code>, <code>business_account_id</code>, <code>event</code>, <code>recipient</code>, <code>locale</code>, <code>body</code>, <code>segments</code>, <code>status</code> (<code>SmsStatus</code>), <code>provider</code>, <code>provider_reference</code>, <code>cost</code>, <code>error</code>, <code>attempts</code>, <code>queued_at</code>, <code>sent_at</code>, <code>failed_at</code>, <code>dedupe_key</code>.</td><td>Written before the provider is called, so a message exists whether or not the provider answers. <code>dedupe_key</code> is unique. <code>cost</code> is a provider-reported string, not a Money column.</td></tr>
+        </tbody>
+    </table>
+    <p>SMS settings (provider, global switch, per-event switches, encrypted provider credentials) live in the settings store: <code>sms.provider</code>, <code>sms.enabled</code>, <code>sms.event.{event}</code>.</p>
+
+    <h2>States &amp; lifecycle</h2>
+    <h3>SmsStatus (not a transitionable state; the job sets it directly)</h3>
+    <table>
+        <thead><tr><th>Case</th><th>Label</th><th>Meaning</th></tr></thead>
+        <tbody>
+        <tr><td><code>queued</code></td><td>Queued</td><td>Written and handed to the queue.</td></tr>
+        <tr><td><code>sent</code></td><td>Sent</td><td>The provider accepted it.</td></tr>
+        <tr><td><code>failed</code></td><td>Failed</td><td>The provider refused it, or kept failing.</td></tr>
+        <tr><td><code>suppressed</code></td><td>Not sent</td><td>Deliberately not sent (global switch, event switch, or no usable provider).</td></tr>
+        </tbody>
+    </table>
+    <pre><code>queued --> sent         (provider accepted)
+queued --> suppressed   (SMS off globally or for this event, or no provider can send)
+queued --> failed       (refused, last attempt, or the queue gave up)
+queued --> queued       (retryable result: released with backoff)</code></pre>
+    <p><code>DeliverSmsMessage</code> acts only on a row still <code>queued</code>; anything else returns without sending, which is what prevents a double send. <code>tries = 3</code>, <code>backoff = [60, 300]</code> seconds. A thrown exception records the error and rethrows (the queue retries, and <code>recordExhaustion()</code> marks failed on the last attempt, which also covers the <code>sync</code> connection where <code>failed()</code> is never called); a provider <em>result</em> that is not accepted and not retryable is final. <code>failed()</code> writes the failure onto the record when the queue gives up.</p>
+    <h3>SmsEvent (the SMS vocabulary)</h3>
+    <table>
+        <thead><tr><th>Case</th><th>Value</th><th>One-time code</th></tr></thead>
+        <tbody>
+        <tr><td><code>AccountActivated</code></td><td><code>account.activated</code></td><td>no</td></tr>
+        <tr><td><code>PaymentReceived</code></td><td><code>payment.received</code></td><td>no</td></tr>
+        <tr><td><code>WalletBalanceLow</code></td><td><code>wallet.balance_low</code></td><td>no</td></tr>
+        <tr><td><code>KycDeadlineMissed</code></td><td><code>kyc_deadline_missed</code></td><td>no</td></tr>
+        <tr><td><code>MobileVerification</code></td><td><code>mobile_verification</code></td><td>yes</td></tr>
+        <tr><td><code>SupplierMobileVerification</code></td><td><code>supplier_mobile_verification</code></td><td>yes</td></tr>
+        <tr><td><code>CodConfirmation</code></td><td><code>cod_confirmation</code></td><td>yes</td></tr>
+        </tbody>
+    </table>
+    <p>A guard test fails when code sends an SMS under an event not listed here, so a new message cannot slip in without its switch. Events are on unless switched off.</p>
+
+    <h2>Actions &amp; workflows</h2>
+    <table>
+        <thead><tr><th>Class</th><th>Purpose</th></tr></thead>
+        <tbody>
+        <tr><td><code>SmsChannel::send()</code></td><td>The channel. Reads the recipient from <code>routeNotificationFor('sms')</code> (none: returns quietly, not a failure); calls the notification's <code>toSms()</code>; empty body returns; writes the row with a dedupe key; catches the unique violation (inside a savepoint transaction, so it cannot poison the caller's transaction) as "already sent"; dispatches <code>DeliverSmsMessage</code>.</td></tr>
+        <tr><td><code>DeliverSmsMessage</code></td><td>Checks the event switch and <code>canSend()</code> at delivery time, calls the provider, records the outcome.</td></tr>
+        <tr><td><code>NotifyStaffOfSubmission</code></td><td>Tell the staff who may act on a <code>StaffQueue</code> that something arrived. <code>holdersOf($permission)</code>: users with the permission plus Super Admins, only those with platform access and never a business identity. Id is uuid5 of event, subject and recipient. Failure is reported and swallowed.</td></tr>
+        <tr><td><code>NotifyRequesterOfDecision</code></td><td>Tell the person who asked (User or Supplier) that staff decided (<code>RequestDecided</code>). The deciding action passes the requester, so it cannot be addressed at someone else's request.</td></tr>
+        <tr><td><code>AnnounceCaseEvent</code></td><td>Return, exchange and damage announcements to staff (<code>CaseStepRequired</code>) and the Partner owner (<code>CaseOutcome</code>). Methods: <code>returnMoved</code>, <code>damageMoved</code>, <code>responsibilityCorrected</code>, <code>exchangeOrder</code>. A version-1 return keeps the notifications it always had (none from here).</td></tr>
+        <tr><td><code>AnnounceCourierEvent</code></td><td>Staff alerts (<code>bookingNeedsAttention</code>, <code>statusNeedsReview</code>; keys <code>booking_failed</code>, <code>booking_uncertain</code>, <code>status_unknown</code>, <code>status_review</code>) to holders of <code>courier.edit</code>; Partner updates (<code>shipmentMoved</code>; outcomes <code>booked</code>, <code>picked_up</code>, <code>in_transit</code>, <code>delivered</code>, <code>failed</code>, <code>returned</code>) to the account owner, Steadfast shipments only.</td></tr>
+        <tr><td><code>MarkNotificationsRead</code></td><td><code>one()</code> and <code>all()</code>, both starting from the notifiable's own relationship so another person's id resolves to nothing; then broadcasts a read nudge, swallowing socket failures.</td></tr>
+        <tr><td><code>ConfigureSms</code>, <code>ConfigureSmsCredentials</code>, <code>ToggleSmsEvent</code>, <code>SendTestSms</code>, <code>CheckSmsBalance</code></td><td>Admin SMS screen actions; audited (see below). <code>SendTestSms</code> goes straight to the provider, not through the queue or switches, with the recipient masked in the audit row.</td></tr>
+        </tbody>
+    </table>
+    <h3>Flow: an SMS from a notification</h3>
+    <ol>
+        <li>A notification class lists <code>'sms'</code> in <code>via()</code> and implements <code>toSms($notifiable): SmsMessage</code> with <code>event</code> set to a <code>SmsEvent</code> value and the locale from the recipient (<code>Locale::parse($notifiable->locale)</code>). The three that do today: <code>PaymentReceived</code>, <code>WalletBalanceLow</code>, <code>AccountActivated</code>. It may define <code>smsDedupeKey()</code> when the event alone is not unique (e.g. <code>payment.received:{reference}</code>).</li>
+        <li>The notification is queued (they implement <code>ShouldQueue</code>), the channel runs, a <code>queued</code> row is inserted, <code>DeliverSmsMessage</code> is dispatched on the queue named by <code>config('sms.queue')</code> (default <code>sms</code>).</li>
+        <li>The job re-reads the switches. Off: <code>suppressed</code>. Otherwise it resolves the active <code>SmsProvider</code> (bound to <code>SmsProviderManager::driver()</code>, not a singleton, so an admin switching provider takes effect without restarting workers), increments <code>attempts</code>, sends, and records <code>sent</code> (with provider reference and cost) or the failure.</li>
+    </ol>
+    <p>Some SMS are not notifications: one-time codes (mobile verification, COD confirmation) are sent directly by their own senders and are governed by the same event switches; a switched-off code event raises <code>SmsEventSwitchedOff</code> so the screen can say no code is coming.</p>
+    <h3>Flow: a case or courier event reaches the bell</h3>
+    <ol>
+        <li>The model's <code>moveTo()</code> (or the courier action) calls the announcer. It captures plain values, then registers a closure with <code>DB::afterCommit</code>, so a rolled-back step announces nothing. A failure inside is reported and swallowed.</li>
+        <li>For each recipient it builds the notification, sets <code>id</code> to <code>Uuid::uuid5(NAMESPACE_URL, "feriwala:{event}:{subject}:{recipient public_id}")</code> and calls <code>Notification::send()</code>. The notification's <code>shouldSend()</code> (on <code>CourierPartnerUpdate</code>) skips a database row whose id already exists, so a repeat writes one entry.</li>
+        <li>The framework's <code>NotificationSent</code> event for the <code>database</code> channel reaches <code>BroadcastStoredNotification</code>, which fires <code>NotificationsChanged</code> (<code>ShouldBroadcastNow</code>) on the private channel <code>notifications.user.{public_id}</code> (or <code>notifications.supplier.{public_id}</code>). It carries only <code>reason</code> and <code>unread</code>, never text; the browser refetches what it is allowed to see.</li>
+        <li>When the person opens the bell, <code>RecentNotifications</code> turns each row into a title, description and link. Case links are computed at read time in <code>caseHref</code> (permission and ownership checked) and never stored.</li>
+    </ol>
+
+    <h2>Entry points</h2>
+    <table>
+        <thead><tr><th>Name</th><th>Method / URL</th><th>Handler</th><th>Notes</th></tr></thead>
+        <tbody>
+        <tr><td><code>notifications.read-all</code></td><td>POST <code>/notifications/read</code></td><td>Erp\NotificationController@readAll</td><td><code>auth</code>, <code>noindex</code>; open to unactivated accounts on purpose (they are who gets KYC notices)</td></tr>
+        <tr><td><code>notifications.read</code></td><td>POST <code>/notifications/{notification}/read</code></td><td>@read</td><td>same</td></tr>
+        <tr><td><code>admin.sms.index</code> / <code>.update</code></td><td>GET / PUT <code>/admin/sms</code></td><td>Admin\SmsController</td><td>view / manage; <code>admin</code> group</td></tr>
+        <tr><td><code>admin.sms.credentials.update</code></td><td>PUT <code>/admin/sms/credentials</code></td><td>@updateCredentials</td><td>encrypted at rest</td></tr>
+        <tr><td><code>admin.sms.balance</code></td><td>POST <code>/admin/sms/balance</code></td><td>@checkBalance</td><td></td></tr>
+        <tr><td><code>admin.sms.test</code></td><td>POST <code>/admin/sms/test</code></td><td>@sendTest</td><td>throttle 6/min</td></tr>
+        <tr><td><code>admin.sms.events.toggle</code></td><td>PUT <code>/admin/sms/events</code></td><td>@toggleEvent</td><td></td></tr>
+        <tr><td><code>admin.sms.storefront-verification.update</code></td><td>PUT <code>/admin/sms/storefront-verification</code></td><td>@updateStorefrontVerification</td><td>Platform policy: require the order confirmation code of every storefront</td></tr>
+        <tr><td>Mobile</td><td><code>GET notifications</code>, <code>POST notifications/read</code>, <code>POST notifications/{notification}/read</code></td><td>Api\Mobile\V1\Account\NotificationController</td><td><code>routes/mobile/account.php</code>; a Supplier counterpart is in <code>Supplier\Account\NotificationController</code></td></tr>
+        <tr><td>Queue</td><td><code>DeliverSmsMessage</code> on queue <code>sms</code> (<code>SMS_QUEUE</code>)</td><td>-</td><td>Needs a worker listening on it</td></tr>
+        <tr><td>Broadcast</td><td>Event <code>notifications.changed</code> on private channel</td><td>Reverb</td><td><code>BROADCAST_CONNECTION=reverb</code> in <code>.env.example</code></td></tr>
+        </tbody>
+    </table>
+    <p>The bell's data is shared to the page by the Inertia middleware (via <code>RecentNotifications</code>); the controller's <code>index</code> for the web bell was not verified separately.</p>
+
+    <h2>Permissions &amp; scoping</h2>
+    <ul>
+        <li><strong>The bell is self-scoped by construction.</strong> Every read and mark-read starts from <code>$user->notifications()</code>; there is no account or user parameter to tamper with (§31.3). A notification id belonging to someone else resolves to nothing.</li>
+        <li><strong>SMS settings:</strong> <code>SmsSettingsPolicy::canView</code> = <code>sms.view</code>, <code>canManage</code> = <code>sms.manage_settings</code> (held by the SMS Manager). Turning messaging off or switching provider decides whether customers hear about their own payments, so it is its own permission. The <code>sms</code> permission module has CRUD plus export, manage_settings and manage_integrations. <code>ToggleSmsEvent</code> checks the policy itself.</li>
+        <li><strong>Staff queue recipients</strong> are the holders of the queue's <code>view</code> permission (<code>delete</code> for the two deletion queues), plus Super Admins, platform access only. A business account's own staff and Suppliers are never told what is waiting in the platform's queues.</li>
+        <li><strong>Partner case and courier notices</strong> go to the account <strong>owner</strong> only.</li>
+        <li><strong>Content rule:</strong> a notification carries an outcome, kind, reference and public id; never a customer's name, number or address, an evidence name or path, a staff note, or an error body.</li>
+    </ul>
+
+    <h2>Money, ledger &amp; audit effects</h2>
+    <p>No ledger effect. <code>PaymentReceived</code> and <code>WalletBalanceLow</code> format a <code>Money</code> into the text (<code>$amount->format()</code>) and store <code>toDecimal()</code> plus the currency in the bell data; nothing is computed from a float.</p>
+    <p>Audit actions (module <code>sms</code>): <code>sms.settings_changed</code> (sensitive; before/after of enabled and provider), <code>sms.event_enabled</code> / <code>sms.event_disabled</code> (sensitive), <code>sms.test_sent</code> (provider, masked recipient, accepted, error code; never the message). The credentials action also audits; read <code>ConfigureSmsCredentials</code> for the exact name (not read for this page).</p>
+
+    <h2>Configuration</h2>
+    <table>
+        <thead><tr><th>Key</th><th>Meaning</th></tr></thead>
+        <tbody>
+        <tr><td><code>config('sms.default')</code> (<code>SMS_PROVIDER</code>, default <code>log</code>)</td><td>Default provider. <code>log</code> writes to the sms log channel instead of sending.</td></tr>
+        <tr><td><code>config('sms.enabled')</code> (<code>SMS_ENABLED</code>, default true)</td><td>Global switch default; the <code>sms.enabled</code> setting overrides it.</td></tr>
+        <tr><td><code>config('sms.providers')</code></td><td><code>log</code> and <code>gennet</code> have drivers (<code>LogSmsProvider</code>, <code>GenNetSmsProvider</code>, timeout <code>SMS_GENNET_TIMEOUT</code>, default 20 s). <code>bulksmsbd</code>, <code>novasms</code>, <code>sslcommerz</code>, <code>twilio</code> are declared with <code>driver =&gt; null</code> and cannot be chosen.</td></tr>
+        <tr><td><code>config('sms.queue')</code> (<code>SMS_QUEUE</code>, default <code>sms</code>)</td><td>Queue for <code>DeliverSmsMessage</code>.</td></tr>
+        <tr><td>Settings: <code>sms.provider</code>, <code>sms.enabled</code>, <code>sms.event.{event}</code></td><td>Admin-changeable without a deploy. Provider credentials (GenNet address, token, sender id) are encrypted settings, never <code>.env</code>.</td></tr>
+        <tr><td><code>QUEUE_CONNECTION=redis</code>, <code>REDIS_QUEUE_DB=2</code></td><td>Queue backend (from <code>.env.example</code>).</td></tr>
+        <tr><td><code>BROADCAST_CONNECTION=reverb</code>, <code>REVERB_*</code></td><td>Live bell updates.</td></tr>
+        <tr><td><code>MAIL_MAILER=log</code> (default in <code>.env.example</code>)</td><td>Mail channel goes to the log locally.</td></tr>
+        </tbody>
+    </table>
+
+    <h2>Rules, invariants &amp; gotchas</h2>
+    <div class="callout callout-warn"><p><strong>Event names contain dots: index the lang array, do not path into it.</strong> <code>__('notification.events.account.activated.title')</code> does NOT work: the translator splits on dots, looks for a nested <code>account</code> array and silently returns the key. Fetch <code>__('notification.events')</code> and index it with the raw event string (<code>RecentNotifications::line()</code>, <code>SmsEvent::describe()</code>). A missing line falls back to the raw event name on purpose: a visible <code>wallet.topped_up</code> in the bell is a bug someone fixes; a dropped row is one nobody notices (<code>.ai/rules/notification.md</code>).</p></div>
+    <div class="callout callout-rule"><p><strong>Case notifications come from the models' <code>moveTo()</code>, after commit.</strong> Return, exchange and damage notifications are sent by <code>AnnounceCaseEvent</code>, called from <code>OrderReturn::moveTo</code>, <code>OrderDamage::moveTo</code>, a few actions and <code>Order::moveTo</code> (exchange shipped). Never add a second sender in an action. Ids are uuid5 of event + case + recipient so repeats write one row; sending is wrapped in <code>DB::afterCommit</code>. Bell links for case events are computed at read time in <code>RecentNotifications::caseHref</code>, never stored.</p></div>
+    <ul>
+        <li><strong>A failure to notify never undoes the change it announces.</strong> Announcers catch, <code>report()</code> and continue; the SMS channel returns quietly for a missing number.</li>
+        <li><strong>Send after commit, never inside the transaction.</strong> Otherwise a rolled-back step announces something that did not happen.</li>
+        <li><strong>Retry the text, not the notification.</strong> SMS delivery is its own job precisely so a provider timeout does not re-send the email and bell entry.</li>
+        <li><strong>Dedupe at the database.</strong> The unique <code>dedupe_key</code> index decides, not an application check, because two concurrent dispatches would pass an application check. Provide <code>smsDedupeKey()</code> when two legitimate messages share an event and recipient.</li>
+        <li><strong>Switches are read at delivery,</strong> so turning an event off stops messages already queued.</li>
+        <li><strong>No-provider and not-configured are suppressed, not failed,</strong> keeping the failed-SMS log for real breakages.</li>
+        <li><strong>Case notifications are in-app only</strong> (D35): no email, SMS or push.</li>
+        <li><strong>Queue name mismatch to check.</strong> <code>compose.yaml</code> runs a worker with <code>--queue=payments,sync,notifications,sms,reports,maintenance</code>. The <code>ShouldQueue</code> notification classes read (e.g. <code>CourierPartnerUpdate</code>, <code>PaymentReceived</code>) set no queue, so they use the connection's default queue, which that list does not name. Verify the production worker command covers the default queue before relying on it. This is observation only, not a confirmed defect.</li>
+        <li><strong>Real SMS provider scope:</strong> only GenNet has a live-capable driver; the others are placeholders. Whether the GenNet integration has been run against the live service was not verified.</li>
+    </ul>
+
+    <h2>How to...</h2>
+    <h3>Add a bell notification</h3>
+    <ol>
+        <li>Create the class in <code>app/Notifications/{Area}/</code> extending <code>Illuminate\Notifications\Notification</code>, <code>implements ShouldQueue</code>, <code>use Queueable</code>, <code>via()</code> returning <code>['database']</code>, and <code>toArray()</code> returning at least <code>event</code> (a dotted name) plus the fields it needs (a reference, a public id). No personal data.</li>
+        <li>Add <code>events.{event}.title</code> and <code>.description</code> under <code>notification.events</code> in <code>lang/en/notification.php</code> and <code>lang/bn/notification.php</code>. Remember the dotted-key trap; keep the array keyed by the full event name.</li>
+        <li>If the link depends on who is reading, extend <code>RecentNotifications::href</code>/<code>caseHref</code> rather than storing a URL.</li>
+        <li>Send it after commit with a deterministic id (copy the <code>idFor()</code> pattern in <code>AnnounceCourierEvent</code>) so repeats write one row, and swallow-and-report failures.</li>
+    </ol>
+    <h3>Add an SMS notification</h3>
+    <ol>
+        <li>Add a case to <code>SmsEvent</code> (decide <code>isOneTimeCode()</code>) and its title/description under <code>sms.events</code> in <code>lang/en/sms.php</code> and <code>bn</code>. Add the template under <code>sms.templates.*</code>.</li>
+        <li>In the notification, add <code>'sms'</code> to <code>via()</code> and implement <code>toSms()</code> returning <code>new SmsMessage(to: '', body: __('sms.templates...'), locale: Locale::parse($notifiable->locale ?? null), event: SmsEvent::X->value)</code>; the channel fills in the recipient from <code>routeNotificationFor('sms')</code>.</li>
+        <li>Add <code>smsDedupeKey()</code> if one event can legitimately occur twice for a recipient.</li>
+        <li>Run the guard test in <code>SmsEventSwitchesTest</code>; add a case to <code>QueuedSmsTest</code>.</li>
+    </ol>
+    <h3>Notify staff that a new kind of work arrived</h3>
+    <ol>
+        <li>Add a case to <code>StaffQueue</code> and fill every <code>match</code>: <code>module()</code>, <code>cardKey()</code>, <code>route()</code>, <code>model()</code>, <code>waitingStatuses()</code> (and the dashboard lang card key). One definition drives who is told, what the dashboard counts and where the bell links.</li>
+        <li>Add <code>notification.events.queue.{value}</code> lines. After the submission commits, call <code>$queue->announce($submission)</code>.</li>
+    </ol>
+    <h3>Add an SMS provider</h3>
+    <ol>
+        <li>Write a driver extending <code>SmsGateway</code> (implements <code>SmsProvider</code>: <code>send</code>, <code>balance</code>, <code>name</code>, <code>isConfigured</code>, required/missing configuration) with a <code>SmsCredentials</code> subclass. A provider-side rejection returns an <code>SmsResult</code>, it does not throw.</li>
+        <li>Set its <code>driver</code> in <code>config/sms.php</code>. No change to the code that sends messages.</li>
+    </ol>
+
+    <h2>Testing</h2>
+    <pre><code>psql -c 'CREATE SCHEMA IF NOT EXISTS testing_mine'
+DB_SEARCH_PATH=testing_mine vendor/bin/pest tests/Feature/Notification</code></pre>
+    <table>
+        <thead><tr><th>File (<code>tests/Feature/Notification/</code>)</th><th>Covers (by name)</th></tr></thead>
+        <tbody>
+        <tr><td><code>QueuedSmsTest.php</code></td><td>Channel, queueing, dedupe, retries.</td></tr>
+        <tr><td><code>SmsEventSwitchesTest.php</code></td><td>Per-event switches and the guard on unlisted events.</td></tr>
+        <tr><td><code>SmsProviderTest.php</code></td><td>Admin SMS screen, provider choice.</td></tr>
+        <tr><td><code>GenNetSmsProviderTest.php</code></td><td>The GenNet driver (HTTP faked).</td></tr>
+        <tr><td><code>HeaderNotificationTest.php</code></td><td>Bell presentation.</td></tr>
+        <tr><td><code>StaffQueueNotificationsTest.php</code>, <code>RequesterDecisionNotificationsTest.php</code></td><td>Recipients and idempotent ids.</td></tr>
+        <tr><td><code>LiveNotificationsTest.php</code></td><td>Broadcast nudge.</td></tr>
+        <tr><td><code>tests/Feature/Cases/CaseNotificationsTest.php</code>, <code>tests/Feature/Courier/SteadfastNoticesTest.php</code></td><td>Case and courier announcements.</td></tr>
+        </tbody>
+    </table>
+    <p>A dedicated Pest group for notifications is not declared in <code>tests/Pest.php</code>; run by path. Use <code>Notification::fake()</code> or <code>Queue::fake()</code> as the existing tests do, and prefix any new helper to avoid global-namespace collisions.</p>
+
+    <h2>Related modules</h2>
+    <ul>
+        <li><a href="cases.html">Cases</a>, <a href="order.html">Order</a>, <a href="courier.html">Courier</a> - the main senders.</li>
+        <li><a href="account.html">Account</a>, <a href="kyc.html">KYC</a>, <a href="billing.html">Billing</a>, <a href="wallet.html">Wallet</a> - SMS-bearing notifications (activation, deadlines, payment, low balance).</li>
+        <li><a href="settings.html">Settings</a> - where SMS switches and encrypted credentials are stored.</li>
+        <li><a href="audit.html">Audit</a>, <a href="access.html">Access</a>, <a href="../guide/operations.html">Operations</a> (queues, scheduler, Reverb).</li>
+    </ul>
+</main>
+</body>
+</html>

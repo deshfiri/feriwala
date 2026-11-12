@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Glossary</title>
+    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+    <script src="../assets/docs.js"></script>
+</head>
+<body>
+<main id="doc">
+    <h1>Glossary</h1>
+    <p class="lead">Domain terms and project acronyms as the code, the specification (<code>requirements.txt</code>) and the decision log use them, in alphabetical order. Where a term has a module page it is linked.</p>
+
+    <div class="callout callout-note"><p><strong>Note.</strong> The product's brand name is Banij (<code>APP_NAME</code>, many comments and seeded emails), while the repository, spec and some logins say Feriwala. Both mean this system. "Partner" and "Client" both appear for the account that trades; the code's entity is <code>BusinessAccount</code>.</p></div>
+
+    <dl>
+        <dt>§ (section reference)</dt>
+        <dd>A numbered section of <code>requirements.txt</code>, the original specification, for example §12 (product restrictions), §23.2 (ledger), §31.3 (self-scoping), §36 (security). Code comments cite them. See <a href="decisions.html">Decisions</a>.</dd>
+
+        <dt>Account Owner</dt>
+        <dd>The registered, activated user who owns a <code>BusinessAccount</code>. A user owns at most one (D23). Staff are members, not owners. See <a href="../modules/account.html">Account</a>.</dd>
+
+        <dt>Action</dt>
+        <dd>A class in <code>app/Domain/&lt;Module&gt;/Actions</code> with one public <code>handle()</code>. Business logic lives in Actions; controllers validate, authorize, delegate and respond, and models hold relationships, casts and scopes only.</dd>
+
+        <dt>Activation</dt>
+        <dd>The move of a business account to <code>Active</code>. Automatic once KYC is approved, the exact payment settled and no hold exists (D27); manual otherwise. See <a href="../modules/account.html">Account</a>.</dd>
+
+        <dt>Activation hold</dt>
+        <dd>Three columns on <code>business_accounts</code> (<code>activation_hold_reason</code>, <code>activation_held_at</code>, <code>activation_held_by</code>), all present or all null. It disables only the automatic activation path (D27).</dd>
+
+        <dt>Admin / Super Admin</dt>
+        <dd>Platform roles (<code>admin</code>, <code>super_admin</code>) among the twenty-one in <code>PlatformRole</code>. The Super Admin alone may clear the audit log (D33) and manage website integration credentials (D32). See <a href="../modules/access.html">Access</a>.</dd>
+
+        <dt>Allocation (order item allocation)</dt>
+        <dd>A frozen decision about which source (warehouse stock or a Supplier offer) fulfils one order line, with its cost, selling price and margin locked by the database. Only workflow columns move. Table <code>order_item_allocations</code>. See <a href="../modules/sourcing.html">Sourcing</a>.</dd>
+
+        <dt>Audit log</dt>
+        <dd>The <code>audit_logs</code> table recording sensitive actions. UPDATE and TRUNCATE are refused; DELETE only through the guarded purge (D33), which leaves a permanent <code>audit.logs_purged</code> entry. See <a href="../modules/audit.html">Audit</a>.</dd>
+
+        <dt>Available to Spend</dt>
+        <dd>Wallet figure from <code>usableBalance()</code>: total less reserved, hold, pending, minimum balance and (where applicable) required deposit, floored at zero. Not the same as withdrawable. See <a href="../modules/wallet.html">Wallet</a>.</dd>
+
+        <dt>Banij</dt>
+        <dd>The brand name of the product. Appears as <code>APP_NAME</code>, in the Banij ERP heading of <code>CLAUDE.md</code>, and in DNS verification (<code>_banij-verify</code>).</dd>
+
+        <dt>BDT / Taka</dt>
+        <dd>Bangladeshi Taka, the base and only operational currency in v1 (D4). Money is flat Taka: <code>100</code> means BDT 100 at every layer (D26).</dd>
+
+        <dt>BJ number (partner number)</dt>
+        <dd>A partner's identity number: <code>BJ</code> plus eleven digits, held in <code>business_accounts.partner_number</code> and assigned by <code>HasPartnerNumber</code> or the <code>partners:assign-numbers</code> command. See <a href="commands.html">Commands</a>.</dd>
+
+        <dt>Business Account</dt>
+        <dd><code>App\Domain\Account\Models\BusinessAccount</code>, the commercial workspace with the 22 §5.3 statuses. Distinct from the <code>User</code> login identity (D23). Named so that "Account" alone is not read as "the thing I log into". See <a href="../modules/account.html">Account</a>.</dd>
+
+        <dt>Case</dt>
+        <dd>A return, an exchange or a damage handled by the one case workflow (D35). Returns and exchanges share <code>order_returns</code>; a damage is <code>order_damages</code>. See <a href="../modules/cases.html">Cases</a> and <a href="../modules/damage.html">Damage</a>.</dd>
+
+        <dt>Central catalogue / Central Product</dt>
+        <dd>Feriwala's single product catalogue. Only admins create products; partners select from it and Suppliers propose listings against it (§12, D25). See <a href="../modules/catalog.html">Catalog</a>.</dd>
+
+        <dt>Collection channel</dt>
+        <dd>How the money behind a Partner's proceeds was collected: <code>cod</code>, <code>platform_gateway</code> or <code>partner_gateway_external</code> (<code>CollectionChannel</code>, D36). A settlement row with no channel predates the field and is COD.</dd>
+
+        <dt>COD (cash on delivery)</dt>
+        <dd>Payment collected by the courier at delivery. Tracked separately from online payment, with its own confirmation, collection and reconciliation (§28). COD orders hold stock under a confirmation window. See <a href="../modules/order.html">Order</a>.</dd>
+
+        <dt>Commission</dt>
+        <dd>A Partner's earning on a dropshipping sale, rule-driven and reversible (§22). Retail margin is one calculation base on the rule, not a separate money path (D12).</dd>
+
+        <dt>Commission base</dt>
+        <dd>What a rule calculates from. For referral plans: the package fee, the registration fee or both (<code>CommissionBase</code>), taken net of discount and excluding tax and deposits (D24). See <a href="../modules/referral.html">Referral</a>.</dd>
+
+        <dt>Conditional / Non-Conditional account</dt>
+        <dd><code>AccountType</code>, set directly by an administrator. Under D34 both pay ERP wholesale in full; Non-Conditional Partners additionally sell Storefront Products with no upfront product cost, and only they are eligible for Model B gateways (D36). Older orders keep their original behaviour.</dd>
+
+        <dt>Contract (Storefront API contract)</dt>
+        <dd><code>requirements/05-storefront-api-contract.md</code>, frozen at v1. Non-breaking additions may ship into v1; breaking changes need v2 and approval. See <a href="../api/storefront-api.html">Storefront API</a>.</dd>
+
+        <dt>Credential (website credential)</dt>
+        <dd>A storefront's signing identity: key id plus encrypted secret, scoped to one website, with scopes, rotation and revocation. The secret is shown once. See <a href="../modules/website.html">Website</a>.</dd>
+
+        <dt>Currency code</dt>
+        <dd>The <code>currency_code</code> column that sits beside every money column (default <code>BDT</code>). Currency mismatches are rejected by <code>Money</code>.</dd>
+
+        <dt>D-number</dt>
+        <dd>A decision in <code>requirements/04-decisions.md</code>, D1 to D36. Note two decisions are headed D30 and a few code comments cite an old D29 or "D-new". See <a href="decisions.html">Decisions</a>.</dd>
+
+        <dt>Damage</dt>
+        <dd>A case for a damaged item, with its own status machine from <code>Reported</code> to <code>ReceivedByPartner</code>. A damage the Partner bears debits their wallet up to the snapshotted suggested price times quantity. See <a href="../modules/damage.html">Damage</a>.</dd>
+
+        <dt>Dedicated website</dt>
+        <dd>A Partner's own public storefront (§16), fed by the ERP over the API and webhooks, counted against the package's Websites limit. See <a href="../modules/website.html">Website</a>.</dd>
+
+        <dt>Delivery success fee</dt>
+        <dd>A percentage fee charged once against a Supplier's own payable when its order reaches Delivered; the rate is frozen on the row (<code>delivery_success_fees</code>). Not reversed by a later return. See <a href="../modules/supplier.html">Supplier</a>.</dd>
+
+        <dt>DFCOMMERCE</dt>
+        <dd>The first external store platform with a driver (<code>DfcommerceDriver</code>). Also a design reference for the storefront, but none of its backend is reused (D30). See <a href="../modules/external-store.html">External store</a>.</dd>
+
+        <dt>Deposit rule</dt>
+        <dd>A dated, scoped requirement for deposit and minimum balance (<code>deposit_rules</code>), resolved by scope precedence and never edited in place; a change closes one row and opens another (§24.1). See <a href="../modules/wallet.html">Wallet</a>.</dd>
+
+        <dt>Distributed lock</dt>
+        <dd><code>App\Support\Concurrency\DistributedLock</code>, backed by the isolated Redis lock database (connection <code>locks</code>). Also used by the scheduler's <code>onOneServer()</code>.</dd>
+
+        <dt>Dropshipping / Partner Selling</dt>
+        <dd>A Partner publishes selected catalogue products on their website; Feriwala fulfils, so the Partner holds no stock. Feriwala is merchant of record (D12) except under Model B (D36).</dd>
+
+        <dt>Entitlement</dt>
+        <dd>What an account's package grants, read from a real subscription term (<code>PackageFeature</code> values such as <code>staff_limit</code>, <code>website_limit</code>). A missing feature row means zero, not unlimited. Enforced by the <code>entitled</code> middleware. See <a href="../modules/package.html">Package</a>.</dd>
+
+        <dt>EPS</dt>
+        <dd>One of the eight payment gateways (<code>EpsGateway</code>), disabled in config by default; the guide PDF is the authority for its integration. See <a href="../modules/billing.html">Billing</a>.</dd>
+
+        <dt>Evidence slot</dt>
+        <dd>One piece of evidence a KYC requirement is made of: a file, image, PDF, typed value or declaration (<code>KycRequirementSlot</code>, D30 KYC). See <a href="../modules/kyc.html">KYC</a>.</dd>
+
+        <dt>Exchange Order</dt>
+        <dd>The replacement order created at an exchange request (<code>source = exchange</code>), released to fulfilment only as inspection approves the returned goods. Numbered <code>EX-{original order number}</code>, then <code>-2</code>, <code>-3</code> (D35).</dd>
+
+        <dt>External store</dt>
+        <dd>A partner's store on another platform, mirrored read-only (D29). No Feriwala payment, wallet or ledger row is ever written for its orders. Owner self-service connection was retired by D30. See <a href="../modules/external-store.html">External store</a>.</dd>
+
+        <dt>Flat Taka</dt>
+        <dd>The money convention of D26: exact decimal Taka in <code>NUMERIC(19,2)</code>, no poisha, nothing multiplied or divided by 100. See <a href="database.html">Database</a>.</dd>
+
+        <dt>Fulfilment commitment</dt>
+        <dd>A Supplier's commitment to fulfil one order line from an on-demand or pre-order offer; the row is the capacity reservation, with a confirmation deadline swept hourly. See <a href="../modules/supplier.html">Supplier</a>.</dd>
+
+        <dt>Gateway (payment gateway)</dt>
+        <dd>A payment provider behind the <code>PaymentGateway</code> contract: SSLCommerz, EPS, SurjoPay, AmarPay, bKash, Nagad, Stripe, PayPal. Credentials are encrypted rows, never env variables. See <a href="../integrations/overview.html">Integrations</a>.</dd>
+
+        <dt>Grace period</dt>
+        <dd>A window after a package term ends or a balance falls short before services are restricted, configured per package or deposit rule (§8.4, §24.3). A stamped grace deadline is never moved by a repeat sweep.</dd>
+
+        <dt>HasPublicId / HasSlug</dt>
+        <dd>Model traits giving a ULID <code>public_id</code> or a unique slug for use in URLs. No database id may appear in a public URL.</dd>
+
+        <dt>Hold</dt>
+        <dd>Three distinct things: the wallet <code>hold</code> bucket (money set aside for a reason); an activation hold on an account (above); and an order hold, <code>OnHold</code> with reason <code>partner_wallet_insufficient</code>, for a Model B order whose receivable is not yet collectable (D36).</dd>
+
+        <dt>Idempotency key</dt>
+        <dd>A unique key making an externally triggered financial write safe to repeat, kept in a unique column (durable) and guarded by a Redis lock for the replay window. See <code>IdempotencyService</code>.</dd>
+
+        <dt>Identity status</dt>
+        <dd><code>User.identity_status</code>: login-level suspension, blocking or closure, gating everything including administration (D23).</dd>
+
+        <dt>Inertia</dt>
+        <dd>The server-driven SPA layer (v3) used for the ERP pages in <code>resources/js/pages</code>; controllers return <code>Inertia::render()</code>. See <a href="frontend.html">Frontend</a>.</dd>
+
+        <dt>KYC batch / round / version</dt>
+        <dd>A batch is a template of groups, requirements and slots; publishing freezes an immutable version; a round is one submission attempt, reading its structure from one version only (D30 KYC). See <a href="../modules/kyc.html">KYC</a>.</dd>
+
+        <dt>Ledger entry</dt>
+        <dd>An immutable row in <code>ledger_entries</code> (or <code>supplier_ledger_entries</code>) recording every financial transaction with balance before and after. No update, no delete, enforced by trigger. Corrections are new rows (§23.2). See <a href="../modules/wallet.html">Wallet</a>.</dd>
+
+        <dt>Locked column</dt>
+        <dd>A column a database trigger refuses to change after insert (<code>feriwala_catalogue_columns_are_locked</code>), such as <code>public_id</code> or an owner. See <a href="database.html">Database</a>.</dd>
+
+        <dt>Low balance</dt>
+        <dd>A wallet below what its account must hold: the graded response is notify, grace, restrict, disable, auto-restore on top-up (§24.3). Also the account status <code>LowWalletBalance</code> and the website status of the same name.</dd>
+
+        <dt>Merchant of record</dt>
+        <dd>The party that takes the customer's payment and carries refund and chargeback duty. Feriwala for dropshipping Model A (D12); the Partner for Model B (D36).</dd>
+
+        <dt>Minimum balance / required deposit</dt>
+        <dd>Wallet amounts an account must keep (protected from withdrawal) and the initial deposit it must make, set by deposit rules (§24).</dd>
+
+        <dt>Mobile API</dt>
+        <dd>The Sanctum bearer-token, JSON-only API under <code>/api/mobile/v1</code>, self-scoped like the web ERP (§31.3) and reusing the same Actions and policies. See <a href="../api/mobile-api.html">Mobile API</a>.</dd>
+
+        <dt>Model A / Model B</dt>
+        <dd>The two payment directions for Store Orders: A, Feriwala's platform gateway (D12); B, the Partner's own gateway with a platform receivable recovered from the Partner wallet (D36). Frozen per payment as <code>GatewayOwnership</code> (<code>Platform</code> or <code>Partner</code>).</dd>
+
+        <dt>Money</dt>
+        <dd><code>App\Support\Money\Money</code>: an exact decimal Taka string with bcmath arithmetic, explicit rounding, exact allocation and currency checking. Cast with <code>MoneyCast</code>. Parsed from input by <code>DecimalAmount::parse()</code>.</dd>
+
+        <dt>Offer (Supplier offer)</dt>
+        <dd>One Supplier's independently priced, independently stocked claim on a product or variation (<code>SupplierOffer</code>). One variation may carry several. See <a href="../modules/supplier.html">Supplier</a>.</dd>
+
+        <dt>Order source</dt>
+        <dd>Where an order came from, for example <code>erp_wholesale</code>, website, <code>exchange</code>. Fulfilment rules can differ by source (D13). See <a href="../modules/order.html">Order</a>.</dd>
+
+        <dt>Package</dt>
+        <dd>An admin-created plan with a fee, validity, renewal terms, grace period and typed features (<code>PackageFeature</code>); an account's term is a <code>user_packages</code> row. See <a href="../modules/package.html">Package</a>.</dd>
+
+        <dt>Partner</dt>
+        <dd>A business account that has been activated and trades, selling wholesale purchases or dropshipping through its website. The UI word for what the code calls a <code>BusinessAccount</code>. Distinct from a Supplier.</dd>
+
+        <dt>Partner gateway configuration</dt>
+        <dd>A versioned, encrypted, write-only store of a Partner's own gateway credentials for Model B; each payment freezes the exact version it used (D36). See <a href="../modules/billing.html">Billing</a>.</dd>
+
+        <dt>Partner stock</dt>
+        <dd>Units a Partner owns after an ERP wholesale purchase, in buckets (<code>PartnerStockItem</code>). A Storefront sells these or, for Non-Conditional accounts, platform stock, but the two are never mixed (D34). See <a href="../modules/inventory.html">Inventory</a>.</dd>
+
+        <dt>Payable (Supplier payable)</dt>
+        <dd>What Feriwala owes a Supplier for one allocated order line. A claim, not money: it credits no wallet until settlement. Figures are locked by the database; a return appends a reversal. See <a href="../modules/supplier.html">Supplier</a>.</dd>
+
+        <dt>Payout method</dt>
+        <dd>Where a Supplier or Partner is paid: one owner-polymorphic table, details encrypted, masked display, snapshotted onto a withdrawal at request time. See <a href="../modules/payout.html">Payout</a>.</dd>
+
+        <dt>Permission</dt>
+        <dd>A Spatie permission named <code>&lt;module&gt;.&lt;action&gt;</code> (for example <code>withdrawal.approve</code>), listed in <code>PermissionCatalogue</code> and seeded by <code>RolesAndPermissionsSeeder</code>. See <a href="../modules/access.html">Access</a>.</dd>
+
+        <dt>Platform credit</dt>
+        <dd>The wallet kind that is spendable inside Banij but never withdrawable (top-ups, deposits, rewards). It becomes withdrawable only through an audited conversion; there is no reverse. A spend takes platform credit first.</dd>
+
+        <dt>Platform rate</dt>
+        <dd>What Feriwala charges for a Supplier-sourced item; the only figure a Partner ever sees. The Supplier Rate stays confidential (D25).</dd>
+
+        <dt>Platform receivable</dt>
+        <dd>What Banij is owed on a Model B Store Order, frozen at placement: product/platform recovery plus delivery plus delivery tax. Append-only; collected from the Partner wallet all-or-nothing (D36).</dd>
+
+        <dt>Platform role</dt>
+        <dd>One of the twenty-one Feriwala staff roles, not bound to a business account (D2, D23), as distinct from an account staff role such as <code>Owner</code>, <code>Manager</code> or <code>Staff</code> (<code>AccountRole</code>).</dd>
+
+        <dt>Poisha</dt>
+        <dd>One hundredth of a Taka. Deliberately absent from the system since D26; the word survives only in historical migrations and a few comments. A guard test fails the build if poisha conversion returns.</dd>
+
+        <dt>Proceeds (order proceeds settlement)</dt>
+        <dd>Whether and how much a Non-Conditional Partner earns on an order line (<code>order_proceeds_settlements</code>), credited only after delivery and confirmed collection. See <a href="../modules/order.html">Order</a>.</dd>
+
+        <dt>Public ID</dt>
+        <dd>A ULID in <code>public_id</code> used wherever an identifier is exposed. The bigint primary key is internal only.</dd>
+
+        <dt>Reconciliation</dt>
+        <dd>Checking the system against an outside truth: gateway reconciliation (every two minutes), ledger integrity (daily), courier and COD reconciliation (§28). Reports a mismatch and repairs nothing silently. See <a href="operations.html">Operations</a>.</dd>
+
+        <dt>Reference (human reference)</dt>
+        <dd>A typed, unique code such as <code>ORD-</code>, <code>PAY-</code>, <code>TXN-</code>, <code>WDR-</code>, <code>INV-</code>, <code>STL-</code>, <code>RFD-</code>, <code>RET-</code>, <code>DMG-</code>, <code>SHP-</code>, generated by <code>HasReference</code> from <code>ReferencePrefix</code>.</dd>
+
+        <dt>Referral</dt>
+        <dd>The multi-level programme (D24): one direct referrer per account, commission to ancestors up to the plan's depth, off by default. See <a href="../modules/referral.html">Referral</a>.</dd>
+
+        <dt>Reservation (stock reservation)</dt>
+        <dd>Units set aside for an order not yet confirmed, expiring by a window (<code>ReservationKind</code>: <code>online_payment</code> or <code>cod</code>); the overselling guard. Released by a scheduled sweep every minute. See <a href="../modules/inventory.html">Inventory</a>.</dd>
+
+        <dt>Retail margin</dt>
+        <dd>The Partner's selling price less the platform's entitlement. A calculation base for the earnings engine, not a money path of its own (D12). In Model B it is reporting only and never credited (D36).</dd>
+
+        <dt>Return charge</dt>
+        <dd>Half the original frozen delivery charge, rounded half away from zero and computed with bcmath, debited from the Partner at settlement after inspection approves (D35).</dd>
+
+        <dt>Reverb</dt>
+        <dd>Laravel's WebSocket server, used for the live notification bell and panel updates (<code>php artisan reverb:start</code>, port 8080).</dd>
+
+        <dt>Rotation grace window</dt>
+        <dd>How long a rotated website credential secret keeps verifying so a storefront can redeploy: <code>STOREFRONT_ROTATION_GRACE_MINUTES</code>, default 1440. See <a href="../modules/website.html">Website</a>.</dd>
+
+        <dt>Row lock</dt>
+        <dd>PostgreSQL <code>SELECT ... FOR UPDATE</code> (<code>lockForUpdate()</code>) taken inside a transaction on the wallet, stock or order row. Required for every financial mutation.</dd>
+
+        <dt>Sanctum</dt>
+        <dd>Laravel's token authentication, used for the mobile API (<code>personal_access_tokens</code>).</dd>
+
+        <dt>Scope (credential scope)</dt>
+        <dd>A permission on a website credential: <code>catalog:read</code>, <code>inventory:read</code>, <code>orders:read</code>, <code>orders:write</code>, <code>customers:write</code>, <code>returns:write</code> (<code>CredentialScope</code>). Chosen explicitly, never defaulted (D32 P1).</dd>
+
+        <dt>Selection (website product)</dt>
+        <dd>A central product chosen for one storefront (<code>WebsiteProduct</code>). A selection, never a copy: the product's name, images and stock stay in the catalogue; the selection holds placement, display order, price and promotion within admin bounds (§15.1). See <a href="../modules/website.html">Website</a>.</dd>
+
+        <dt>Self-scoping</dt>
+        <dd>The rule that a non-admin cannot reach another user's data through a URL, API call, export or modified parameter (§31.3). Implemented in queries and scopes, never only in the UI.</dd>
+
+        <dt>Settlement</dt>
+        <dd>The closing of a financial claim: gateway settlement of a payment, a return or damage case settlement after inspection, Partner proceeds settlement, Supplier payable settlement, and COD settlement against courier statements. Context decides which.</dd>
+
+        <dt>Shared address</dt>
+        <dd>The structured address book for business accounts and Suppliers, tied to <code>bd_locations</code> (division, district, upazila, union). Separate from free-text <code>user_addresses</code> (D28). See <a href="../modules/address.html">Address</a>.</dd>
+
+        <dt>Slot (allocation slot / evidence slot)</dt>
+        <dd>In websites, one entitlement slot per permitted website, each with its own domain and hosting period (D30). In KYC, an evidence slot (above). Different tables, different meaning.</dd>
+
+        <dt>Source link</dt>
+        <dd>A legacy staff assertion that stock catalogued under a different product fulfils orders for this one (<code>ProductSourceLink</code>). No longer used by allocation; kept as inactive history. See <a href="../modules/sourcing.html">Sourcing</a>.</dd>
+
+        <dt>Sourcing group</dt>
+        <dd>A staff-declared set of catalogue products that can fulfil the same ordered product (<code>ProductSourcingGroup</code>), never inferred from names or SKUs. Some structures were later converted to product links and supplier assignments; see the module page.</dd>
+
+        <dt>SSLCommerz</dt>
+        <dd>The first and only default-enabled gateway (D7). Its sandbox cannot reach a local address, which is why a local payment may need the reconciliation sweep. Also the name of a (disabled) SMS provider entry.</dd>
+
+        <dt>Staff</dt>
+        <dd>Either Feriwala's own platform staff (platform roles) or an account's staff members under one owner, capped by the package Staff Limit (D1). Different scopes that never mix (D2).</dd>
+
+        <dt>Steadfast</dt>
+        <dd>The first real courier API behind the provider-neutral shipment domain (D8). Statuses arrive by webhook (Bearer token) and a five-minute poll through one locked action. "Delivered" never means "cash collected". See <a href="../modules/courier.html">Courier</a>.</dd>
+
+        <dt>Store ID / store password</dt>
+        <dd>The SSLCommerz credential pair a gateway configuration holds, either Feriwala's own or a Partner's under Model B. Held encrypted and masked; never copied into payment rows or logs.</dd>
+
+        <dt>Storefront</dt>
+        <dd>A customer-facing partner website application consuming the ERP's Storefront API. Since D32 each Owner has an independent installation built from the Master Storefront Template. See <a href="../storefront-app.html">Storefront app</a>.</dd>
+
+        <dt>Store Order</dt>
+        <dd>An order placed on a Partner's storefront, as against an ERP wholesale purchase. The unit Model B and Non-Conditional settlement apply to.</dd>
+
+        <dt>Supplier</dt>
+        <dd>A separate account domain (D25): its own model, <code>supplier</code> guard, KYC, portal, wallet and payables. Never convertible to or from a Partner login. See <a href="../modules/supplier.html">Supplier</a>.</dd>
+
+        <dt>Supplier Rate</dt>
+        <dd>A Supplier's own price (<code>supplier_rate</code>), confidential to that Supplier and staff with <code>supplier_pricing.view</code>; never in a Partner prop, API response, export, log or notification (D25).</dd>
+
+        <dt>Supply mode</dt>
+        <dd>How an offer is supplied: <code>ready_stock</code>, <code>on_demand</code> or <code>pre_order</code> (<code>SupplyMode</code>). A declared fact, not a lifecycle, so "no confirmed stock" is never read as zero or unlimited.</dd>
+
+        <dt>Sweep</dt>
+        <dd>A scheduled, idempotent pass that moves things whose time has come (expiry, reconciliation, retries). All run with <code>onOneServer()</code> and <code>withoutOverlapping()</code>. See <a href="operations.html">Operations</a>.</dd>
+
+        <dt>Tax-exclusive</dt>
+        <dd>The default tax mode (D19): prices exclude tax and the tax is added; inclusive pricing is supported by configuration. No statutory rate is hardcoded. See <a href="../modules/tax.html">Tax</a>.</dd>
+
+        <dt>Taka</dt>
+        <dd>See BDT.</dd>
+
+        <dt>TransitionableState</dt>
+        <dd>Interface in <code>App\Support\StateMachine</code> that status enums implement, declaring <code>transitionsTo()</code>, <code>label()</code> and <code>isTerminal()</code>. Statuses move through <code>transitionTo()</code> (trait <code>HasStateMachine</code>), never by assigning the attribute.</dd>
+
+        <dt>Typed balance</dt>
+        <dd>The wallet split into platform credit and withdrawable money, with reserved and hold amounts remembering their split (<code>.ai/rules/wallet.md</code>). Never compute withdrawable as <code>total - platform_credit</code>.</dd>
+
+        <dt>Wallet</dt>
+        <dd>An account's set of balance buckets (total, reserved, pending, hold, required deposit, minimum balance, COD receivable) backed by the immutable ledger. Written only through <code>WalletService</code>. A Supplier has a separate <code>supplier_wallets</code>. See <a href="../modules/wallet.html">Wallet</a>.</dd>
+
+        <dt>Wayfinder</dt>
+        <dd>Generates typed TypeScript route functions into <code>resources/js/actions</code> and <code>resources/js/routes</code>. Always regenerate with <code>--with-form</code>. See <a href="commands.html">Commands</a>.</dd>
+
+        <dt>Webhook secret</dt>
+        <dd>The signing secret for a webhook: a website's outbound endpoint secret, an external store's HMAC secret, or Steadfast's Bearer token. Shown once or encrypted, never logged. See <a href="operations.html">Operations</a>.</dd>
+
+        <dt>Website</dt>
+        <dd>A Partner's dedicated site record with its own status machine (<code>WebsiteStatus</code>, fourteen cases from <code>SetupPending</code> to <code>Closed</code>), domains, hosting, charges, credentials and webhook endpoint. See <a href="../modules/website.html">Website</a>.</dd>
+
+        <dt>Wholesale</dt>
+        <dd>Bulk purchase by a logged-in Partner inside the ERP (order source <code>erp_wholesale</code>), always paid in full since D34. The public site never shows products or prices. See <a href="../modules/wholesale.html">Wholesale</a>.</dd>
+
+        <dt>Withdrawal</dt>
+        <dd>A Partner or Supplier request to pay out withdrawable wallet money, with default rules and per-user overrides, approval and a paid lifecycle. Blocked while a collectable Model B hold exists. See <a href="../modules/withdrawal.html">Withdrawal</a>.</dd>
+    </dl>
+
+    <p>Related: <a href="decisions.html">Decisions</a>, <a href="architecture.html">Architecture</a>, <a href="conventions.html">Conventions</a>.</p>
+</main>
+</body>
+</html>

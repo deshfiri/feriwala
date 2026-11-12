@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Storefront app</title>
+    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+    <script src="assets/docs.js"></script>
+</head>
+<body>
+<main id="doc">
+    <h1>Storefront app</h1>
+    <p class="lead">The customer-facing shop for one partner website: a separate Laravel application in <code>storefront/</code> with its own repository, database (MySQL) and deployment. It talks to the ERP only through the frozen <a href="api/storefront-api.html">Storefront API</a> and never decides a price. Read this to install, configure, run or change it.</p>
+
+    <div class="callout callout-rule"><p><strong>Rule.</strong> The storefront has no access to the ERP database, never computes money, never holds a gateway credential, and never stores a price in the basket. Every figure shown was worked out by the ERP; an order is submitted with exactly those figures, and a <code>0.01</code> difference makes the customer confirm the new total again (D11, D12, D32).</p></div>
+
+    <h2>What it is</h2>
+    <p>Per D32 each partner website is served by <em>its own installation</em> of this app. It is Laravel 13 on PHP 8.3 or newer (<code>storefront/composer.json</code>), needs <code>pdo_mysql</code>, <code>curl</code> and <code>mbstring</code>, has no Node build (plain CSS and JS in <code>public/assets</code>), and supports English and Bangla (<code>lang/en.json</code>, <code>lang/bn.json</code>). Features: home, catalogue, category and search with the ERP's filters; product pages; a basket that remembers SKUs and quantities; guest checkout (COD or online payment) with a review step and price-change reconfirmation; an order page (pay, cancel, confirm a COD code, request a return); order lookup by reference <em>and</em> mobile number; a webhook receiver. Its own README is <code>storefront/README.md</code>.</p>
+    <p>The ERP side of the relationship (credentials, webhook endpoint, "Connect the store") is documented in <a href="modules/website.html">Website module</a>.</p>
+
+    <h2>Structure</h2>
+    <table>
+        <thead><tr><th>Path (under <code>storefront/</code>)</th><th>Role</th></tr></thead>
+        <tbody>
+        <tr><td><code>app/Erp/Client.php</code></td><td>The signed ERP client. <code>get</code>, <code>post</code>, <code>patch</code>. Builds the canonical request, signs, retries <code>429</code>/<code>5xx</code>/connection failures with backoff, never follows redirects, gives every non-GET an <code>Idempotency-Key</code>. <code>Client::fromConfig()</code> throws if <code>ERP_BASE_URL</code>, <code>STORE_ID</code> or <code>STORE_TOKEN</code> is empty, and if the base URL is not https (http is allowed only when <code>APP_ENV=local</code>). Bound as a singleton in <code>AppServiceProvider</code>.</td></tr>
+        <tr><td><code>app/Erp/Signature.php</code></td><td>The request signature (same algorithm as the ERP's <code>RequestSignature</code>): <code>canonical()</code>, <code>sign()</code>, <code>authorization()</code>, and <code>nonce()</code> (a v4 UUID, also used as the idempotency key).</td></tr>
+        <tr><td><code>app/Erp/ErpException.php</code></td><td>Carries <code>status</code>, <code>errorCode</code> (the contract's stable code), <code>details</code>, <code>requestId</code>, <code>retryAfter</code>. <code>isUnavailable()</code> is true for status 0, 429 or 5xx. Nothing branches on the message. It is not reported; <code>bootstrap/app.php</code> renders it as the "unavailable" page (503) or 404 and logs the request id.</td></tr>
+        <tr><td><code>app/Services/Catalog.php</code></td><td>Products, facets, categories, inventory via the ERP, cached through <code>ApiCache</code> with tag <code>catalog</code>. Only the filters the API understands are forwarded.</td></tr>
+        <tr><td><code>app/Services/Site.php</code></td><td><code>GET /site</code> through a cache (tag <code>site</code>); falls back to a conservative site that says it cannot take orders when the ERP is unreachable. Also vets the banner link and colours before they reach HTML or CSS.</td></tr>
+        <tr><td><code>app/Services/Basket.php</code></td><td>Basket kept in the database against a cookie token (cookie <code>sf_cart</code>). Stores SKU, quantity and display data, <em>never a price</em>. Limits: 50 lines, quantity 1000 (<code>MAX_LINES</code>, <code>MAX_QUANTITY</code>).</td></tr>
+        <tr><td><code>app/Services/Checkouts.php</code></td><td>Basket to order: <code>quote()</code> (POST <code>/checkout/quote</code>), <code>place()</code> (POST <code>/orders</code> with the stored quote as the storefront's claim). On <code>price_mismatch</code> it stores the ERP's authoritative figures, issues a new idempotency key and returns <code>repriced</code>. Claims a checkout (<code>draft</code> to <code>placing</code>); a claim older than two minutes counts as abandoned. <code>returnUrl()</code> is <code>APP_URL/payment/return</code> only when <code>APP_URL</code> is https.</td></tr>
+        <tr><td><code>app/Services/Orders.php</code></td><td>Local order rows so a customer can find an order again; status is always read back from the ERP. Access: the order's unguessable <code>access_token</code>, the placing session, or reference plus mobile (rate limited). A miss and a wrong number are indistinguishable.</td></tr>
+        <tr><td><code>app/Services/Webhooks.php</code></td><td>Verifies and applies the ERP's webhooks (below).</td></tr>
+        <tr><td><code>app/Services/ApiCache.php</code></td><td>Short-lived tagged cache of ERP reads in the <code>api_cache</code> table: <code>remember</code>, <code>forgetTag</code>, <code>forgetKey</code>, <code>flush</code>, <code>prune</code>. A TTL bounds staleness if a webhook is lost. Quotes and orders are never cached.</td></tr>
+        <tr><td><code>app/Http/Controllers/</code></td><td><code>CatalogController</code>, <code>CartController</code>, <code>CheckoutController</code>, <code>OrderController</code>, <code>SystemController</code> (areas proxy, locale, about, contact, robots, health, migrate), <code>WebhookController</code>.</td></tr>
+        <tr><td><code>app/Http/Middleware/</code></td><td><code>LoadStorefront</code> (language, the site's status, layout data; an unavailable shop answers every page with a 503 "closed" view and <code>Retry-After: 120</code>), <code>SecurityHeaders</code> (nosniff, frame deny, referrer policy, a CSP that allows images from https and from the ERP's origin).</td></tr>
+        <tr><td><code>app/Models/</code>, <code>app/Support/</code></td><td><code>Cart</code>, <code>CartItem</code>, <code>Checkout</code>, <code>Order</code>; helpers and <code>Money</code> (decimal-string handling).</td></tr>
+        <tr><td><code>app/Console/Commands/</code></td><td><code>storefront:doctor</code>, <code>storefront:prune</code>.</td></tr>
+        <tr><td><code>resources/views/</code></td><td>Blade: <code>home</code>, <code>catalog/</code>, <code>cart/</code>, <code>checkout/</code>, <code>orders/</code>, <code>pages/</code>, <code>errors/</code> (<code>404</code>, <code>500</code>, <code>closed</code>, <code>unavailable</code>), <code>layouts/app</code>, <code>partials/</code>.</td></tr>
+        <tr><td><code>database/migrations/</code></td><td>Cache table, and <code>2025_10_18_000001_create_storefront_tables.php</code> creating <code>sessions</code>, <code>carts</code>, <code>cart_items</code>, <code>checkouts</code>, <code>orders</code>, <code>api_cache</code>, <code>webhook_deliveries</code>. Guarded with <code>hasTable</code> so it upgrades the earlier plain-PHP storefront in place (only the sessions table is rebuilt).</td></tr>
+        <tr><td><code>config/erp.php</code>, <code>config/storefront.php</code></td><td>ERP connection; shop settings (below).</td></tr>
+        <tr><td><code>routes/web.php</code>, <code>routes/system.php</code></td><td>The shop (session, CSRF, shop-status middleware); and the routes that must work without a session or shop lookup: <code>GET /health</code>, <code>GET /migrate</code>, <code>POST /webhooks/feriwala</code>. <code>bootstrap/app.php</code> loads <code>system.php</code> outside the <code>web</code> group.</td></tr>
+        <tr><td><code>tests/</code></td><td>Pest; in-memory SQLite and <code>Http::fake()</code> (<code>tests/Support/FakeErp.php</code>); <code>SignatureTest</code>, <code>SupportTest</code>, <code>StorefrontDesignTest</code>.</td></tr>
+        </tbody>
+    </table>
+
+    <h2>Environment variables</h2>
+    <p>From <code>storefront/.env.example</code> and the config files. Names only; never commit values. <code>.env.example</code> ships an <code>APP_KEY</code> line: replace it with your own via <code>key:generate</code>.</p>
+    <table>
+        <thead><tr><th>Variable</th><th>Meaning</th></tr></thead>
+        <tbody>
+        <tr><td><code>APP_NAME</code></td><td>Shop name used by the framework.</td></tr>
+        <tr><td><code>APP_KEY</code></td><td>Required; generate with <code>php artisan key:generate</code>.</td></tr>
+        <tr><td><code>APP_URL</code></td><td>This storefront's public address, no trailing slash. Must be https in production: it is what the ERP returns customers to after paying (<code>/payment/return</code>), and <code>storefront:doctor</code> checks it.</td></tr>
+        <tr><td><code>APP_ENV</code>, <code>APP_DEBUG</code></td><td>Environment and debug. <code>APP_ENV=local</code> permits an http ERP and <code>ERP_INSECURE_TLS</code>.</td></tr>
+        <tr><td><code>TRUSTED_PROXY</code></td><td><code>1</code> only behind a proxy or load balancer you control: then <code>X-Forwarded-For</code> and <code>-Proto</code> are believed (<code>storefront.trusted_proxy</code>, <code>TrustProxies::at('*')</code>).</td></tr>
+        <tr><td><code>DB_CONNECTION</code>, <code>DB_HOST</code>, <code>DB_PORT</code>, <code>DB_DATABASE</code>, <code>DB_USERNAME</code>, <code>DB_PASSWORD</code>, <code>DB_SOCKET</code> (commented)</td><td>MySQL. The older <code>DB_NAME</code>, <code>DB_USER</code>, <code>DB_PASS</code> still work.</td></tr>
+        <tr><td><code>SESSION_DRIVER</code></td><td><code>database</code>, so the web server holds no state.</td></tr>
+        <tr><td><code>SESSION_LIFETIME</code></td><td>Minutes (it was seconds in the plain-PHP storefront).</td></tr>
+        <tr><td><code>CACHE_STORE</code></td><td><code>database</code>.</td></tr>
+        <tr><td><code>LOG_CHANNEL</code>, <code>LOG_LEVEL</code></td><td>Logging.</td></tr>
+        <tr><td><code>ERP_BASE_URL</code></td><td>The ERP's origin, for example <code>https://erp.example.com</code>; trailing slash stripped.</td></tr>
+        <tr><td><code>STORE_ID</code></td><td>The credential's key id (<code>wsk_...</code>). <code>ERP_KEY_ID</code> is the earlier name and is still read.</td></tr>
+        <tr><td><code>STORE_TOKEN</code></td><td>The credential's secret, shown once by the ERP. <code>ERP_SECRET</code> is the earlier name, still read.</td></tr>
+        <tr><td><code>ERP_STOREFRONT_HOST</code></td><td>Only when one deployment serves several websites: the host this one is. Sent as <code>X-Feriwala-Storefront-Host</code>.</td></tr>
+        <tr><td><code>ERP_TIMEOUT</code></td><td>Seconds for an ERP call (default 10; connect timeout is fixed at 5).</td></tr>
+        <tr><td><code>WEBHOOK_SECRET</code></td><td>The webhook signing secret the ERP shows when it registers a webhook. Optional: without it the catalogue refreshes as its cache expires.</td></tr>
+        <tr><td><code>WEBHOOK_SECRET_PREVIOUS</code></td><td>During a rotation, the secret being retired.</td></tr>
+        <tr><td><code>CACHE_TTL_SITE</code></td><td>Seconds a <code>/site</code> read is kept (default 300).</td></tr>
+        <tr><td><code>CACHE_TTL_CATALOG</code></td><td>Product lists (default 60).</td></tr>
+        <tr><td><code>CACHE_TTL_PRODUCT</code></td><td>One product (default 120).</td></tr>
+        <tr><td><code>CACHE_TTL_CATEGORIES</code></td><td>Categories (default 600).</td></tr>
+        <tr><td><code>MIGRATE_TOKEN</code></td><td>Protects <code>/migrate</code> (below). Set a long random value.</td></tr>
+        <tr><td><code>ERP_INSECURE_TLS</code> (commented)</td><td>Local development only: skips certificate verification; ignored unless <code>APP_ENV=local</code>.</td></tr>
+        </tbody>
+    </table>
+    <p>Other values are fixed in <code>config/erp.php</code>: <code>backoff_ms</code> <code>[250, 750]</code> (so up to three attempts; a <code>Retry-After</code> is honoured up to 5 s). In <code>config/storefront.php</code>: <code>locales</code> <code>['en','bn']</code>, <code>webhook_tolerance_seconds</code> 300. The delivery-area proxy (<code>GET /api/areas</code>) caches for 3600 s with a hardcoded TTL.</p>
+
+    <h2>How it authenticates to the ERP</h2>
+    <ol>
+        <li>Staff with <code>website.manage_integrations</code> open the website in the ERP's admin and use "Connect the store" with the storefront's address. The ERP shows <code>ERP_BASE_URL</code>, <code>STORE_ID</code>, <code>STORE_TOKEN</code> (and <code>WEBHOOK_SECRET</code> when it could register a webhook) once; copy them into <code>.env</code>.</li>
+        <li>Every call is signed: <code>Authorization: Feriwala-HMAC-SHA256 Credential=&lt;STORE_ID&gt;, Signature=&lt;hex&gt;</code> with <code>X-Feriwala-Timestamp</code> and a fresh <code>X-Feriwala-Nonce</code>, where the signature is HMAC-SHA256 of the canonical request keyed with <code>STORE_TOKEN</code>. Each retry re-signs with a new nonce and timestamp because a nonce is accepted once. Details: <a href="api/storefront-api.html">Storefront API</a>.</li>
+        <li>Scopes are decided by the credential. A connected store gets all six, so <code>storefront:doctor</code> should list them.</li>
+        <li>The token is never sent to the browser: the delivery-area directory is proxied so the browser holds no credentials.</li>
+        <li>A rotated token keeps the old one valid for the ERP's grace window (<code>STOREFRONT_ROTATION_GRACE_MINUTES</code>, default 1440 minutes); update <code>STORE_TOKEN</code> within it.</li>
+    </ol>
+    <div class="callout callout-note"><p>Credentials made by hand in the ERP (<code>admin.websites.credentials.store</code>) return an <code>.env</code> block that uses the same names this app reads: <code>ERP_BASE_URL</code>, <code>STORE_ID</code> and <code>STORE_TOKEN</code>. Paste it as it is. Older ERP versions emitted <code>BANIJ_*</code> names, which this app never read.</p></div>
+
+    <h2>Caching</h2>
+    <p><code>ApiCache</code> stores JSON in <code>api_cache</code> with a tag and an expiry (key truncated to 190 characters). TTLs come from <code>config('storefront.cache_ttl')</code> (variables above). Tags: <code>site</code> and <code>catalog</code>. Quotes, orders and anything priced at checkout are never cached; the ERP prices the cart again at <code>POST /orders</code>. <code>storefront:prune</code> removes expired entries.</p>
+
+    <h2>Webhook receiver</h2>
+    <p><code>POST /webhooks/feriwala</code> (route name <code>webhooks.feriwala</code>, in <code>routes/system.php</code>: no session, no CSRF, no shop lookup) calls <code>Services\Webhooks::receive()</code> with the raw body and the <code>x-feriwala-signature</code>, <code>-timestamp</code>, <code>-delivery</code> and <code>-event</code> headers.</p>
+    <ol>
+        <li><strong>Verify.</strong> The timestamp must be all digits and within 300 s. The signature (with or without a <code>sha256=</code> prefix) is compared with <code>hash_equals</code> against <code>HMAC-SHA256(timestamp + "." + rawBody)</code> for each of <code>WEBHOOK_SECRET</code> and <code>WEBHOOK_SECRET_PREVIOUS</code>; every configured secret is tried whatever the first answered. No secret configured: always <code>401 invalid_signature</code>.</li>
+        <li><strong>Parse.</strong> Not JSON: <code>400 malformed</code>. The delivery id must match <code>^[A-Za-z0-9_-]{8,64}$</code>, else <code>400 missing_delivery_id</code>.</li>
+        <li><strong>Deduplicate.</strong> <code>insertOrIgnore</code> into <code>webhook_deliveries</code> by <code>delivery_id</code>; a repeat answers <code>200 {"status":"duplicate"}</code> and is not processed.</li>
+        <li><strong>Apply.</strong> <code>product.*</code>, <code>inventory.*</code> and <code>category.updated</code> drop the <code>catalog</code> tag; <code>website.*</code> drops <code>site</code> and <code>catalog</code>; an event whose <code>data.order</code> has an <code>id</code> and <code>status</code> updates the local order's status (<code>Orders::noteStatus</code>). Unknown events are acknowledged and ignored. Answer <code>200 {"status":"ok"}</code>.</li>
+    </ol>
+    <p>A webhook only invalidates cache; a lost, late or duplicate one costs freshness, never correctness. Delivery ids are pruned after 14 days.</p>
+    <p><strong>Rotating the secret.</strong> In the ERP, rotate (or "Generate webhook secret"). Put the new value in <code>WEBHOOK_SECRET</code> and the old one in <code>WEBHOOK_SECRET_PREVIOUS</code>, redeploy within the ERP's grace window, then clear the previous one.</p>
+
+    <h2>Installation and deploy</h2>
+    <ol>
+        <li><code>composer install --no-dev --optimize-autoloader</code></li>
+        <li>Point the web server's document root at <code>public/</code> only.</li>
+        <li>Create a MySQL database and user.</li>
+        <li>Connect the store in the ERP (above).</li>
+        <li><code>cp .env.example .env</code>, fill in the database, <code>APP_URL</code> and the ERP lines, then <code>php artisan key:generate</code>.</li>
+        <li><code>php artisan migrate --force</code>: safe to repeat, and upgrades an earlier plain-PHP installation in place.</li>
+        <li><code>php artisan storefront:doctor</code></li>
+        <li>Cron every minute: <code>php /path/to/storefront/artisan schedule:run</code> (the schedule runs <code>storefront:prune</code> hourly), or run <code>php artisan storefront:prune</code> hourly directly.</li>
+        <li>Production: <code>php artisan config:cache route:cache view:cache</code>. Behind a proxy you control set <code>TRUSTED_PROXY=1</code>.</li>
+    </ol>
+    <h3>No shell: the <code>/migrate</code> route</h3>
+    <p>On hosting with no shell (cPanel), open <code>https://your-domain/migrate?token=&lt;MIGRATE_TOKEN&gt;</code> once after upload. <code>SystemController::migrate()</code> runs <code>migrate --force</code> and prints the output as plain text. With <code>MIGRATE_TOKEN</code> set, a wrong or missing token answers <code>404</code>. With it unset anyone can open the route (harmless as it only applies the shipped migrations, but set it). On failure it answers <code>500</code> with detail only to a caller holding the token or when <code>APP_DEBUG</code> is on; the exception is always reported. The route lives in <code>routes/system.php</code>, so it works before any table exists.</p>
+
+    <h2>The doctor command</h2>
+    <p><code>php artisan storefront:doctor</code> (exit code 1 if anything needs attention) checks: PHP <code>pdo_mysql</code>, <code>curl</code>, <code>mbstring</code>; database connection; that <code>carts</code>, <code>checkouts</code>, <code>orders</code> and <code>sessions</code> exist; that <code>APP_URL</code> is https (or the environment is local); the webhook secret (optional, at least 16 characters if set); then against the ERP: <code>GET /site</code> accepts the credentials, website status is <code>open</code>, it is accepting orders, payment methods are available, and <code>GET /connection</code> lists the credential's scopes. <code>storefront:prune</code> removes expired sessions and cached reads, abandoned baskets (30 days), unplaced checkouts (14 days) and old webhook delivery ids (14 days).</p>
+
+    <h2>Local development against the ERP</h2>
+    <ol>
+        <li>Run the ERP with <code>APP_ENV=local</code> (or <code>WEBSITE_ALLOW_LOCAL_ADDRESSES=true</code>) so it accepts plain http and a local address (<code>php artisan serve</code>, <code>http://127.0.0.1:8000</code>).</li>
+        <li>Run the storefront on another port: <code>php artisan serve --port=8001</code>, with <code>APP_ENV=local</code> in its <code>.env</code>.</li>
+        <li>In the ERP admin, "Connect the store" with <code>http://127.0.0.1:8001</code>. A local address registers no webhook; the shown <code>.env</code> block adds <code>APP_ENV=local</code>.</li>
+        <li>Paste <code>ERP_BASE_URL=http://127.0.0.1:8000</code>, <code>STORE_ID</code> and <code>STORE_TOKEN</code>, run <code>php artisan migrate</code> and <code>storefront:doctor</code>.</li>
+        <li>Product images are served by the ERP; <code>APP_URL</code> and the ERP's <code>APP_URL</code> must match the origin each is really served on (port included), and the ERP needs <code>php artisan storage:link</code>. The storefront's CSP already allows the ERP's origin for images.</li>
+        <li>Without a payment return URL (the storefront's <code>APP_URL</code> not https) the ERP gets no <code>return_url</code> and the customer lands on the shop home after paying. Tests: <code>vendor/bin/pest</code> inside <code>storefront/</code> (no ERP needed).</li>
+    </ol>
+
+    <h2>Gotchas</h2>
+    <ul>
+        <li><code>routes/web.php</code> contains a route <code>GET /cc/{token}</code> that runs <code>optimize:clear</code>, <code>key:generate --force</code>, <code>migrate</code> and <code>storage:link</code> when the token equals <code>config('services.cc_token')</code>. That config key does not exist in <code>config/services.php</code> and no env variable for it is documented, so the route always answers 403 as shipped. Do not enable it casually: <code>key:generate --force</code> would invalidate sessions and encrypted data. Not in the README; flagged for review.</li>
+        <li>A basket survives price changes because it holds no price. A stale checkout is re-quoted before it is placed.</li>
+        <li>An order is reachable only through its own token, the session that placed it, or reference plus mobile; never by id or mobile alone.</li>
+        <li>The reference in <code>POST /orders</code> is <code>SF-&lt;year&gt;-&lt;id&gt;-&lt;random&gt;</code>; the random tail keeps a database restored from backup from reusing a reference the ERP already saw.</li>
+        <li>If the ERP is unreachable the shop renders from a fallback site and says it cannot take orders; ERP failures show the "try again shortly" page, never a trace.</li>
+    </ul>
+
+    <h2>Related</h2>
+    <ul>
+        <li><a href="api/storefront-api.html">Storefront API</a>: the contract this app implements.</li>
+        <li><a href="modules/website.html">Website module</a>: credentials, connecting, webhooks on the ERP side.</li>
+        <li><a href="guide/operations.html">Operations</a>, <a href="guide/getting-started.html">Getting started</a>.</li>
+    </ul>
+</main>
+</body>
+</html>

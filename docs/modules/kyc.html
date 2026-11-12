@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>KYC module</title>
+    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+    <script src="../assets/docs.js"></script>
+</head>
+<body>
+<main id="doc">
+    <h1>KYC module</h1>
+    <p class="lead">Identity and business verification for Client/Partner accounts (and, through the same batch engine, Suppliers). It owns the document catalogue, versioned batch templates, rounds, evidence, the private encrypted document store, reviews, re-verification requests and deadlines.</p>
+
+    <h2>Purpose</h2>
+    <p>KYC approval is one of three conditions for activating a business account (§5.1, §44); approving KYC never activates by itself. The module implements §7.2 (administrator-configured requirements, scoped by package and country), §7.3 (rounds, review outcomes, append-only review record), §7.4 (deadlines and consequences), §7.5 (private, authenticated, access-logged documents) and <strong>D30</strong> (batches as versioned templates, with groups, options, slots and a live selfie).</p>
+    <p>Users: the <strong>applicant</strong> (partner owner or staff of that account) fills in rounds; <strong>KYC Manager</strong> and <strong>Admin</strong> staff review; the <strong>system</strong> sweeps deadlines. Supplier KYC lives in the Supplier domain (separate tables, D25) but reuses the batch engine through the <code>KycRound</code> interface.</p>
+
+    <h2>Where it lives</h2>
+    <table>
+        <thead><tr><th>Path</th><th>Role</th></tr></thead>
+        <tbody>
+        <tr><td><code>app/Domain/Kyc/Models/</code></td><td>Eighteen models, listed below</td></tr>
+        <tr><td><code>app/Domain/Kyc/Enums/</code></td><td><code>KycStatus</code>, <code>KycAudience</code>, <code>KycEvidenceType</code>, <code>KycRoundPurpose</code>, <code>KycConsequence</code>, <code>KycSelfieMode</code>, <code>KycCompletionRule</code></td></tr>
+        <tr><td><code>app/Domain/Kyc/Actions/</code></td><td>Opening, submitting, reviewing, requesting updates, deadlines, batch authoring and publishing</td></tr>
+        <tr><td><code>app/Domain/Kyc/Batch/</code></td><td>The batch engine: <code>KycRound</code> interface, <code>PartnerKycRound</code>, <code>SupplierKycRound</code>, <code>KycRoundDefinition</code>, <code>RecordKycEvidence</code>, <code>RecordKycVerdict</code>, <code>KycCompletion</code>, <code>KycApprovalReadiness</code>, <code>AssignKycBatch</code>, <code>CarryForwardKycEvidence</code>, <code>KycRoundPresenter</code>, <code>KycPreviewRound</code>, refusal exceptions</td></tr>
+        <tr><td><code>app/Domain/Kyc/KycDocumentStore.php</code></td><td>Store, read (access-logged), verify, delete-draft for files</td></tr>
+        <tr><td><code>app/Domain/Kyc/KycDeadlines.php</code>, <code>KycRestrictions.php</code></td><td>Deadline settings; what an open re-verification blocks</td></tr>
+        <tr><td><code>app/Domain/Kyc/Policies/</code></td><td><code>KycSubmissionPolicy</code>, <code>KycDocumentPolicy</code>, <code>KycBatchPolicy</code>, <code>KycDocumentTypePolicy</code></td></tr>
+        <tr><td><code>app/Domain/Kyc/Queries/</code></td><td><code>ApplicableRequirements</code>, <code>ApplicantKycHistory</code></td></tr>
+        <tr><td><code>app/Http/Controllers/Erp/</code></td><td><code>KycController</code>, <code>KycEvidenceController</code>, <code>KycDocumentController</code></td></tr>
+        <tr><td><code>app/Http/Controllers/Admin/</code></td><td><code>KycReviewController</code>, <code>KycDocumentTypeController</code>, <code>KycBatchController</code>, <code>KycBatchTemplateController</code>, <code>KycUpdateRequestController</code>, <code>KycReverificationCancellationController</code>, <code>KycUploadOnBehalfController</code></td></tr>
+        <tr><td><code>app/Http/Controllers/Api/Mobile/V1/Kyc/</code>, <code>Supplier/Kyc/</code></td><td>Mobile endpoints; requests in <code>app/Http/Requests/Mobile/Kyc/</code></td></tr>
+        <tr><td><code>resources/js/pages/</code></td><td><code>onboarding/kyc.tsx</code>, <code>onboarding/kyc-history.tsx</code>, <code>admin/kyc/*</code> (index, show, document-types, batches), <code>supplier/kyc/index.tsx</code></td></tr>
+        <tr><td><code>lang/{en,bn}/kyc.php</code></td><td>Including <code>kyc.batch_builder.*</code> and <code>kyc.batch.refused.*</code></td></tr>
+        <tr><td><code>database/seeders/StandardKycBatchSeeder.php</code></td><td>Development example batch (refuses to run in production, left switched off)</td></tr>
+        <tr><td><code>tests/Feature/Kyc/</code></td><td>See Testing</td></tr>
+        </tbody>
+    </table>
+
+    <h2>Key terms</h2>
+    <dl>
+        <dt>Document type / requirement</dt>
+        <dd><code>KycDocumentType</code>: one thing the applicant is asked for ("National ID"). Called a "criterion" in older comments. Active, inactive (paused) or archived; never deleted once referenced.</dd>
+        <dt>Slot</dt>
+        <dd><code>KycRequirementSlot</code>: one piece of evidence a requirement is made of: a file, image, PDF, typed value or declaration. "National ID" is two image slots (front, back); "TIN" is a value slot (D30).</dd>
+        <dt>Batch</dt>
+        <dd><code>KycBatch</code>: a template of groups an administrator asks for together ("Identity", "Business"). Has an audience, optional selfie, scope rules, a default flag.</dd>
+        <dt>Group</dt>
+        <dd><code>KycBatchGroup</code>: holds options and a completion rule: <code>all</code>, <code>any</code> (one of) or <code>min</code> (at least N).</dd>
+        <dt>Option</dt>
+        <dd>A requirement's place in a group (<code>KycBatchGroupRequirement</code>), shown as a choice in <code>any</code>/<code>min</code> groups.</dd>
+        <dt>Version</dt>
+        <dd><code>KycBatchVersion</code>: the batch frozen at publish time; append-only. A round reads only its version, never the live batch.</dd>
+        <dt>Round</dt>
+        <dd>One <code>KycSubmission</code> (`round` is a counter per account). A correction or resubmission is a new round, never an edit of the reviewed one.</dd>
+        <dt>Round purpose</dt>
+        <dd><code>onboarding</code>, <code>correction</code>, <code>reverification</code> (a trading business asked again, §7.2). Only re-verification can carry consequences.</dd>
+        <dt>Evidence</dt>
+        <dd>An uploaded <code>KycDocument</code> or a typed <code>KycSubmissionField</code> in a slot, judged per slot by a verdict.</dd>
+        <dt>Live selfie</dt>
+        <dd>A batch-level setting, not a requirement. It appears under fixed keys <code>__selfie</code> / <code>capture</code> (<code>KycRoundDefinition::SELFIE_REQUIREMENT</code>, <code>SELFIE_SLOT</code>); stored with <code>captured_live</code> and <code>capture_meta</code>; JPEG/PNG up to 3072 KB.</dd>
+        <dt>Legacy (flat) round</dt>
+        <dd>A round with no batch version, judged against a snapshot of document types (<code>KycSubmissionRequirement</code>). Still supported.</dd>
+        <dt>Audience</dt>
+        <dd><code>KycAudience</code>: <code>account</code>, <code>supplier</code>, <code>both</code>.</dd>
+    </dl>
+
+    <h2>Data model</h2>
+    <p>Column lists below are from model docblocks and casts; exact column types should be read from the migrations <code>2026_09_01_140000_create_kyc_tables</code>, <code>2026_09_04_130000_scope_and_snapshot_kyc_requirements</code>, <code>2026_10_07_100000_take_kyc_reverification_rounds</code>, <code>2026_10_12_180000_group_kyc_criteria_into_batches</code>, <code>2026_10_14_110000_create_versioned_kyc_batch_templates</code>, <code>2026_10_14_120000_link_kyc_rounds_to_batch_versions</code>.</p>
+    <table>
+        <thead><tr><th>Table / model</th><th>Purpose and key columns</th><th>Notes</th></tr></thead>
+        <tbody>
+        <tr><td><code>kyc_document_types</code> <code>KycDocumentType</code></td><td><code>public_id</code>, <code>key</code>, <code>audience</code>, <code>name</code>, <code>instructions</code>, <code>is_required</code>, <code>is_active</code>, <code>archived_at</code>, <code>accepted_mime_types</code> (array), <code>max_size_kb</code>, <code>requires_file</code>, <code>requires_value</code>, <code>kyc_batch_id</code>, <code>sort_order</code></td><td>Factory: <code>KycDocumentTypeFactory</code>. Scopes <code>forAccounts</code>, <code>active</code>. Archived instead of deleted once referenced.</td></tr>
+        <tr><td><code>kyc_document_type_scopes</code> <code>KycDocumentTypeScope</code></td><td>Package (by <strong>package public id</strong>, not slug) and/or country; nullable <code>is_required</code> override</td><td>Null dimension matches anything; the most specific rule wins.</td></tr>
+        <tr><td><code>kyc_batches</code> <code>KycBatch</code></td><td><code>public_id</code>, <code>key</code>, <code>audience</code>, <code>name</code>/<code>name_bn</code>, <code>description</code>/<code>_bn</code>, <code>selfie_mode</code>, <code>selfie_allows_upload</code>, <code>is_default</code>, <code>is_active</code>, <code>published_version</code>, <code>archived_at</code>, <code>sort_order</code></td><td>Defaults: audience <code>account</code>, active, selfie <code>disabled</code>. <code>isReferenced()</code> decides archive versus delete. <code>appliesTo($package, $country)</code>: no scope rows = everyone.</td></tr>
+        <tr><td><code>kyc_batch_scopes</code> <code>KycBatchScope</code></td><td>Package/country rules for a batch</td><td></td></tr>
+        <tr><td><code>kyc_batch_groups</code> <code>KycBatchGroup</code></td><td><code>key</code>, bilingual name/description/<code>selector_label</code>, <code>completion_rule</code>, <code>minimum_required</code>, <code>is_required</code>, <code>sort_order</code></td><td></td></tr>
+        <tr><td><code>kyc_batch_group_requirements</code></td><td>Join: group, requirement, <code>is_required</code>, <code>sort_order</code></td><td></td></tr>
+        <tr><td><code>kyc_requirement_slots</code> <code>KycRequirementSlot</code></td><td><code>key</code>, bilingual <code>label</code>/<code>instructions</code>, <code>evidence_type</code>, <code>accepted_mime_types</code>, <code>max_size_kb</code>, <code>value_label</code>, <code>is_sensitive</code>, <code>is_required</code>, <code>archived_at</code></td><td>Keys are generated by <code>GenerateKycKey</code>.</td></tr>
+        <tr><td><code>kyc_batch_versions</code> <code>KycBatchVersion</code></td><td><code>version</code>, <code>definition</code> (JSON), <code>checksum</code> (sha256), <code>published_by</code>, <code>published_at</code></td><td>Append-only in the database; no <code>updated_at</code>.</td></tr>
+        <tr><td><code>kyc_submissions</code> <code>KycSubmission</code></td><td><code>business_account_id</code>, <code>status</code>, <code>round</code>, <code>purpose</code>, <code>kyc_batch_id</code>, <code>kyc_batch_version_id</code>, <code>selections</code> (JSON), <code>submitted_at</code>, <code>reviewed_at</code>, <code>deadline_at</code>, <code>requested_at/_by</code>, <code>request_reason</code>, <code>request_instructions</code>, <code>consequences</code> (JSON), <code>consequences_applied_at</code>, <code>cancelled_at/_by</code>, <code>cancellation_reason</code></td><td>Uses <code>HasPublicId</code> and <code>HasStateMachine</code>. Belongs to the <strong>account</strong>, not the person (D23). A partial unique index allows one open re-verification per account.</td></tr>
+        <tr><td><code>kyc_submission_requirements</code> <code>KycSubmissionRequirement</code></td><td>A copy of the document type as it stood when the flat round opened (<code>name</code>, <code>is_required</code>, <code>requires_file/_value</code>, mime types, size, batch fields)</td><td>Why editing a type cannot change what a submitted round was judged on.</td></tr>
+        <tr><td><code>kyc_documents</code> <code>KycDocument</code></td><td><code>kyc_submission_id</code>, <code>kyc_document_type_id</code> (null for the selfie), <code>slot_key</code>, <code>disk</code>, <code>path</code>, <code>original_name</code>, <code>mime_type</code>, <code>size_bytes</code>, <code>checksum</code>, <code>is_encrypted</code>, <code>captured_live</code>, <code>captured_at</code>, <code>capture_meta</code>, <code>superseded_at</code></td><td><code>disk</code>, <code>path</code>, <code>checksum</code> are <code>$hidden</code>. The model has no URL method on purpose.</td></tr>
+        <tr><td><code>kyc_submission_fields</code> <code>KycSubmissionField</code></td><td>Typed value (TIN, NID number), <code>slot_key</code>, per document type</td><td><code>value</code> cast <code>encrypted</code>; masked preview for lists.</td></tr>
+        <tr><td><code>kyc_reviews</code> <code>KycReview</code></td><td><code>reviewer_id</code>, <code>from_status</code>, <code>to_status</code>, <code>reason</code>, <code>internal_note</code>, <code>user_visible_feedback</code></td><td>Append-only (§7.3).</td></tr>
+        <tr><td><code>kyc_evidence_reviews</code> <code>KycEvidenceReview</code></td><td>Per-slot verdict: <code>requirement_key</code>, <code>slot_key</code>, <code>evidence_ref</code>, <code>status</code> (<code>accepted</code>/<code>rejected</code>), <code>note</code></td><td>Append-only; a later row supersedes. A verdict names the exact evidence it judged.</td></tr>
+        <tr><td><code>kyc_document_accesses</code> <code>KycDocumentAccess</code></td><td><code>kyc_document_id</code>, <code>accessed_by</code>, <code>action</code> (<code>view</code>/<code>download</code>), <code>ip_address</code>, <code>user_agent</code> (truncated to 512)</td><td>Append-only.</td></tr>
+        <tr><td><code>kyc_deadline_events</code> <code>KycDeadlineEvent</code></td><td><code>event</code> (<code>warned</code>, <code>enforced</code>, <code>restored</code>), <code>account_restricted</code>, <code>deadline_at</code></td><td>Unique on (<code>kyc_submission_id</code>, <code>event</code>): the insert is the idempotency claim (<code>claim()</code>, inside a savepoint).</td></tr>
+        </tbody>
+    </table>
+    <p>Supplier counterparts (<code>supplier_kyc_submissions</code>, <code>supplier_kyc_documents</code>, <code>supplier_kyc_fields</code>, <code>supplier_kyc_requirements</code>) belong to the Supplier module and are not described here beyond <code>SupplierKycRound</code>.</p>
+
+    <h2>States &amp; lifecycle</h2>
+    <h3>Submission (<code>KycStatus</code>)</h3>
+    <table>
+        <thead><tr><th>Status</th><th>Legal next</th><th>Notes</th></tr></thead>
+        <tbody>
+        <tr><td><code>draft</code></td><td>submitted</td><td>The only editable state (<code>isEditable()</code>)</td></tr>
+        <tr><td><code>submitted</code></td><td>under_review, resubmission_required</td><td>Awaits review (<code>awaitsReview()</code>)</td></tr>
+        <tr><td><code>under_review</code></td><td>approved, rejected, resubmission_required</td><td>Awaits review</td></tr>
+        <tr><td><code>approved</code></td><td>resubmission_required</td><td>Approval can be withdrawn (§7.2)</td></tr>
+        <tr><td><code>rejected</code></td><td>resubmission_required</td><td></td></tr>
+        <tr><td><code>resubmission_required</code></td><td>none (<code>isTerminal()</code>)</td><td>The round is closed; the applicant starts a new round</td></tr>
+        </tbody>
+    </table>
+    <p>A review straight from <code>submitted</code> is stepped through <code>under_review</code> explicitly by <code>ReviewKyc</code>; the map is not loosened. <code>isOpen()</code> on a submission means not cancelled and not approved/rejected, matching the partial unique index.</p>
+    <h3>Effect on the account status</h3>
+    <p><code>ReviewKyc::applyToAccount</code> maps approved to <code>kyc_approved</code> (then immediately <code>package_selection_pending</code>), rejected to <code>kyc_rejected</code>, resubmission to <code>kyc_resubmission_required</code>, stepping <code>kyc_submitted</code> through <code>kyc_under_review</code> first. <code>SubmitKyc</code> moves the account to <code>kyc_submitted</code> only when the machine allows it (a re-submission is already further on). See the table in <a href="account.html">Account</a>.</p>
+    <h3>Batch lifecycle</h3>
+    <p>Draft structure (live, editable) &rarr; <strong>publish</strong> creates version N+1 (or returns the existing version if the checksum is unchanged) &rarr; rounds pin the newest published version when opened. A batch used by anything is archived, not deleted. Active, default and archived are flags, not a state enum.</p>
+
+    <h2>Actions &amp; workflows</h2>
+    <table>
+        <thead><tr><th>Class</th><th>Purpose</th></tr></thead>
+        <tbody>
+        <tr><td><code>OpenKycDraft</code></td><td>Gets the applicant's editable round, creating round 1 (deadline from <code>KycDeadlines</code>), or a resubmission. Locks the latest round so two tabs cannot create two drafts. An untouched first round is given the default batch if one applies; otherwise requirements are snapshotted.</td></tr>
+        <tr><td><code>CaptureRoundRequirements</code></td><td>Snapshots applicable document types into the round (idempotent; optionally narrowed to given types).</td></tr>
+        <tr><td><code>AssignKycBatch</code></td><td><code>forPartner</code> / <code>forSupplier</code>: pins a round to a batch version. Order: explicit choice, then the audience's default (exact audience first, then <code>both</code>) that applies, else none. Refuses archived/inactive, wrong audience, or a round that has begun. Audits <code>kyc.batch_assigned</code> / <code>supplier_kyc.batch_assigned</code>.</td></tr>
+        <tr><td><code>RecordKycEvidence</code></td><td>Applicant operations on a batch round: <code>file</code>, <code>value</code>, <code>remove</code>, <code>choose</code>, <code>deselect</code>. Judged against the round's version. Putting a file in an option of an <code>any</code> group chooses it and clears the other options' drafts. Accepted evidence cannot be replaced. Selfie via upload is refused unless <code>selfie_allows_upload</code>.</td></tr>
+        <tr><td><code>KycCompletion</code></td><td>The only place completeness is decided: <code>all</code> / <code>any</code> / <code>min</code> per group; only chosen options count in <code>any</code>/<code>min</code>; rejected evidence counts as missing.</td></tr>
+        <tr><td><code>SubmitKyc</code></td><td>Refuses with <code>KycIncomplete</code> if anything required is missing (batch rounds via <code>KycCompletion</code>, flat rounds via the snapshot), then in a transaction: draft &rarr; submitted, moves the account, announces to <code>StaffQueue::Kyc</code>.</td></tr>
+        <tr><td><code>RecordKycVerdict</code></td><td>Accept or reject one slot; a rejection needs a note (the applicant's instruction). Audits <code>kyc.evidence_reviewed</code> (shape only, never the evidence).</td></tr>
+        <tr><td><code>KycApprovalReadiness</code></td><td>For a batch round: approval needs every required group satisfied <em>and</em> every evidence item that satisfies one accepted; sending back needs at least one rejected slot.</td></tr>
+        <tr><td><code>ReviewKyc</code></td><td>Records the decision in one transaction (submission status, <code>KycReview</code>, account status). Afterwards: notifies the applicant for batch rounds (<code>KycApproved</code>, <code>KycRejected</code>, <code>KycResubmissionRequested</code>), lifts a deadline restriction on approval, and calls <code>ActivateAccountAutomatically</code>. Throws <code>KycReviewRefused</code> when a batch round is not ready.</td></tr>
+        <tr><td><code>StartKycResubmission</code></td><td>Opens round N+1 after resubmission_required or rejected. Stays on the same batch version and carries forward accepted evidence (<code>CarryForwardKycEvidence</code>: copies rows pointing at the same stored file, with their accepted verdicts). The deadline is inherited unless already passed.</td></tr>
+        <tr><td><code>RequestKycUpdate</code></td><td>Asks an <em>active</em> business for fresh KYC (re-verification). Requires an internal reason and instructions for the holder; deadline not in the past; either a batch or specific documents, not both; chosen consequences. The account keeps trading. Notification <code>KycUpdateRequested</code> is mandatory (D20).</td></tr>
+        <tr><td><code>CancelKycReverification</code></td><td>Withdraws an unanswered re-verification (<code>kyc.verify</code>).</td></tr>
+        <tr><td><code>SweepKycDeadlines</code></td><td>Daily pass: warns (once) and enforces. Skipped entirely when <code>kyc.deadline_days</code> is unset. Rounds that wait on the applicant: draft, resubmission_required, rejected. Chunked by 200.</td></tr>
+        <tr><td><code>EnforceKycDeadline</code></td><td>Claims the <code>enforced</code> event, then restricts an active account (only if enabled and the case has no consequences of its own), or applies the case's consequences; suspension goes through <code>SuspendAccount</code> after commit. Audits <code>kyc.deadline_missed</code> (system actor).</td></tr>
+        <tr><td><code>LiftKycDeadlineRestriction</code></td><td>Restores an account restricted for a missed deadline once KYC is approved.</td></tr>
+        <tr><td><code>UploadKycDocumentOnBehalf</code></td><td>Staff put evidence on a partner's or Supplier's round using the same stores and rules; targets are <code>type:&lt;key&gt;</code> or <code>slot:&lt;requirement&gt;:&lt;slot&gt;</code>. Only a draft or sent-back round takes uploads. Optional submit, and optional verify-on-the-spot (send, accept, approve as that reviewer).</td></tr>
+        <tr><td><code>ManageKycDocumentTypes</code>, <code>ManageKycBatches</code>, <code>SaveKycBatchStructure</code>, <code>CloneKycBatch</code>, <code>PublishKycBatchVersion</code>, <code>BuildBatchDefinition</code>, <code>AdoptLegacyCriteria</code>, <code>GenerateKycKey</code></td><td>Authoring. <code>BuildBatchDefinition::problems()</code> rejects a batch no applicant could complete (<code>InvalidKycBatch</code>). <code>AdoptLegacyCriteria</code> moves older criteria into a batch.</td></tr>
+        </tbody>
+    </table>
+
+    <h3>Flow: applicant to approval</h3>
+    <ol>
+        <li>The applicant opens <code>/kyc</code>; <code>OpenKycDraft</code> returns (or creates) the draft, pinned to a batch version if a default applies.</li>
+        <li>Each file, value or choice is saved on its own (one request each) through <code>RecordKycEvidence</code>; a rejected upload never costs the others. Files go through <code>KycDocumentStore</code>: private <code>kyc</code> disk, random name, encrypted at rest.</li>
+        <li><code>SubmitKyc</code>: completeness is checked server-side; the progress bars are a courtesy.</li>
+        <li>A reviewer at <code>/admin/kyc/{submission}</code> opens documents (access recorded), reveals sensitive values on demand, records per-slot verdicts, then decides (<code>decide</code>).</li>
+        <li>Approve: the batch round must be fully accepted. Account becomes <code>kyc_approved</code> then <code>package_selection_pending</code>; automatic activation is re-evaluated.</li>
+        <li>Send back: at least one rejected slot. The applicant gets round N+1 with accepted slots locked and satisfied, and only the failed or missing ones open.</li>
+    </ol>
+    <h3>Flow: document access (§7.5)</h3>
+    <ol>
+        <li>Routes <code>kyc.documents.show</code> / <code>.download</code> (web), mobile equivalents, and <code>admin.suppliers.kyc.documents.show</code> are the only way to a file.</li>
+        <li>The policy decides: the applicant (any member of the submitting account) may open their own; others need <code>kyc.view_kyc_documents</code>.</li>
+        <li><code>KycDocumentStore::read</code> writes the <code>kyc_document_accesses</code> row <em>before</em> returning the bytes; if that insert fails nobody gets the file. Then reads from the recorded disk and decrypts.</li>
+    </ol>
+    <div class="callout callout-rule"><p><strong>Rule.</strong> There is no public URL for a KYC document, deliberately: no <code>getUrl()</code> on the model or the store. Do not add one. Storage disk and path are hidden from every array and JSON form.</p></div>
+
+    <h3>Flow: re-verification</h3>
+    <ol>
+        <li>Staff with <code>kyc.verify</code> call <code>RequestKycUpdate</code> from the account dossier (<code>admin.kyc.request-update</code>). A round with purpose <code>reverification</code> opens; the account's status is untouched.</li>
+        <li>Consequences are chosen per case (<code>KycConsequence</code>): <code>warning_only</code> (default), <code>block_new_orders</code>, <code>block_publishing</code>, <code>block_withdrawals</code> (these three bite as soon as the round is open), <code>suspend_after_deadline</code> (only after the deadline). Each blocks <strong>new activity only</strong>; nothing cancels an order, unpublishes a site, reverses a ledger entry or blocks payment settlement, refunds or reconciliation.</li>
+        <li>Server-side Actions ask <code>KycRestrictions::blocksNewOrders/blocksPublishing/blocksWithdrawals</code> (one open case per account). A hidden button is not a restriction.</li>
+        <li>The daily sweep warns once before the deadline and enforces once after. Approval of the round lifts a deadline restriction.</li>
+    </ol>
+
+    <h2>Entry points</h2>
+    <h3>Applicant web (<code>auth</code>, <code>business.activated</code>; <code>kyc.</code> is in the pre-activation allow-list)</h3>
+    <table>
+        <thead><tr><th>Name</th><th>Method and URL</th><th>Controller</th></tr></thead>
+        <tbody>
+        <tr><td><code>kyc.create</code>, <code>kyc.history</code></td><td>GET <code>/kyc</code>, <code>/kyc/history</code></td><td><code>Erp\KycController</code> (self-scoped through membership; no account id in the URL)</td></tr>
+        <tr><td><code>kyc.documents.store</code>, <code>kyc.submit</code></td><td>POST <code>/kyc/documents</code>, <code>/kyc/submit</code></td><td><code>Erp\KycController</code></td></tr>
+        <tr><td><code>kyc.evidence.file|value|remove|choose|deselect</code></td><td>POST <code>/kyc/evidence/…</code></td><td><code>Erp\KycEvidenceController</code></td></tr>
+        <tr><td><code>kyc.documents.show</code>, <code>.download</code></td><td>GET <code>/kyc/documents/{document}[/download]</code></td><td><code>Erp\KycDocumentController</code></td></tr>
+        </tbody>
+    </table>
+    <h3>Mobile (<code>/api/mobile/v1/kyc</code>, <code>routes/mobile/kyc.php</code>)</h3>
+    <p>GET <code>kyc</code> (form), <code>kyc/history</code>; POST <code>kyc/documents</code> (flat list), <code>kyc/submit</code>; GET <code>kyc/documents/{document}</code> and <code>/download</code>; POST <code>kyc/evidence/{file|value|remove|choose|deselect}</code>. Names <code>mobile.v1.kyc.*</code>. The Supplier mobile tree repeats the shape under <code>supplier/</code>.</p>
+    <div class="callout callout-note"><p><strong><code>document_type</code> alias.</strong> The app already sends <code>document_type</code> (a requirement key) to the flat <code>POST /kyc/documents</code>. The batch evidence requests (<code>KycEvidenceFileRequest</code>, <code>…ValueRequest</code>, <code>…SlotRequest</code>, <code>…OptionRequest</code>, and the Supplier versions) accept <code>document_type</code> as well as <code>requirement</code>. The trait <code>app/Http/Requests/Mobile/Kyc/Concerns/AcceptsDocumentType.php</code> copies it onto <code>requirement</code> in <code>prepareForValidation()</code> when <code>requirement</code> is absent; <code>requirement</code> wins when both are sent, and nothing downstream knows there was an alias. Each option in the form payload also lists its <code>document_type</code>. Proved by <code>tests/Feature/Kyc/MobileKycDocumentTypeTest.php</code>.</p></div>
+    <h3>Admin (<code>/admin</code>, <code>two-factor</code>)</h3>
+    <table>
+        <thead><tr><th>Name</th><th>URL</th><th>Controller</th></tr></thead>
+        <tbody>
+        <tr><td><code>kyc.index</code>, <code>kyc.show</code></td><td>GET <code>/admin/kyc</code>, <code>/kyc/{submission}</code></td><td><code>KycReviewController</code> (<code>viewAny</code>/<code>view</code>)</td></tr>
+        <tr><td><code>kyc.decide</code></td><td>POST <code>/admin/kyc/{submission}/decide</code></td><td><code>review</code> on the submission</td></tr>
+        <tr><td><code>kyc.evidence-review</code></td><td>POST <code>/admin/kyc/{submission}/evidence-review</code></td><td><code>review</code> plus <code>review</code> on <code>KycBatch</code></td></tr>
+        <tr><td><code>kyc.evidence-value</code></td><td>GET <code>/admin/kyc/{submission}/evidence-value</code></td><td><code>view</code> plus <code>viewSensitive</code></td></tr>
+        <tr><td><code>kyc.request-update</code></td><td>POST <code>/admin/accounts/{account}/kyc-update</code></td><td><code>KycUpdateRequestController</code></td></tr>
+        <tr><td><code>kyc.withdraw</code></td><td>POST <code>/admin/kyc/{submission}/withdraw</code></td><td><code>KycReverificationCancellationController</code></td></tr>
+        <tr><td><code>accounts.kyc-upload.targets|store</code>, <code>suppliers.kyc-upload.*</code></td><td><code>/admin/accounts/{account}/kyc-upload[/targets]</code></td><td><code>KycUploadOnBehalfController</code></td></tr>
+        <tr><td><code>kyc.document-types.*</code></td><td><code>/admin/kyc/document-types</code> (index, store, reorder, update, active, archive, destroy)</td><td><code>KycDocumentTypeController</code></td></tr>
+        <tr><td><code>kyc.batches.*</code></td><td><code>/admin/kyc/batches</code> (store, reorder, update, active, archive, destroy)</td><td><code>KycBatchController</code></td></tr>
+        <tr><td><code>kyc.batch-builder.*</code></td><td><code>/admin/kyc-batches</code> (index, store, edit, update, structure, preview, clone, publish, active, default)</td><td><code>KycBatchTemplateController</code></td></tr>
+        <tr><td><code>suppliers.kyc.*</code></td><td><code>/admin/suppliers/{supplier}/kyc/…</code> (documents, correction, evidence-review, evidence-value, batch)</td><td><code>SupplierController</code></td></tr>
+        </tbody>
+    </table>
+    <p><strong>Scheduled:</strong> <code>kyc-deadline-sweep</code>, daily 02:00 in <code>app.timezone</code>, <code>onOneServer()</code>, runs <code>SweepKycDeadlines</code> (<code>routes/console.php</code>). Nothing queued in this module itself.</p>
+
+    <h2>Permissions &amp; scoping</h2>
+    <table>
+        <thead><tr><th>Permission</th><th>Used for</th></tr></thead>
+        <tbody>
+        <tr><td><code>kyc.view</code></td><td>See the queue and a submission</td></tr>
+        <tr><td><code>kyc.approve</code></td><td>Decide a round (<code>KycSubmissionPolicy::review</code>)</td></tr>
+        <tr><td><code>kyc.verify</code></td><td>Request or withdraw an update (<code>requestUpdate</code>, <code>cancelUpdate</code>)</td></tr>
+        <tr><td><code>kyc.edit</code></td><td>Upload on behalf (via <code>BusinessAccountPolicy::uploadKycDocument</code>)</td></tr>
+        <tr><td><code>kyc.view_kyc_documents</code></td><td>Open a file (sensitive, so a two-factor role)</td></tr>
+        <tr><td><code>kyc.manage_settings</code></td><td>Document-type catalogue (<code>KycDocumentTypePolicy</code>; also deadline and re-verification settings)</td></tr>
+        <tr><td><code>kyc_batch.view|create|edit|activate|assign|review|view_sensitive_data</code></td><td>Build, publish/switch on/default, choose when opening a round, grade evidence, reveal a TIN/NID value</td></tr>
+        </tbody>
+    </table>
+    <ul>
+        <li>Held by <code>kyc_manager</code> (everything above except delete; also <code>kyc.manage_settings</code>), <code>supplier_manager</code> (<code>kyc_batch.view|assign|review</code>), <code>admin</code> (<code>kyc_batch.view</code> only), <code>withdrawal_approver</code> (<code>kyc.view</code>).</li>
+        <li><strong>Nobody reviews their own KYC.</strong> <code>review</code> and <code>cancelUpdate</code> return false for a member of the submitting account; <code>requestUpdate</code> likewise.</li>
+        <li><strong>The applicant may open their own documents</strong> (<code>KycDocumentPolicy::isOwner</code>, any member of the account); everyone else needs <code>kyc.view_kyc_documents</code>.</li>
+        <li><strong>Batch templates are platform configuration</strong>, hold no applicant data, and are not account-scoped; an archived batch cannot be edited or switched on (the policy and the action both say so).</li>
+        <li>No account identifier appears in applicant URLs: the account comes from the membership (§31.3).</li>
+    </ul>
+
+    <h2>Money, ledger &amp; audit effects</h2>
+    <p>No money or ledger entries. Audit actions: <code>kyc.batch_assigned</code>, <code>supplier_kyc.batch_assigned</code>, <code>kyc.batch_published</code>, <code>kyc.evidence_reviewed</code>, <code>supplier_kyc.evidence_reviewed</code>, <code>kyc.deadline_missed</code>, plus entries from document-type and batch management (<code>ManageKycDocumentTypes</code>, <code>ManageKycBatches</code>), <code>RequestKycUpdate</code>, <code>CancelKycReverification</code>, <code>LiftKycDeadlineRestriction</code> and <code>UploadKycDocumentOnBehalf</code> (exact action strings in those classes; not enumerated here). Audit payloads carry the shape of a change, never evidence, values or notes. Reviews also leave append-only <code>kyc_reviews</code> rows, and file reads leave <code>kyc_document_accesses</code>.</p>
+
+    <h2>Configuration</h2>
+    <table>
+        <thead><tr><th>Key</th><th>Meaning</th></tr></thead>
+        <tbody>
+        <tr><td><code>kyc.deadline_days</code> (integer setting)</td><td>Days an applicant has per round. Unset or non-positive = no deadlines at all. <code>SafeSeeder</code> defines it as 30 and the warning as 7.</td></tr>
+        <tr><td><code>kyc.deadline_warning_days</code></td><td>Days before the deadline to warn; null disables warnings.</td></tr>
+        <tr><td><code>kyc.overdue_restricts_active_account</code> (boolean, default false)</td><td>Whether an overdue update moves an active account to <code>temporarily_restricted</code>.</td></tr>
+        <tr><td>Disk <code>kyc</code> (<code>KycDocumentStore::DISK</code>)</td><td>Private disk. Resolved through <code>ManagedStorage::diskForLocal()</code>: moves to Cloudflare R2 when configured but stays on the dedicated <code>kyc</code> disk otherwise. The row records its own disk so reads follow it. Bytes are always app-encrypted (<code>encrypt()</code>); R2's encryption is never a substitute.</td></tr>
+        </tbody>
+    </table>
+    <p>Where the settings are edited in the admin UI was not verified.</p>
+
+    <h2>Rules, invariants &amp; gotchas</h2>
+    <ul>
+        <li><strong>A round never reads live configuration.</strong> Batch rounds read their version's <code>definition</code>; flat rounds read their requirement snapshot. An administrator editing a type or batch this morning must not change what an applicant was shown yesterday. File acceptance in <code>KycDocumentStore::store</code> uses the round's snapshot rules first.</li>
+        <li><strong>A correction is a new round.</strong> Never edit a reviewed round; <code>resubmission_required</code> is terminal.</li>
+        <li><strong>Approval does not activate.</strong> It clears one gate; payment and the owner's verification remain (<code>ActivationRequirements</code>).</li>
+        <li><strong>Approving a batch round needs every accepted slot reviewed.</strong> A complete-looking round whose files were never opened is not verified. <code>CompleteAccountManually</code> will not approve a batch round with unaccepted evidence.</li>
+        <li><strong>Rejection needs a note</strong> (it is the instruction the applicant reads). Staff-only notes (<code>internal_note</code>, <code>request_reason</code>) never reach the applicant (§7.2); admin screens use <code>viewDossier</code>.</li>
+        <li><strong>Typed values are encrypted and masked</strong>; the full value is revealed per request through <code>kyc.evidence-value</code> (<code>kyc_batch.view_sensitive_data</code>).</li>
+        <li><strong>Draft file deletion is conditional.</strong> A carried-forward file is the same stored file as the earlier round's; <code>deleteDraftFile</code> removes bytes only when no other row points at them, and refuses on a non-editable submission.</li>
+        <li><strong>Batches with begun rounds cannot be re-pinned</strong> (<code>kyc.batch.refused.round_begun</code>).</li>
+        <li><strong>Publishing unchanged returns the same version</strong> (a version number means "this changed").</li>
+        <li><strong>Deadlines are opt-in</strong> and only restrict when an administrator turned that on. Idempotency is a unique-index claim, not a flag.</li>
+        <li><code>kyc_document_types.accepted_mime_types</code> default for a slot with none comes from <code>KycEvidenceType::defaultMimeTypes()</code> (JPEG/PNG for image, PDF for pdf, all three for file).</li>
+        <li>Language: older comments say "criterion"; the rename of consequence values is covered by <code>KycConsequenceRenameMigrationTest</code>.</li>
+    </ul>
+
+    <h2>How to&hellip;</h2>
+    <h3>Add a document type or batch (data, not code)</h3>
+    <ol>
+        <li>Admin &rarr; KYC &rarr; document types, or the batch builder (<code>/admin/kyc-batches</code>). Define requirements and slots, group them, preview, then <strong>publish</strong>. Only published versions reach new rounds.</li>
+        <li>Switch the batch on and, if wanted, make it the default for its audience. Existing open rounds stay on their version.</li>
+    </ol>
+    <h3>Add a new evidence kind</h3>
+    <ol>
+        <li>Add a case to <code>KycEvidenceType</code>, with <code>takesFile()</code> / <code>takesValue()</code> / <code>defaultMimeTypes()</code>.</li>
+        <li>Handle it in <code>RecordKycEvidence</code> (<code>file</code> / <code>value</code> branches), <code>KycCompletion::holds</code>, the presenter and the React form; keep <code>PartnerKycRound</code> and <code>SupplierKycRound</code> in step through the <code>KycRound</code> interface.</li>
+    </ol>
+    <h3>Add a re-verification consequence</h3>
+    <ol>
+        <li>Add a case to <code>KycConsequence</code>; decide <code>appliesBeforeDeadline()</code>; add label keys under <code>kyc_consequence</code> (<code>lang/en|bn/status.php</code>).</li>
+        <li>Add a <code>blocks…</code> method to <code>KycRestrictions</code> and call it from the <em>Action</em> that performs the activity, never only the UI.</li>
+        <li>Never make it cancel, reverse or unpublish anything.</li>
+    </ol>
+    <h3>Add a mobile evidence field</h3>
+    <ol>
+        <li>New request in <code>app/Http/Requests/Mobile/Kyc/</code> using <code>AcceptsDocumentType</code> if it names a requirement; add the route in <code>routes/mobile/kyc.php</code> (and the Supplier file if it applies); keep the validation docblocks, which feed the API docs.</li>
+    </ol>
+    <h3>Add a review outcome side effect</h3>
+    <ol>
+        <li>Extend <code>ReviewKyc::applyToAccount</code> inside the existing transaction; do side effects like notifications after commit.</li>
+    </ol>
+
+    <h2>Testing</h2>
+    <p>Pest group <code>kyc</code> covers <code>tests/Feature/Kyc</code>. Run a slice in its own schema, one suite at a time (<a href="../guide/testing.html">Testing</a>): <code>vendor/bin/pest tests/Feature/Kyc</code>.</p>
+    <table>
+        <thead><tr><th>Area</th><th>Files</th></tr></thead>
+        <tbody>
+        <tr><td>Flow and review</td><td><code>KycReviewTest</code>, <code>KycReviewScreenTest</code>, <code>KycScreenTest</code>, <code>ApplicantKycHistoryTest</code>, <code>KycUploadOnBehalfTest</code></td></tr>
+        <tr><td>Batches</td><td><code>KycBatchTest</code>, <code>KycBatchAdminTest</code>, <code>KycBatchRoundTest</code>, <code>KycBatchApplicantFlowTest</code>, <code>KycBatchVersioningTest</code>, <code>KycBatchSecurityTest</code>, <code>KycSelfieSubmissionTest</code></td></tr>
+        <tr><td>Catalogue and scoping</td><td><code>KycDocumentTypeManagementTest</code>, <code>KycDocumentTypeScreenTest</code>, <code>KycRequirementScopingTest</code>, <code>KycScopeSelectionTest</code>, <code>KycIdentityDropdownTest</code></td></tr>
+        <tr><td>Documents</td><td><code>KycDocumentStoreTest</code>, <code>KycDocumentAccessTest</code></td></tr>
+        <tr><td>Re-verification and deadlines</td><td><code>RequestKycUpdateTest</code>, <code>KycReverificationTest</code>, <code>KycReverificationDeadlineTest</code>, <code>KycDeadlineTest</code>, <code>KycEnforcementTest</code>, <code>KycRestrictionReleaseTest</code></td></tr>
+        <tr><td>Mobile and migration</td><td><code>MobileKycDocumentTypeTest</code>, <code>KycConsequenceRenameMigrationTest</code>, <code>DemoSeederTest</code></td></tr>
+        </tbody>
+    </table>
+    <p>Tests use <code>Storage::fake('kyc')</code>, <code>Notification::fake()</code> and seed <code>RolesAndPermissionsSeeder</code>. Fixtures: <code>KycDocumentTypeFactory</code>; batches are usually built inline with <code>KycBatch::create</code>.</p>
+
+    <h2>Related modules</h2>
+    <div class="cards">
+        <a class="card" href="account.html"><h3>Account</h3><p>Funnel, activation, statuses.</p></a>
+        <a class="card" href="access.html"><h3>Access</h3><p><code>kyc.*</code> and <code>kyc_batch.*</code>.</p></a>
+        <a class="card" href="supplier.html"><h3>Supplier</h3><p>Supplier KYC rounds.</p></a>
+        <a class="card" href="storage.html"><h3>Storage</h3><p><code>ManagedStorage</code>, R2.</p></a>
+        <a class="card" href="audit.html"><h3>Audit</h3><p>Decisions recorded.</p></a>
+        <a class="card" href="notification.html"><h3>Notification</h3><p>Staff queue, deadline SMS.</p></a>
+    </div>
+</main>
+</body>
+</html>

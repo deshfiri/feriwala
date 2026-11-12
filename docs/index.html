@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Banij developer documentation</title>
+    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+    <script src="assets/docs.js"></script>
+</head>
+
+<body>
+    <main id="doc">
+        <section class="hero">
+            <span class="eyebrow">DEVELOPER DOCUMENTATION</span>
+            <h1>The complete map of <span class="grad">Banij</span></h1>
+            <p class="lead">
+                Banij is an ERP for wholesale and dropshipping in Bangladesh. Partners buy from a central catalogue or
+                sell it on their own storefronts; suppliers feed the catalogue; Banij is the merchant of record and
+                keeps the money straight. This is the map of the whole system for a developer joining the project.
+            </p>
+            <div class="actions">
+                <a class="btn" href="guide/getting-started.html">Get started →</a>
+                <a class="btn btn-ghost" href="guide/conventions.html">Read the rules</a>
+                <a class="btn btn-ghost" href="guide/glossary.html">Glossary</a>
+            </div>
+            <div class="stats">
+                <div class="stat"><b>29</b><span>Domain modules</span></div>
+                <div class="stat"><b>2</b><span>Public APIs</span></div>
+                <div class="stat"><b>0</b><span>Floats in money</span></div>
+                <div class="stat"><b>45</b><span>Pages of docs</span></div>
+            </div>
+        </section>
+
+        <div class="callout callout-rule">
+            <p><strong>Read these two first.</strong> <a href="guide/conventions.html">Conventions &amp;
+                    non-negotiables</a>
+                (money, ledger, state machines, scoping) and the <a href="guide/decisions.html">Decision log</a>.
+                Everything
+                else in the code assumes them.</p>
+        </div>
+
+        <h2>Start here</h2>
+        <div class="cards">
+            <a class="card" href="guide/getting-started.html">
+                <h3>Getting started</h3>
+                <p>Install, configure, migrate, generate the app key, run it.</p>
+            </a>
+            <a class="card" href="guide/architecture.html">
+                <h3>Architecture</h3>
+                <p>Actors, layers, and how a request travels through them.</p>
+            </a>
+            <a class="card" href="guide/conventions.html">
+                <h3>Conventions</h3>
+                <p>The rules that may not be worked around, and where they are enforced.</p>
+            </a>
+            <a class="card" href="guide/glossary.html">
+                <h3>Glossary</h3>
+                <p>Every domain term and acronym used in the code and the UI.</p>
+            </a>
+            <a class="card" href="guide/decisions.html">
+                <h3>Decision log</h3>
+                <p>The approved decisions (D-numbers) and what they affect.</p>
+            </a>
+        </div>
+
+        <h2>Platform guide</h2>
+        <div class="cards">
+            <a class="card" href="guide/http-layers.html">
+                <h3>Routing &amp; HTTP layers</h3>
+                <p>Web, admin, supplier, mobile API, storefront API, webhooks.</p>
+            </a>
+            <a class="card" href="guide/frontend.html">
+                <h3>Frontend</h3>
+                <p>Inertia + React, Wayfinder, shared components, design tokens.</p>
+            </a>
+            <a class="card" href="guide/database.html">
+                <h3>Database</h3>
+                <p>PostgreSQL conventions, migrations, table map.</p>
+            </a>
+            <a class="card" href="guide/testing.html">
+                <h3>Testing &amp; checks</h3>
+                <p>Pest, test schemas, the four checks that must pass.</p>
+            </a>
+            <a class="card" href="guide/operations.html">
+                <h3>Operations</h3>
+                <p>Queues, scheduler, Redis, deployment, troubleshooting.</p>
+            </a>
+            <a class="card" href="guide/commands.html">
+                <h3>Console commands</h3>
+                <p>Every Artisan command and scheduled task.</p>
+            </a>
+        </div>
+
+        <h2>Modules</h2>
+        <p class="section-intro">One page per domain module, grouped the way the product is organised.</p>
+        <h3>Identity &amp; access</h3>
+        <div class="cards">
+            <a class="card" href="modules/account.html">
+                <h3>Account</h3>
+                <p>Business accounts, membership, activation.</p>
+            </a>
+            <a class="card" href="modules/access.html">
+                <h3>Access</h3>
+                <p>Roles, permissions, platform staff.</p>
+            </a>
+            <a class="card" href="modules/kyc.html">
+                <h3>KYC</h3>
+                <p>Batches, rounds, evidence, review.</p>
+            </a>
+            <a class="card" href="modules/audit.html">
+                <h3>Audit</h3>
+                <p>The immutable audit trail.</p>
+            </a>
+            <a class="card" href="modules/settings.html">
+                <h3>Settings</h3>
+                <p>Platform settings and branding.</p>
+            </a>
+        </div>
+        <h3>Reference data</h3>
+        <div class="cards">
+            <a class="card" href="modules/location.html">
+                <h3>Location</h3>
+                <p>Divisions to unions.</p>
+            </a>
+            <a class="card" href="modules/address.html">
+                <h3>Address</h3>
+                <p>Shared addresses and defaults.</p>
+            </a>
+            <a class="card" href="modules/bank.html">
+                <h3>Bank</h3>
+                <p>Bangladesh banks.</p>
+            </a>
+            <a class="card" href="modules/tax.html">
+                <h3>Tax</h3>
+                <p>Rates, modes, exact allocation.</p>
+            </a>
+        </div>
+        <h3>Money</h3>
+        <div class="cards">
+            <a class="card" href="modules/wallet.html">
+                <h3>Wallet</h3>
+                <p>Balances, ledger, holds, settlement.</p>
+            </a>
+            <a class="card" href="modules/billing.html">
+                <h3>Billing</h3>
+                <p>Charges, payments, gateways, FX.</p>
+            </a>
+            <a class="card" href="modules/withdrawal.html">
+                <h3>Withdrawal</h3>
+                <p>Requests and their review.</p>
+            </a>
+            <a class="card" href="modules/payout.html">
+                <h3>Payout</h3>
+                <p>Paying money out.</p>
+            </a>
+            <a class="card" href="modules/referral.html">
+                <h3>Referral</h3>
+                <p>Codes and rewards.</p>
+            </a>
+        </div>
+        <h3>Catalog &amp; stock</h3>
+        <div class="cards">
+            <a class="card" href="modules/catalog.html">
+                <h3>Catalog</h3>
+                <p>Products, eligibility, pricing tiers.</p>
+            </a>
+            <a class="card" href="modules/inventory.html">
+                <h3>Inventory</h3>
+                <p>Stock, reservations, availability.</p>
+            </a>
+            <a class="card" href="modules/sourcing.html">
+                <h3>Sourcing</h3>
+                <p>Where a product comes from.</p>
+            </a>
+            <a class="card" href="modules/wholesale.html">
+                <h3>Wholesale</h3>
+                <p>Cart, checkout and wholesale orders.</p>
+            </a>
+            <a class="card" href="modules/content-library.html">
+                <h3>Content Library</h3>
+                <p>Shared product content.</p>
+            </a>
+            <a class="card" href="modules/damage.html">
+                <h3>Damage</h3>
+                <p>Damages, returns, exchanges.</p>
+            </a>
+        </div>
+        <h3>Orders &amp; delivery</h3>
+        <div class="cards">
+            <a class="card" href="modules/order.html">
+                <h3>Order</h3>
+                <p>Orders, allocation, proceeds, shipments.</p>
+            </a>
+            <a class="card" href="modules/courier.html">
+                <h3>Courier</h3>
+                <p>Booking and tracking.</p>
+            </a>
+            <a class="card" href="modules/cases.html">
+                <h3>Cases</h3>
+                <p>Support cases.</p>
+            </a>
+            <a class="card" href="modules/notification.html">
+                <h3>Notification</h3>
+                <p>Email, SMS and in-app messages.</p>
+            </a>
+        </div>
+        <h3>Suppliers &amp; packages</h3>
+        <div class="cards">
+            <a class="card" href="modules/supplier.html">
+                <h3>Supplier</h3>
+                <p>Supplier portal, offers, stock.</p>
+            </a>
+            <a class="card" href="modules/package.html">
+                <h3>Package</h3>
+                <p>Plans, features, entitlements.</p>
+            </a>
+            <a class="card" href="modules/storage.html">
+                <h3>Storage</h3>
+                <p>Managed files and disks.</p>
+            </a>
+        </div>
+        <h3>Sales channels</h3>
+        <div class="cards">
+            <a class="card" href="modules/website.html">
+                <h3>Website</h3>
+                <p>Partner storefronts, credentials, webhooks.</p>
+            </a>
+            <a class="card" href="modules/external-store.html">
+                <h3>External Store</h3>
+                <p>A partner's own store, connected.</p>
+            </a>
+        </div>
+
+        <h2>Integrations &amp; APIs</h2>
+        <div class="cards">
+            <a class="card" href="integrations/overview.html">
+                <h3>Integrations</h3>
+                <p>Payment, SMS, courier, store and DNS drivers.</p>
+            </a>
+            <a class="card" href="api/mobile-api.html">
+                <h3>Mobile API</h3>
+                <p>The app's API: auth, resources, errors.</p>
+            </a>
+            <a class="card" href="api/storefront-api.html">
+                <h3>Storefront API</h3>
+                <p>The frozen v1 contract for storefronts.</p>
+            </a>
+            <a class="card" href="storefront-app.html">
+                <h3>Storefront application</h3>
+                <p>The separate shop app: env, deploy, webhooks.</p>
+            </a>
+        </div>
+
+        <h2>How to read these pages</h2>
+        <ul>
+            <li>Module pages share one shape: purpose, where it lives, terms, data model, states, actions, entry points,
+                permissions, money effects, configuration, gotchas, how-tos, testing, related modules.</li>
+            <li>Paths are relative to the repository root. Names (classes, routes, permissions, enum cases) were taken
+                from
+                the code, not from memory.</li>
+            <li>The live OpenAPI references are served by the running app at <code>/docs/mobile</code> and
+                <code>/docs/storefront</code>. The files <code>docs/api/mobile.md</code> and
+                <code>docs/api/storefront.md</code> feed them — edit those, not these pages, to change the API text.
+            </li>
+            <li>The original specification is <code>requirements.txt</code> (cited as §number); approved decisions are
+                in
+                <code>requirements/04-decisions.md</code> (cited as D-number).
+            </li>
+        </ul>
+    </main>
+</body>
+
+</html>

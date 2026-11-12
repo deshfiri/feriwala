@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Frontend</title>
+    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+    <script src="../assets/docs.js"></script>
+</head>
+<body>
+<main id="doc">
+    <h1>Frontend</h1>
+    <p class="lead">The ERP interface is Inertia v3 and React 19 with Tailwind 4, in <code>resources/js</code>. This page covers the folder layout, how pages and layouts are resolved, Wayfinder, the shared components (DataTable, StatusPill, MoneyAmount, MoneyInput, state components), translations, design tokens and the admin-selectable accent, the vendored shadcn <code>ui/</code> folder, and how to test and check the front end.</p>
+
+    <h2>Stack</h2>
+    <table>
+        <thead><tr><th>Piece</th><th>Notes (from <code>package.json</code> / <code>vite.config.ts</code>)</th></tr></thead>
+        <tbody>
+            <tr><td>Inertia</td><td><code>@inertiajs/react</code> ^3, <code>@inertiajs/vite</code> ^3 (SSR works automatically in Vite dev mode). Inertia v3 has no Axios; use the built-in client or <code>useHttp</code>.</td></tr>
+            <tr><td>React</td><td>19, with the React Compiler (<code>babel-plugin-react-compiler</code> through <code>@rolldown/plugin-babel</code>).</td></tr>
+            <tr><td>Build / tooling</td><td>Vite 8 driven through <strong>vite-plus</strong> (<code>vp</code>): <code>vp dev</code>, <code>vp build</code>, <code>vp check</code>, <code>vp test run</code>. Entry points: <code>resources/css/app.css</code> and <code>resources/js/app.tsx</code>.</td></tr>
+            <tr><td>Styling</td><td>Tailwind 4 (<code>@tailwindcss/vite</code>), Radix primitives, <code>class-variance-authority</code>, <code>tailwind-merge</code>, <code>tw-animate-css</code>, <code>lucide-react</code> icons, <code>sonner</code> toasts.</td></tr>
+            <tr><td>Fonts</td><td>Poppins and Noto Sans Bengali, self-hosted through <code>laravel-vite-plugin/fonts</code> (<code>bunny()</code>), so Bangla renders correctly everywhere (D6).</td></tr>
+            <tr><td>Realtime</td><td><code>laravel-echo</code> + <code>pusher-js</code> (<code>resources/js/lib/echo.ts</code>).</td></tr>
+            <tr><td>Charts</td><td>Plain SVG; <strong>no charting library</strong> (Recharts was removed and must not return without approval).</td></tr>
+        </tbody>
+    </table>
+
+    <h2>Folder layout</h2>
+    <table>
+        <thead><tr><th>Folder</th><th>What lives there</th></tr></thead>
+        <tbody>
+            <tr><td><code>app.tsx</code></td><td><code>createInertiaApp</code>: title template, the layout resolver, <code>TooltipProvider</code> + <code>Toaster</code> wrapper, the progress-bar colour (<code>var(--brand)</code>), theme init, and a <code>router.on('success')</code> hook that syncs <code>&lt;html lang/dir&gt;</code> with the page's locale (<code>lib/sync-document-locale.ts</code>).</td></tr>
+            <tr><td><code>pages/</code></td><td>Inertia pages: <code>admin</code>, <code>auth</code>, <code>allocated-stock</code>, <code>cases</code>, <code>catalog</code>, <code>customers</code>, <code>damages</code>, <code>erp</code>, <code>inventory</code>, <code>onboarding</code>, <code>orders</code>, <code>referrals</code>, <code>settings</code>, <code>staff</code>, <code>store-orders</code>, <code>stores</code>, <code>supplier</code>, <code>wallet</code>, <code>websites</code>, <code>wholesale</code>. A page's name equals its path, e.g. <code>Inertia::render('wallet/top-up')</code> is <code>pages/wallet/top-up.tsx</code>.</td></tr>
+            <tr><td><code>layouts/</code></td><td><code>app-layout.tsx</code> (with <code>resources/js/layouts/app/app-sidebar-layout.tsx</code> and <code>app-header-layout.tsx</code>), <code>auth-layout.tsx</code> (+ <code>auth/</code> simple, split, card), <code>settings/layout.tsx</code>, <code>supplier-layout.tsx</code>, <code>supplier-auth-layout.tsx</code>.</td></tr>
+            <tr><td><code>components/</code></td><td>App components. Sub-folders: <code>ui/</code> (vendored shadcn), <code>data-table/</code>, <code>states/</code>, <code>forms/</code>, <code>charts/</code>, <code>dashboard/</code>, and per-module folders (<code>cases</code>, <code>kyc</code>, <code>wallet</code>, <code>supplier</code>, <code>address-book</code>, <code>payout</code>, <code>onboarding</code>, <code>product-links</code>, <code>product-suppliers</code>, <code>content-library</code>). Shell pieces: <code>app-shell</code>, <code>app-sidebar</code>, <code>app-header</code>, <code>breadcrumbs</code>, <code>nav-main</code>, <code>notification-menu</code>, <code>global-search</code>, <code>language-switcher</code>, <code>impersonation-banner</code>.</td></tr>
+            <tr><td><code>hooks/</code></td><td><code>use-translation</code>, <code>use-table-query</code>, <code>use-navigation</code> (+ <code>use-navigation-pending</code>), <code>use-appearance</code>, <code>use-flash-toast</code>, <code>use-realtime-updates</code>, <code>use-measured-width</code>, <code>use-current-url</code>, <code>use-clipboard</code>, <code>use-mobile</code>, <code>use-two-factor-auth</code>, <code>use-initials</code>.</td></tr>
+            <tr><td><code>lib/</code></td><td><code>money.ts</code>, <code>status.ts</code>, <code>accent.ts</code>, <code>chart.ts</code>, <code>page-shape.ts</code>, <code>reasons.ts</code>, <code>datetime-local.ts</code>, <code>echo.ts</code>, <code>xsrf.ts</code>, <code>utils.ts</code> (<code>cn()</code>), domain helpers (<code>website.ts</code>, <code>website-order.ts</code>, <code>order-return.ts</code>, <code>referral.ts</code>).</td></tr>
+            <tr><td><code>types/</code></td><td>Shared TypeScript types per area (<code>data-table.ts</code>, <code>wallet.ts</code>, <code>orders.ts</code>, <code>kyc.ts</code>, <code>navigation.ts</code>, <code>localization.ts</code>, <code>branding.ts</code> ...). Import from <code>@/types</code>.</td></tr>
+            <tr><td><code>actions/</code>, <code>routes/</code>, <code>wayfinder/</code></td><td><strong>Generated, git-ignored.</strong> See Wayfinder below. Excluded from lint.</td></tr>
+            <tr><td><code>test/</code></td><td><code>setup.ts</code>: React Testing Library matchers and per-test cleanup.</td></tr>
+        </tbody>
+    </table>
+    <p>The alias <code>@/*</code> maps to <code>resources/js/*</code> (<code>tsconfig.json</code>).</p>
+
+    <h2>Pages and layouts</h2>
+    <p>The layout is chosen by page name in <code>app.tsx</code>, not by each page:</p>
+    <table>
+        <thead><tr><th>Page name</th><th>Layout</th></tr></thead>
+        <tbody>
+            <tr><td><code>welcome</code>, <code>supplier/auth/login</code>, <code>supplier/auth/register</code></td><td>None (they draw their own full-screen two-panel shell).</td></tr>
+            <tr><td><code>auth/*</code></td><td><code>AuthLayout</code></td></tr>
+            <tr><td><code>supplier/auth/*</code></td><td><code>SupplierAuthLayout</code></td></tr>
+            <tr><td><code>supplier/*</code></td><td><code>SupplierLayout</code> (visibly separate from the ERP, D25)</td></tr>
+            <tr><td><code>settings/*</code></td><td><code>[AppLayout, SettingsLayout]</code> (nested)</td></tr>
+            <tr><td>everything else</td><td><code>AppLayout</code></td></tr>
+        </tbody>
+    </table>
+    <p>A page can set its own breadcrumbs with <code>Page.layout = { breadcrumbs: [...] }</code>. Known debt: breadcrumb titles are hard-coded English in 15+ pages (<code>.ai/rules/ui-surfaces.md</code>); do not translate them piecemeal.</p>
+    <p>Skeletons: <code>lib/page-shape.ts</code> learns a screen's shape (list, dashboard, form, detail) after it first renders and remembers it against the URL pattern, so no page hand-draws a skeleton and the next visit is drawn in the right shape.</p>
+    <p>Inertia v3 features are all available (deferred props, prefetching, optimistic updates, <code>useHttp</code>, layout props). When using deferred props, give them an empty state with a pulsing skeleton. Activate the <code>inertia-react-development</code> skill when working on client-side Inertia patterns.</p>
+
+    <h2>Wayfinder (<code>@/actions</code>, <code>@/routes</code>)</h2>
+    <p>Wayfinder generates typed functions from Laravel routes. Never hardcode a URL; import it.</p>
+<pre><code>import { show } from '@/routes/wallet';                       // by named route
+import { create as topUp } from '@/routes/wallet/top-up';
+import WalletTopUpController from '@/actions/App/Http/Controllers/Erp/WalletTopUpController';  // by controller
+
+&lt;Link href={show()}&gt;...&lt;/Link&gt;
+&lt;Form {...WalletTopUpController.store.form()}&gt;...&lt;/Form&gt;</code></pre>
+    <ul>
+        <li>Generated into <code>resources/js/actions</code>, <code>resources/js/routes</code> and <code>resources/js/wayfinder</code>, all git-ignored. The Vite plugin (<code>wayfinder({ formVariants: true })</code>) regenerates them during <code>npm run dev</code> / <code>composer run dev</code>.</li>
+        <li>Manual regeneration: <code>php artisan wayfinder:generate --with-form</code>. <strong>Always <code>--with-form</code></strong>: without it the <code>.form</code> helpers vanish and <code>tsc --noEmit</code> fails in ~40 unrelated files with <code>Property 'form' does not exist</code> (<code>.ai/rules/actions.md</code>).</li>
+        <li>A new backend route is unknown to TypeScript until regenerated. Activate the <code>wayfinder-development</code> skill for details.</li>
+    </ul>
+
+    <h2>Shared components</h2>
+    <h3><code>DataTable</code></h3>
+    <p><code>components/data-table/data-table.tsx</code> is the one list component (it backs roughly fifty screens); reuse it, do not write a table. It covers search, filters, sorting, server-side pagination, column visibility, bulk actions, export, and every state (<code>ready</code>, <code>loading</code>, <code>error</code>, <code>forbidden</code>, plus empty). Key props: <code>columns: Column&lt;T&gt;[]</code> (<code>key</code>, <code>header</code>, <code>cell</code>, <code>sortable</code>, <code>priority: 'primary'|'secondary'</code>, <code>hiddenByDefault</code>, <code>alwaysVisible</code>), <code>paginator: Paginator&lt;T&gt;</code> (Laravel's length-aware paginator shape), <code>rowKey</code>, <code>state</code>, <code>searchable</code>, <code>filters</code>, <code>actions</code>, <code>selection</code> + <code>bulkActions</code>, <code>renderCard</code> (mobile cards below <code>md</code> instead of sideways scroll), <code>renderTile</code> (list/tile switch), <code>viewStorageKey</code>, <code>emptyState</code>, <code>onRetry</code>, <code>onlyReload</code>.</p>
+    <ul>
+        <li><code>hooks/use-table-query.ts</code> keeps search, sort, filters and page in the <strong>URL</strong> (bookmarkable, survives refresh and back) and asks the server; the browser only ever holds one page of rows (&sect;39). Nothing polls. Pass <code>only</code> so a filter change re-fetches the table and nothing else.</li>
+        <li>On the server, return a <code>paginate()</code> result and honour <code>search</code>, <code>sort</code>, <code>direction</code> query parameters in the Query class.</li>
+    </ul>
+    <h3><code>StatusPill</code></h3>
+    <p><code>components/status-pill.tsx</code> takes <code>tone</code>, a <strong>required</strong> <code>label</code> and optional <code>icon</code>. Tones are five: <code>success</code>, <code>warning</code>, <code>danger</code>, <code>info</code>, <code>neutral</code> (<code>lib/status.ts</code>), each with a default icon and a hairline border, so status is never conveyed by colour alone (&sect;33.9). Map every status of every module onto those five tones; do not invent hues. Get the label from the server enum's <code>label()</code>.</p>
+    <h3><code>MoneyAmount</code> and <code>MoneyInput</code></h3>
+    <ul>
+        <li><code>components/money-amount.tsx</code>: renders the server's <code>Money</code> JSON (<code>{amount, currency, formatted}</code>, type in <code>lib/money.ts</code>), always <code>tabular-nums</code>, with <code>title</code> carrying the exact decimal. <strong>Pass <code>direction</code> explicitly</strong> (<code>'credit' | 'debit' | 'neutral'</code>): ledger rows store a debit as a positive amount with a debit type, so inferring from the sign colours half a statement wrongly. <code>showSign</code> and <code>size</code> (<code>small|default|large</code>) are optional.</li>
+        <li><code>components/money-input.tsx</code>: labelled input with a <code>symbol</code> (default Taka) that submits the decimal string exactly as typed, uncontrolled, never a minor-unit integer. <code>components/forms/money-field.tsx</code> is the unlabelled variant for use inside <code>FormField</code>.</li>
+        <li><code>lib/money.ts</code> offers only string-pattern predicates (<code>isZero</code>, <code>isNegative</code>, <code>isPositive</code>, <code>directionOf</code>, <code>signed</code>). <strong>Nothing in React parses, multiplies or divides an amount.</strong> A guard test fails the build on <code>.decimal</code> reads, <code>_minor</code> names and <code>minor_units</code> in <code>resources/js</code> (see <a href="conventions.html">Conventions</a>).</li>
+    </ul>
+    <h3>States</h3>
+    <p>Every important screen needs loading, empty, error and permission-denied states (&sect;33.10). They are in <code>components/states/</code>: <code>EmptyState</code> (nothing yet, an invitation to create), <code>ErrorState</code> (retry), <code>PermissionDeniedState</code>, <code>OfflineState</code>, <code>TableSkeleton</code>, <code>PageSkeleton</code>, with <code>StateShell</code> as the common frame. <code>DataTable</code> already renders them.</p>
+    <h3>Surfaces and forms</h3>
+    <ul>
+        <li><code>PageContainer</code> owns the gutters (16px on a phone, 24px from <code>sm</code>) and vertical rhythm; every authenticated screen opens with it. <code>width="narrow"</code> for forms and detail panels, default <code>full</code> for tables and dashboards. Do not hand-roll <code>space-y-6 p-4</code>.</li>
+        <li><code>SectionCard</code> is the panel (title, description, actions, footer; <code>headingLevel</code>; <code>tone="destructive"</code>). <code>StatCard</code>/<code>StatCardGrid</code> for figures, passed already formatted by the server. <code>DetailList</code>/<code>DetailItem</code> for label-value pairs. <code>Notice</code> for tinted explanatory boxes. <code>NativeSelect</code> and <code>Textarea</code> match <code>Input</code>.</li>
+        <li>Forms: <code>FormField</code>, <code>SubmitButton</code>, <code>InputError</code>, <code>ReasonTextarea</code>, <code>ReasonDialog</code>, <code>ConfirmDialog</code>, <code>FileField</code> in <code>components/forms/</code>. Mutations that need a reason use the reason dialogs (<code>lib/reasons.ts</code>).</li>
+        <li>Radius is a token (<code>--radius</code> 8px; <code>rounded-xl</code> 12px, <code>rounded-2xl</code> 16px), never a per-screen choice. Status hues (<code>text-warning</code>, <code>text-danger</code>) are used on their own <code>-subtle</code> ground; do not reach for a Tailwind palette colour.</li>
+        <li>Charts (<code>components/charts</code>, <code>lib/chart.ts</code>): plain SVG, measured with <code>useMeasuredWidth</code>. A <code>ChartPoint</code> carries <code>value</code> (plottable) and <code>formatted</code> (server-written string); tooltips print <code>formatted</code>. Money axes take server-formatted <code>ticks</code>. Series colour is <code>tone: 1..5</code> mapped to <code>--chart-1..5</code>, never a hex. Gaps stay gaps. A chart never carries meaning in colour alone.</li>
+        <li>Navigation: <code>hooks/use-navigation.ts</code> builds the sidebar from permissions (<code>usePage().props.permissions</code>) and account presence. Everything under "My business" needs <code>account</code> to be present, because platform staff have none. See the shared-prop gotchas in <a href="http-layers.html">HTTP layers</a>.</li>
+    </ul>
+
+    <h2>Translations</h2>
+    <p><code>hooks/use-translation.ts</code> returns <code>{ t, locale, direction, available }</code> from the shared <code>translations</code> and <code>locale</code> props.</p>
+<pre><code>const { t } = useTranslation();
+t('common.actions.save');                       // lang/en/common.php  ->  ['actions' =&gt; ['save' =&gt; ...]]
+t('common.table.showing', { from: 1, to: 25, total: 25 })  // ":name" placeholders, same syntax as Laravel</code></pre>
+    <ul>
+        <li>A missing key returns <strong>the key itself</strong>, on purpose: a visible <code>common.actions.save</code> is a bug somebody fixes; an empty string is a blank button nobody notices.</li>
+        <li>Placeholders are replaced in one pass, longest token first, so <code>:to</code> never matches inside <code>:total</code>.</li>
+        <li>Every user-facing string goes through <code>t()</code>, with lines in <code>lang/en/*.php</code> <strong>and</strong> <code>lang/bn/*.php</code>. The server ships the whole active-locale tree (English fallback) as the lazy <code>translations</code> prop, so a new <code>lang</code> file needs no front-end wiring. Status labels come from the backend enum (<code>HasTranslatedLabel</code>).</li>
+        <li><code>direction</code> comes from the locale; <code>syncDocumentLocale</code> keeps <code>&lt;html&gt;</code> in step after each visit.</li>
+    </ul>
+
+    <h2>Design tokens and the brand accent</h2>
+    <p>Tokens live in <code>resources/css/app.css</code> (<code>@theme</code> at the top, <code>:root</code> for light, <code>.dark</code> for dark, <code>@custom-variant dark (&amp;:is(.dark *))</code>). The approved direction is a neutral warm-grey surface with near-black primary actions and one restrained orange accent (D6). Never put a colour directly in a component; use a token class (<code>bg-card</code>, <code>text-muted-foreground</code>, <code>bg-brand</code>, <code>text-success</code>, <code>bg-success-subtle</code>, <code>text-credit</code>, <code>text-debit</code>, <code>--chart-1..5</code>).</p>
+    <ul>
+        <li><strong>Accent.</strong> Every brand token derives from <code>--brand-base</code> (default <code>#ca6330</code>): <code>--brand</code>, <code>--brand-foreground</code>, <code>--brand-subtle</code>, <code>--brand-border</code>, with <code>--brand-on</code> and <code>--brand-lifted-on</code> chosen for text contrast (4.5:1 minimum, <code>lib/accent.ts</code>). Buttons and navigation have their own triples (<code>--button-base</code>, <code>--nav-base</code> ...).</li>
+        <li><strong>Admin-selectable.</strong> Under Admin &rarr; Branding (<code>Admin\BrandingController</code>, <code>App\Domain\Settings\Branding</code>) an admin picks a preset (orange, crimson, amber, emerald, teal, blue, indigo, violet, slate: <code>ACCENT_PRESETS</code>) or a custom <code>#rrggbb</code>. The server shares <code>branding</code>; <code>components/branding-head.tsx</code> writes the properties onto <code>document.documentElement</code> client-side.</li>
+        <li><strong>Painted before hydration.</strong> <code>resources/views/app.blade.php</code> paints the canvas colour inline before the stylesheet loads. Those values mirror <code>--background</code> for each theme; if you change the token, change them. <code>tests/Feature/Ui/AppearanceShellTest.php</code> fails if they drift.</li>
+        <li><strong>Appearance</strong> is exactly Light, Dark and System. No fourth palette. The choice is stored in <code>localStorage</code> and a cookie (<code>appearance</code>, exempt from encryption in <code>bootstrap/app.php</code>).</li>
+    </ul>
+
+    <h2>Vendored shadcn <code>ui/</code></h2>
+    <div class="callout callout-rule"><p><strong>Do not hand-edit <code>resources/js/components/ui</code>.</strong> It is vendored shadcn; it is excluded from lint and formatting. The few defaults that do not match the palette (dialog overlay, surface, corner) are corrected at the bottom of <code>app.css</code> against the <code>data-slot</code> each primitive stamps (<code>[data-slot='dialog-content']</code>, ...). Skin by <code>data-slot</code> or wrap the primitive in an app component.</p></div>
+
+    <h2>Gotchas from the rules</h2>
+    <ul>
+        <li><strong>HTML <code>pattern</code> with a hyphen.</strong> <code>pattern="^[a-z0-9-]+$"</code> throws "Invalid regular expression" in current Chrome (Unicode Sets mode) and can abort in-flight form handling. Escape it (<code>\\-</code> in a JS string) or drop the client pattern and rely on server validation + <code>InputError</code>.</li>
+        <li><strong>Derived "kind" values must be React state.</strong> In a dialog where a <code>&lt;select&gt;</code> changes which fields render, never compute <code>const kind = x ?? y</code> once and leave the select uncontrolled; use <code>useState</code> seeded from props and a controlled select.</li>
+        <li><strong>Never rebuild assets while the PHP suite runs.</strong> Deleting <code>public/hot</code> or running <code>npm run build</code> mid-run makes every Inertia response test fail with <code>ViteException</code> (<code>.ai/rules/tests.md</code>). Build <em>before</em> starting the suite; a new page is missing from the manifest until built.</li>
+        <li>If a front-end change does not show, you probably need <code>npm run dev</code>, <code>composer run dev</code> or <code>npm run build</code>.</li>
+        <li>A page prop must not be named like a shared prop (<code>account</code>, <code>auth</code>, <code>locale</code>...). See <a href="http-layers.html">HTTP layers</a>.</li>
+    </ul>
+
+    <h2>Tests and checks</h2>
+    <table>
+        <thead><tr><th>Command</th><th>What it runs</th></tr></thead>
+        <tbody>
+            <tr><td><code>npm run test:js</code></td><td><code>vp test run</code>: Vitest with jsdom, Testing Library and <code>jest-dom</code>; setup in <code>resources/js/test/setup.ts</code>. Test files sit next to their subject as <code>*.test.ts(x)</code> (for example <code>money-input.test.tsx</code>, <code>use-translation.test.tsx</code>, <code>use-table-query.test.tsx</code>, <code>nav-main.test.tsx</code>). Each file names its own environment.</td></tr>
+            <tr><td><code>npm run check</code></td><td><code>vp check</code>: format + lint (type-aware, <code>denyWarnings</code>) + types. <code>npm run check:fix</code> applies fixes.</td></tr>
+            <tr><td><code>npm run types:check</code></td><td><code>tsc --noEmit</code>.</td></tr>
+            <tr><td><code>npm run build</code></td><td><code>vp build</code> (production bundle); <code>build:ssr</code> adds the SSR bundle.</td></tr>
+        </tbody>
+    </table>
+    <div class="callout callout-tip"><p><strong>Tip.</strong> Pass explicit paths: <code>npx vp check --fix resources/js/pages/wallet/show.tsx</code>. A bare <code>vp check --fix</code> reformats the whole repo, including <code>.md</code> files, and leaves unrelated churn in <code>git status</code> (<code>.ai/rules/js.md</code>). If your editor also formats on save, point it at <code>vp check --fix</code> or turn it off; the two disagree about ternary indentation. Formatter: 4-space tabs, single quotes, semicolons, 80 columns, Tailwind class sorting (<code>fmt</code> in <code>vite.config.ts</code>); <code>docs/**/*.html</code> is ignored.</p></div>
+
+    <h2>How to add a screen</h2>
+    <ol>
+        <li>Make the backend route and controller (<a href="http-layers.html">HTTP layers</a>); regenerate Wayfinder with <code>--with-form</code>.</li>
+        <li>Create <code>resources/js/pages/&lt;area&gt;/&lt;name&gt;.tsx</code>; its default export is the page, props typed from <code>@/types</code>. The layout is automatic.</li>
+        <li>Open with <code>PageContainer</code>; group content in <code>SectionCard</code>; use <code>DataTable</code> for lists with <code>useTableQuery</code>; render money with <code>MoneyAmount</code> (explicit <code>direction</code>), status with <code>StatusPill</code>.</li>
+        <li>Provide loading, empty, error and permission-denied states from <code>components/states</code>.</li>
+        <li>Put every string in <code>lang/en</code> and <code>lang/bn</code> and read it with <code>t()</code>.</li>
+        <li>If it is a menu item, add it to <code>use-navigation.ts</code> and its ability to <code>HandleInertiaRequests::NAVIGATION_ABILITIES</code>.</li>
+        <li>Add a Vitest test for non-trivial logic, run <code>npx vp check --fix &lt;files&gt;</code> and <code>npm run types:check</code>.</li>
+    </ol>
+    <p>See also: <a href="conventions.html">Conventions</a>, <a href="architecture.html">Architecture</a>, <a href="testing.html">Testing</a>.</p>
+</main>
+</body>
+</html>

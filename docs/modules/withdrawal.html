@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Withdrawals</title>
+    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+    <script src="../assets/docs.js"></script>
+</head>
+<body>
+<main id="doc">
+    <h1>Withdrawals</h1>
+    <p class="lead">A Client or Partner business account asks to move withdrawable money out of its wallet to a saved payout method. Staff review, approve, process and mark it paid with the external reference. The money is reserved at request time and captured or released exactly once.</p>
+
+    <h2>Purpose</h2>
+    <p>Implements §27 and D25 for <code>BusinessAccount</code> owners. Suppliers have a parallel but separate model (<code>SupplierWithdrawal</code>, in the Supplier domain, out of scope here). The business requests; platform staff decide and pay outside the system, then record the bank or mobile-wallet reference.</p>
+    <ul>
+        <li><strong>Client / Partner</strong>: requests and tracks its own withdrawals.</li>
+        <li><strong>Staff</strong>: a queue under Admin, with separated duties (below).</li>
+        <li><strong>Admin with <code>withdrawal.manage_settings</code></strong>: sets minimum and maximum.</li>
+    </ul>
+
+    <h2>Where it lives</h2>
+    <table>
+        <thead><tr><th>Path</th><th>Role</th></tr></thead>
+        <tbody>
+            <tr><td><code>app/Domain/Withdrawal/Models/</code></td><td><code>AccountWithdrawal</code>, <code>AccountWithdrawalStatusChange</code>.</td></tr>
+            <tr><td><code>app/Domain/Withdrawal/Enums/</code></td><td><code>AccountWithdrawalStatus</code>, <code>AccountWithdrawalChangeSource</code> (account, staff, system, scheduler, payment_gateway).</td></tr>
+            <tr><td><code>app/Domain/Withdrawal/Actions/</code></td><td><code>RequestAccountWithdrawal</code>, <code>AdvanceAccountWithdrawalStatus</code>, <code>RejectOrFailAccountWithdrawal</code>, <code>PayAccountWithdrawal</code>, <code>SetAccountWithdrawalLimits</code>.</td></tr>
+            <tr><td><code>app/Domain/Withdrawal/AccountWithdrawalLimits.php</code>, <code>Policies/AccountWithdrawalPolicy.php</code>, <code>Exceptions/AccountWithdrawalRefused.php</code></td><td>Limits, policy, refusals.</td></tr>
+            <tr><td><code>app/Http/Controllers/Erp/AccountWithdrawalController.php</code></td><td>The account's own screens.</td></tr>
+            <tr><td><code>app/Http/Controllers/Admin/AccountWithdrawalController.php</code>, <code>WithdrawalLimitsController.php</code></td><td>Staff queue and limits.</td></tr>
+            <tr><td><code>app/Http/Controllers/Api/Mobile/V1/Withdrawals/WithdrawalController.php</code></td><td>Mobile API.</td></tr>
+            <tr><td><code>resources/js/pages/erp/withdrawals/</code> (index, create, show); <code>admin/account-withdrawals/</code> (index, show); <code>admin/withdrawal-limits.tsx</code></td><td>Pages.</td></tr>
+            <tr><td><code>lang/en/withdrawal.php</code> (and <code>bn</code>)</td><td>Strings.</td></tr>
+            <tr><td><code>database/migrations/2026_10_13_100000_take_account_withdrawals.php</code>, <code>2026_10_13_110000_add_account_withdrawal_limit_overrides.php</code></td><td>Tables, constraints, triggers; override columns on <code>business_accounts</code>.</td></tr>
+            <tr><td><code>tests/Feature/Withdrawal/</code>, <code>tests/Feature/Concurrency/AccountWithdrawalConcurrencyTest.php</code></td><td>Tests.</td></tr>
+        </tbody>
+    </table>
+
+    <h2>Key terms</h2>
+    <dl>
+        <dt>Claim</dt>
+        <dd>The wallet reservation (<code>wallet_transactions</code> row, type <code>withdrawal_debit</code>) named by <code>wallet_transaction_id</code>. Pending while reserved, settled when paid, cancelled when released.</dd>
+        <dt>Payout snapshot</dt>
+        <dd>A frozen copy of the payout method (type, label, masked number, bank, branch) taken at request time. Editing or archiving the method later never changes it.</dd>
+        <dt>External reference</dt>
+        <dd>The proof of payment staff enter when marking paid.</dd>
+    </dl>
+
+    <h2>Data model</h2>
+    <table>
+        <thead><tr><th>Table / model</th><th>Columns and constraints</th></tr></thead>
+        <tbody>
+            <tr><td><code>account_withdrawals</code> / <code>AccountWithdrawal</code></td><td><code>HasPublicId</code>, <code>HasReference</code> (prefix <code>Withdrawal</code>), <code>HasStateMachine</code>, <code>RecordsStatusHistory</code>. <code>business_account_id</code>, <code>wallet_id</code>, <code>payout_method_id</code>, <code>wallet_transaction_id</code> (all restrict-on-delete), <code>payout_snapshot</code> (jsonb), <code>amount</code> (decimal 19,2, check &gt; 0), <code>currency_code</code>, <code>status</code>, <code>requested_at</code>, <code>decided_by</code>, <code>decided_at</code>, <code>decision_note</code>, <code>processed_by</code>, <code>processed_at</code>, <code>paid_at</code>, <code>external_reference</code> (max 120), <code>failure_reason</code>, <code>idempotency_key</code> (unique).</td></tr>
+            <tr><td><code>account_withdrawal_status_history</code> / <code>AccountWithdrawalStatusChange</code></td><td>Append-only (triggers via <code>feriwala_status_history_is_append_only</code>): previous and new status, <code>changed_by</code>, <code>source</code>, reason, internal and public notes. A check requires previous &ne; new.</td></tr>
+            <tr><td><code>business_accounts.withdrawal_minimum_override</code>, <code>withdrawal_maximum_override</code></td><td>Per-account limits, set only by Admin.</td></tr>
+        </tbody>
+    </table>
+    <p>Database guarantees: <code>account_withdrawals_locked_columns</code> forbids changing identity, amount, currency, payout snapshot, wallet transaction and idempotency key; <code>account_withdrawals_never_deleted</code>; check <code>account_withdrawals_paid_is_complete</code> (paid exactly when <code>paid_at</code> and <code>external_reference</code> are both set); the withdrawal currency must equal its wallet's.</p>
+
+    <h2>States &amp; lifecycle</h2>
+    <table>
+        <thead><tr><th>From</th><th>May move to</th><th>By</th></tr></thead>
+        <tbody>
+            <tr><td><code>requested</code></td><td>under_review, rejected</td><td>Staff (<code>approve</code> route does the first step automatically; <code>reject</code>)</td></tr>
+            <tr><td><code>under_review</code></td><td>approved, rejected</td><td>Staff</td></tr>
+            <tr><td><code>approved</code></td><td>processing</td><td>Staff (<code>process</code>)</td></tr>
+            <tr><td><code>processing</code></td><td>paid, failed</td><td>Staff holding release_payment (<code>paid</code>); reject permission (<code>failed</code>)</td></tr>
+            <tr><td><code>rejected</code>, <code>failed</code>, <code>paid</code>, <code>reversed</code></td><td>none</td><td>Terminal; a new attempt is a new request</td></tr>
+        </tbody>
+    </table>
+    <p><code>holdsReservation()</code> is true for requested, under_review, approved and processing. <code>reversed</code> exists as a case and a check-constraint value, but no status has a move into it and I found no code that produces it.</p>
+
+    <h2>Actions &amp; workflows</h2>
+    <h3>Request (<code>RequestAccountWithdrawal</code>)</h3>
+    <ol>
+        <li>Account must be activated; <code>KycRestrictions::blocksWithdrawals()</code> must be false (a new request only; one already in flight is never cancelled by a KYC consequence, see <code>.ai/rules/withdrawal.md</code>).</li>
+        <li>The payout method must belong to this account and be active.</li>
+        <li>Amount at least the minimum and at most the maximum (if any).</li>
+        <li>An existing withdrawal with the same idempotency key is returned.</li>
+        <li>Transaction: lock the wallet; refuse if a Partner-gateway receivable hold is live (<code>PartnerCollectionHolds::firstLive</code>, D36, taken under the same wallet lock a collection uses); refuse if the amount exceeds <code>availableForWithdrawal()</code>; <code>WalletService::reserve()</code> with <code>withdrawal_debit</code> (withdrawable money only, key <code>account-withdrawal-reserve:{key}</code>); create the row with the payout snapshot; first status-history row (source account); audit <code>account_withdrawal.requested</code>.</li>
+        <li>After commit, announce to the staff queue (<code>StaffQueue::AccountWithdrawal</code>). A unique-key race returns the winner's row.</li>
+    </ol>
+    <h3>Review and payment</h3>
+    <ol>
+        <li><code>AdvanceAccountWithdrawalStatus</code> moves requested to under_review, under_review to approved, approved to processing. No money moves. Audit <code>account_withdrawal.{status}</code>.</li>
+        <li><code>RejectOrFailAccountWithdrawal</code> (to <code>rejected</code> or <code>failed</code>, reason required): lock the row, check the transition, <code>WalletService::release()</code> the claim, store <code>failure_reason</code> for failed, write history with the reason, audit, and notify the owner (<code>AccountWithdrawalStatusChanged</code>).</li>
+        <li><code>PayAccountWithdrawal</code>: lock, check <code>canTransitionTo(paid)</code>, <code>WalletService::capture()</code> the claim (total and reserved fall together, one ledger entry, key claim key + <code>:capture</code>), set processed and paid times and the external reference, write history, audit <code>account_withdrawal.paid</code> (sensitive), notify.</li>
+    </ol>
+    <p>The claim's own state machine is what makes release and capture happen once: a repeat is refused before the wallet is touched.</p>
+    <div class="callout callout-note"><p><strong>No fees.</strong> I found no withdrawal fee in <code>app/Domain/Withdrawal</code>; the amount requested is the amount reserved and captured. Limits are the only rule beyond the balance.</p></div>
+    <div class="callout callout-note"><p><strong>Decision columns.</strong> <code>decided_by</code>, <code>decided_at</code> and <code>decision_note</code> exist and are read by screens and the mobile resource, but I found no action that writes them. Who decided is recoverable from the status history and audit log.</p></div>
+
+    <h3>Limits (<code>AccountWithdrawalLimits</code>)</h3>
+    <ul>
+        <li>Minimum: the account's override, else setting <code>account.withdrawal_minimum</code>, else <code>500.00</code>; never below the floor <code>1.00</code>.</li>
+        <li>Maximum: the account's override, else setting <code>account.withdrawal_maximum</code>; none by default; capped at <code>1000000000.00</code> when set.</li>
+        <li><code>SetAccountWithdrawalLimits</code> writes the default or an override and audits <code>account.withdrawal_limits_default_set</code> / <code>account.withdrawal_limit_override_set</code> (sensitive). Authorisation is the controller's job.</li>
+    </ul>
+
+    <h2>Entry points</h2>
+    <table>
+        <thead><tr><th>Name</th><th>Method and URL</th><th>Controller</th><th>Gate</th></tr></thead>
+        <tbody>
+            <tr><td><code>withdrawals.index|create|store|show</code></td><td>GET <code>/withdrawals</code>, <code>/withdrawals/create</code>, POST <code>/withdrawals</code>, GET <code>/withdrawals/{withdrawal}</code></td><td><code>Erp\AccountWithdrawalController</code></td><td><code>auth</code> + <code>business.activated</code>; <code>create</code>/<code>store</code> need <code>AccountWithdrawalPolicy::create</code> (business owner with <code>UpdateAccount</code>)</td></tr>
+            <tr><td><code>admin.account-withdrawals.index|show</code></td><td>GET <code>/admin/account-withdrawals[/{withdrawal}]</code></td><td><code>Admin\AccountWithdrawalController</code></td><td><code>withdrawal.view</code></td></tr>
+            <tr><td><code>.approve</code>, <code>.process</code></td><td>POST <code>/{withdrawal}/approve|process</code></td><td>same</td><td><code>withdrawal.approve</code> (policy <code>decide</code>)</td></tr>
+            <tr><td><code>.reject</code>, <code>.failed</code></td><td>POST <code>/{withdrawal}/reject|failed</code></td><td>same</td><td><code>withdrawal.reject</code>; reason 5 to 500 characters</td></tr>
+            <tr><td><code>.paid</code></td><td>POST <code>/{withdrawal}/paid</code></td><td>same</td><td><code>withdrawal.release_payment</code> + <code>RequirePassword</code>; <code>external_reference</code> required, max 120</td></tr>
+            <tr><td><code>admin.withdrawal-limits.index</code>, <code>.account.update</code>, <code>.supplier.update</code>, <code>.account.override</code>, <code>.supplier.override</code></td><td><code>/admin/withdrawal-limits...</code></td><td><code>Admin\WithdrawalLimitsController</code></td><td>View <code>withdrawal.view</code>; change <code>withdrawal.manage_settings</code></td></tr>
+            <tr><td><code>mobile.v1.withdrawals.index|options|store|show</code></td><td>GET/POST <code>/api/mobile/v1/withdrawals</code>, GET <code>/options</code>, GET <code>/{withdrawal}</code></td><td><code>Api\Mobile\V1\Withdrawals\WithdrawalController</code></td><td><code>mobile.activated</code>; send an <code>Idempotency-Key</code> header (up to 64 characters)</td></tr>
+        </tbody>
+    </table>
+    <p>No scheduled tasks. Mobile contract: <a href="../api/mobile-api.html">Mobile API</a>.</p>
+
+    <h2>Permissions &amp; scoping</h2>
+    <p>Separation of duties through three permissions on the shared <code>withdrawal</code> module: a holder of <code>approve</code> may advance and process; <code>reject</code> may reject and mark failed; only <code>release_payment</code> may mark paid. <code>manage_settings</code> is held by no seeded role (the WithdrawalApprover role deliberately lacks it); reachable by Super Admin. Staff <code>viewAny</code>/<code>view</code> never fall back to "has a business account": otherwise any account owner would reach the staff queue.</p>
+    <p>Self-scoping is the query: <code>Erp\AccountWithdrawalController</code> reads only the signed-in account's rows and never asks the staff policy. The idempotency key stored is <code>account-withdrawal:{account id}:{client token}</code>, so one account's token cannot collide with another's.</p>
+
+    <h2>Money, ledger &amp; audit effects</h2>
+    <ul>
+        <li>Request: no ledger entry (a reservation). Pay: one <code>withdrawal_debit</code> entry on the withdrawable kind. Reject or fail: no ledger entry, only the release event.</li>
+        <li>Audit actions: <code>account_withdrawal.requested</code>, <code>.under_review</code>, <code>.approved</code>, <code>.processing</code>, <code>.rejected</code>, <code>.failed</code>, <code>.paid</code>, plus the limit actions above. Module <code>withdrawal</code>.</li>
+        <li>Invariant: the reserved amount equals the withdrawal amount until it is captured or released; the amount is positive and in the wallet's currency.</li>
+    </ul>
+
+    <h2>Configuration</h2>
+    <p>Settings <code>account.withdrawal_minimum</code>, <code>account.withdrawal_maximum</code> (decimal, group <code>account</code>), and the per-account override columns. Constants in <code>AccountWithdrawalLimits</code>: <code>DEFAULT_MINIMUM</code> 500.00, <code>FLOOR_MINIMUM</code> 1.00, <code>CEILING_MAXIMUM</code> 1000000000.00.</p>
+
+    <h2>Rules, invariants &amp; gotchas</h2>
+    <ul>
+        <li>The generic <code>WalletService::reserve()</code> checks <code>usableBalance()</code>; the withdrawal action checks the stricter <code>availableForWithdrawal()</code> itself, because the required deposit stays out of reach even when it may cover service charges.</li>
+        <li>A withdrawal only ever claims withdrawable money; platform credit cannot be withdrawn until converted (<a href="wallet.html">Wallet</a>).</li>
+        <li>The idempotency key here is the durable, unique-index kind, not the cache-backed <code>IdempotencyService</code>. The client must send a stable token per submission.</li>
+        <li>The Admin <code>approve</code> button performs two transitions when the request is still <code>requested</code>.</li>
+        <li>Payout details are never read from the method after request time; always use <code>payout_snapshot</code>.</li>
+        <li>Money is paid outside the system. Marking paid records a fact and captures the reservation; nothing here calls a payout API.</li>
+    </ul>
+
+    <h2>How to&hellip;</h2>
+    <h3>Add a withdrawal status</h3>
+    <ol>
+        <li>Add the case and its <code>transitionsTo()</code>, <code>tone()</code>, label (lang <code>withdrawal.php</code>) in <code>AccountWithdrawalStatus</code>.</li>
+        <li>Extend the <code>account_withdrawals_status_known</code> check in a new migration (and the history table check if the source list changes).</li>
+        <li>Decide whether it holds the reservation (<code>holdsReservation()</code>) and whether leaving it must release or capture the claim.</li>
+        <li>Add the Action and the admin route and policy method; update <code>admin/account-withdrawals/show.tsx</code>.</li>
+    </ol>
+    <h3>Add a withdrawal fee</h3>
+    <ol>
+        <li>Raise it for approval first (payment direction and ledger are architecture-locked).</li>
+        <li>It needs its own ledger type, a second capture entry in <code>PayAccountWithdrawal</code>, and a limit check against amount plus fee in <code>RequestAccountWithdrawal</code>.</li>
+    </ol>
+    <h3>Give one account a higher limit</h3>
+    <p>Admin, Withdrawal limits, account override (<code>withdrawal.manage_settings</code>); this sets the two override columns and audits.</p>
+
+    <h2>Testing</h2>
+    <p><code>vendor/bin/pest tests/Feature/Withdrawal</code> (group <code>withdrawal</code>), in your own schema. <code>AccountWithdrawalRequestTest</code>, <code>AccountWithdrawalAdminDecisionTest</code>, <code>WithdrawalLimitsSettingsTest</code>; <code>AccountWithdrawalConcurrencyTest</code> for races; mobile coverage in <code>tests/Feature/Mobile</code> (supplier variants exist; account variant not verified).</p>
+
+    <h2>Related modules</h2>
+    <ul>
+        <li><a href="wallet.html">Wallet</a>: reserve, release, capture.</li>
+        <li><a href="payout.html">Payout</a>: methods and snapshot.</li>
+        <li><a href="kyc.html">KYC</a>: <code>blocksWithdrawals</code> consequence.</li>
+        <li><a href="supplier.html">Supplier</a>: its parallel withdrawal flow.</li>
+        <li><a href="notification.html">Notification</a>, <a href="audit.html">Audit</a>.</li>
+    </ul>
+</main>
+</body>
+</html>

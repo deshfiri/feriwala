@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Damage module</title>
+    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+    <script src="../assets/docs.js"></script>
+</head>
+<body>
+<main id="doc">
+    <h1>Damage module</h1>
+    <p class="lead">Damage cases (D35): a finding that delivered or returned goods are damaged, who bears the loss, what it costs, and what happens to the item. Returns and exchanges share a separate case workflow in the Order module; this page covers damages only.</p>
+
+    <h2>Purpose</h2>
+    <p>A Partner reports a delivered item damaged (the item may be sent back, or stay with the customer), or staff open a damage from a returned line during return inspection. Staff inspect, decide who bears the loss (Banij or the Partner), approve an amount, and post it. The Partner may then ask for the damaged item to be delivered to them. D35 is the authority (<code>requirements/04-decisions.md</code>); see <a href="cases.html">Cases</a> for the unified workspace and the return/exchange side.</p>
+    <div class="callout callout-rule"><p><strong>Rule (D35).</strong> Nothing moves before inspection: no stock, charge or ledger entry until a person has inspected and the responsibility is decided. Only <code>finalize</code> moves money. A completed case is never reopened; cost is corrected by a compensating entry (reversal row plus a new charge), not by a status.</p></div>
+
+    <h2>Where it lives</h2>
+    <table>
+        <thead><tr><th>Path</th><th>Role</th></tr></thead>
+        <tbody>
+        <tr><td><code>app/Domain/Damage/Models/</code></td><td><code>OrderDamage</code>, <code>OrderDamageStatusChange</code>, <code>OrderDamageDisposition</code>, <code>DamageResponsibilityChange</code>, <code>DamageCharge</code>, <code>DamageDispatch</code></td></tr>
+        <tr><td><code>app/Domain/Damage/Enums/</code></td><td><code>DamageStatus</code>, <code>DamageCondition</code>, <code>DamageCause</code>, <code>DamageSource</code>, <code>DamageValuationBasis</code>, <code>DamageDispatchStatus</code></td></tr>
+        <tr><td><code>app/Domain/Damage/Actions/</code></td><td>Steps listed below; trait <code>Concerns/GuardsDamageActions</code></td></tr>
+        <tr><td><code>app/Domain/Damage/Queries/</code></td><td><code>DamageValuation</code>, <code>DamageReportEligibility</code>, <code>DamageDeliveryQuote</code>, <code>MyDamages</code>, <code>DamagePayload</code></td></tr>
+        <tr><td><code>app/Domain/Damage/Data/</code></td><td><code>DamageReport</code>, <code>DamageInspection</code>, <code>DamageValue</code></td></tr>
+        <tr><td><code>app/Domain/Damage/Policies/DamagePolicy.php</code>, <code>Exceptions/DamageRefused.php</code></td><td>Registered with <code>Gate::policy(OrderDamage::class, ...)</code>; named refusals</td></tr>
+        <tr><td>Shared with Order: <code>Order\Enums\ReturnDisposition</code>, <code>ReturnParty</code>, <code>ReturnChargeKind</code>, <code>ReturnChargeStatus</code>, <code>ReturnInitiator</code></td><td>Disposition to bucket, bearer, charge kinds/status</td></tr>
+        <tr><td><code>app/Http/Controllers/Admin/DamageCaseActionController.php</code>, <code>AdminCaseController</code>, <code>ReturnCaseActionController@openDamage</code>; <code>Erp/DamageController.php</code></td><td>Staff and Partner controllers</td></tr>
+        <tr><td><code>resources/js/pages/damages/</code> (Partner), <code>pages/admin/cases/</code> (staff), <code>pages/cases/</code></td><td>Screens</td></tr>
+        <tr><td><code>lang/en/damages.php</code>, <code>lang/bn/damages.php</code>; migration <code>2026_11_16_120000_add_damage_workflow.php</code> (and <code>2026_11_16_115000_tighten_exchange_reservation_guard.php</code>)</td><td>Strings; schema</td></tr>
+        <tr><td><code>tests/Feature/Damage/DamageWorkflowTest.php</code>, <code>tests/Feature/Cases/PartnerDamageReportTest.php</code>, <code>tests/Feature/Concurrency/DamageConcurrencyTest.php</code></td><td>Tests</td></tr>
+        </tbody>
+    </table>
+
+    <h2>Key terms</h2>
+    <dl>
+        <dt>Case / damage</dt><dd>One <code>OrderDamage</code>, reference prefix from <code>ReferencePrefix::Damage</code>.</dd>
+        <dt>Source</dt><dd><code>return_inspection</code> (found on returned goods) or <code>delivered_report</code> (delivered product reported).</dd>
+        <dt>Parcel expected / in custody</dt><dd>Whether the item is coming back to Banij, and whether Banij now holds it (<code>held_bucket</code>). A customer-retained item has no parcel, no warehouse, no stock movement and can only be "damaged".</dd>
+        <dt>Disposition</dt><dd>What inspection decided for units: <code>restock</code> (to available), <code>damaged</code> (to damaged), <code>quarantine</code> (stay in returned).</dd>
+        <dt>Bearer / responsible party</dt><dd><code>partner</code> or <code>banij</code> (<code>ReturnParty</code>). Customer fault is the Partner's to settle; Banij creates no debt for the customer.</dd>
+        <dt>Valuation</dt><dd>The maximum loss: the order line's frozen suggested selling price times damaged quantity.</dd>
+        <dt>Outstanding</dt><dd>A Partner-borne charge the wallet could not cover; owed, never a negative balance.</dd>
+        <dt>Dispatch</dt><dd>Delivery of the damaged item to the Partner who asked and paid.</dd>
+    </dl>
+
+    <h2>Data model</h2>
+    <p>All tables are never deleted (model <code>deleting</code> hooks throw; DB guards).</p>
+    <table>
+        <thead><tr><th>Table / model</th><th>Important columns</th><th>Constraints</th></tr></thead>
+        <tbody>
+        <tr><td><code>order_damages</code> / <code>OrderDamage</code></td><td><code>public_id</code>, <code>reference</code>, <code>business_account_id</code>, <code>website_id</code>, <code>order_id</code>, <code>order_item_id</code>, <code>order_return_id</code>, <code>order_return_item_id</code>, <code>source</code>, <code>parcel_expected</code>, <code>in_custody</code>, <code>held_bucket</code>, <code>warehouse_id</code>, snapshot <code>sku</code>/<code>product_name</code>/<code>variant_label</code>, <code>quantity</code>, <code>damage_condition</code>, <code>cause</code>, <code>description</code>, <code>evidence</code> (json), <code>status</code>, <code>initiated_by_type</code>, <code>responsible_party</code>, <code>currency_code</code>, <code>valuation_basis</code>, <code>valuation_unit_price</code>, <code>max_recoverable_value</code>, <code>valuation_snapshot</code>, <code>approved_loss_amount</code>, <code>approval_reason</code>, <code>write_off_reason</code>, <code>inspection_note</code>, actor/time pairs (reported, received, inspected, liability_decided, finalized), <code>idempotency_key</code> (hidden)</td><td>Unique <code>public_id</code>, <code>reference</code>, <code>idempotency_key</code>; one live damage per returned line (unique index <code>order_damages_one_per_returned_line</code>); many CHECKs: known enums, <code>quantity &gt; 0</code>, source matches links, custody has a bucket, value within maximum, zero loss is a write-off, decision follows inspection, finalized is dated, parcel arrived before inspection. Identifying columns are frozen after opening; the approved loss is fixed once decided.</td></tr>
+        <tr><td><code>order_damage_status_history</code></td><td>previous/new status, <code>changed_by</code>, <code>source</code> (<code>OrderStatusChangeSource</code>), <code>reason</code>, <code>internal_note</code>, <code>public_note</code> (a translation key, the only note a Partner sees)</td><td>Append-only; must be an actual change.</td></tr>
+        <tr><td><code>order_damage_dispositions</code></td><td><code>disposition</code>, <code>quantity</code>, <code>from_bucket</code>, <code>to_bucket</code>, <code>stock_movement_id</code> or <code>partner_stock_movement_id</code>, <code>moved_at</code></td><td>Unique per (damage, disposition); at most one movement; one central and one partner movement per index.</td></tr>
+        <tr><td><code>order_damage_responsibility_changes</code></td><td><code>previous_party</code>, <code>new_party</code>, <code>changed_by</code>, <code>changed_at</code>, <code>reason</code></td><td>Append-only; must change party; reason present.</td></tr>
+        <tr><td><code>order_damage_charges</code> / <code>DamageCharge</code></td><td><code>kind</code> (<code>damage_loss</code>, <code>damage_delivery</code>), <code>entry_type</code> (<code>charge</code>, <code>reversal</code>), <code>reverses_charge_id</code>, <code>bearer</code>, <code>amount</code> (Money), <code>status</code>, <code>wallet_transaction_id</code>, <code>reason</code>, <code>idempotency_key</code>, <code>posted_at</code>, <code>settled_at</code></td><td><code>amount &gt; 0</code>; unique <code>idempotency_key</code>; reversal must point at a charge; wallet transaction must match status. Mistakes are answered by a reversal row.</td></tr>
+        <tr><td><code>order_damage_dispatches</code> / <code>DamageDispatch</code></td><td><code>quantity</code>, <code>shared_address_id</code>, <code>address_snapshot</code>, <code>delivery_charge</code>, <code>delivery_calculation</code>, <code>status</code>, requested/dispatched/received actor+time, <code>courier_provider_id</code>, <code>tracking_number</code>, stock movement ids, <code>idempotency_key</code></td><td>Unique per damage (one dispatch only); dated-status CHECKs.</td></tr>
+        </tbody>
+    </table>
+
+    <h2>States &amp; lifecycle</h2>
+    <p><code>DamageStatus</code> (a <code>TransitionableState</code>; cases: reported, awaiting_receipt, received, under_inspection, liability_review, approved, rejected, financial_posting_pending, finalized, dispatch_requested, dispatched, received_by_partner). Moves go through <code>OrderDamage::moveTo()</code>, which writes a history row and announces the move (<code>AnnounceCaseEvent</code>).</p>
+    <table>
+        <thead><tr><th>From</th><th>May move to</th></tr></thead>
+        <tbody>
+        <tr><td>reported</td><td>awaiting_receipt, received, under_inspection, rejected</td></tr>
+        <tr><td>awaiting_receipt</td><td>received, rejected</td></tr>
+        <tr><td>received</td><td>under_inspection</td></tr>
+        <tr><td>under_inspection</td><td>liability_review, rejected</td></tr>
+        <tr><td>liability_review</td><td>approved, rejected</td></tr>
+        <tr><td>approved</td><td>financial_posting_pending</td></tr>
+        <tr><td>financial_posting_pending</td><td>finalized</td></tr>
+        <tr><td>finalized</td><td>dispatch_requested</td></tr>
+        <tr><td>dispatch_requested</td><td>dispatched</td></tr>
+        <tr><td>dispatched</td><td>received_by_partner</td></tr>
+        <tr><td>rejected, received_by_partner</td><td>terminal</td></tr>
+        </tbody>
+    </table>
+    <p>Helpers: <code>isDecided()</code> (approved onward), <code>isPosted()</code> (finalized onward), <code>hasDispatchStarted()</code>. Entry state: delivered report with a parcel starts at awaiting_receipt; without a parcel goes straight to under_inspection; from a return (already received and inspected) starts at received. <code>DamageDispatchStatus</code>: requested, dispatched, received_by_partner (forward only).</p>
+
+    <h2>Actions &amp; workflows</h2>
+    <table>
+        <thead><tr><th>Action</th><th>Permission</th><th>Effect</th></tr></thead>
+        <tbody>
+        <tr><td><code>ReportDamage::fromDelivered</code></td><td>staff <code>damage.inspect</code>, or the owning Partner with account role permission <code>ViewOrders</code></td><td>Order must be delivered/completed/return_requested and inside the return window (<code>ReturnEligibility::windowClosesAt</code>); quantity at most sold minus live claims; supplier-backed lines refused; description (min 10 chars) or evidence required (max 10 references); freezes the valuation; idempotent by key.</td></tr>
+        <tr><td><code>ReportDamage::fromReturn</code></td><td><code>damage.inspect</code></td><td>From an inspection-approved return line whose disposition is not restock; points at the return and line; in custody; opens at received.</td></tr>
+        <tr><td><code>ReceiveDamageParcel</code></td><td><code>damage.inspect</code></td><td>awaiting_receipt to received; moves units sold to returned through the stock ledgers (purpose <code>intake</code>).</td></tr>
+        <tr><td><code>StartDamageInspection</code></td><td><code>damage.inspect</code></td><td>received to under_inspection; awaiting_receipt is refused.</td></tr>
+        <tr><td><code>RecordDamageInspection</code></td><td><code>damage.inspect</code></td><td>Every unit gets exactly one disposition (sum must equal the quantity); a not-in-custody item may only be damaged; moves units from the held bucket via <code>MoveDamageStock</code>; records cause. Nothing damaged: restocks and rejects; else to liability_review.</td></tr>
+        <tr><td><code>ApproveDamageLiability</code></td><td><code>damage.assign_liability</code></td><td>Reason min 10 chars; bearer; loss between 0 and the maximum (damaged units times frozen price, never above the case maximum), same currency; zero needs a write-off reason (min 10). Writes first responsibility row; moves approved then financial_posting_pending.</td></tr>
+        <tr><td><code>FinalizeDamage</code></td><td><code>damage.finalize</code></td><td>The only money step: <code>PostDamageCharge</code> then financial_posting_pending to finalized. A zero loss posts nothing.</td></tr>
+        <tr><td><code>ChangeDamageResponsibility</code></td><td><code>damage.assign_liability</code></td><td>After a decision, before dispatch starts: appends a responsibility row; if already posted, <code>ReverseDamageCharge</code> then <code>PostDamageCharge</code> under a new revision.</td></tr>
+        <tr><td><code>RejectDamage</code></td><td>inspect, or assign_liability at liability_review</td><td>Only before approval; reason min 10; received passes through under_inspection first. Stock already moved stays.</td></tr>
+        <tr><td><code>RequestDamageDelivery</code></td><td>owning Partner with <code>UpdateAccount</code> role permission; policy <code>requestDelivery</code></td><td>Finalized, Partner-borne, in custody with damaged units; one of the account's own active shared addresses; charge from <code>CalculateDeliveryCharge</code> on the item's logistics; posted with outstanding not allowed (insufficient wallet refuses); creates the dispatch; to dispatch_requested.</td></tr>
+        <tr><td><code>DispatchDamage</code></td><td><code>damage.dispatch</code></td><td>Tracking number required; units leave damaged and the system (never into a sellable bucket); to dispatched.</td></tr>
+        <tr><td><code>ConfirmDamageReceivedByPartner</code></td><td>owning Partner (UpdateAccount) or <code>damage.dispatch</code></td><td>dispatched to received_by_partner.</td></tr>
+        <tr><td><code>SettleOutstandingDamageCharge</code></td><td><code>damage.finalize</code> (controller)</td><td>Collects an outstanding charge when the wallet can now cover it.</td></tr>
+        <tr><td><code>PostDamageCharge</code> / <code>ReverseDamageCharge</code> / <code>MoveDamageStock</code></td><td>internal</td><td>See below.</td></tr>
+        </tbody>
+    </table>
+    <p>Every action locks the case (<code>lockForUpdate</code>), returns the existing result if its step already happened, and writes an audit entry after commit (module <code>damage</code>).</p>
+    <h3>Stock effects</h3>
+    <ul>
+        <li>Intake: sold to returned (only for a delivered report with a parcel).</li>
+        <li>Inspection: held bucket to the disposition bucket (restock to available, damaged to damaged, quarantine stays returned). Skipped when already in that bucket.</li>
+        <li>Dispatch: damaged to nowhere.</li>
+        <li><code>MoveDamageStock</code> picks the Partner's own stock (<code>PartnerStock</code>, type <code>adjustment</code>) if the order line was reserved from it (D34), else central stock in the case's warehouse (<code>needsAWarehouse</code> if none). Key: <code>order-damage:&lt;public id&gt;:&lt;purpose&gt;</code>. Supplier-backed lines are refused.</li>
+    </ul>
+    <h3>Money</h3>
+    <ul>
+        <li>Banij bears: a <code>DamageCharge</code> with status <code>recorded</code>; no wallet movement, no platform wallet.</li>
+        <li>Partner bears: <code>WalletService::debit</code> (platform credit first, then withdrawable) with ledger type <code>DamageLossDebit</code> (delivery: <code>DamageDeliveryDebit</code>); status <code>posted</code>. If the wallet cannot cover it: <code>outstanding</code>.</li>
+        <li>Charge key: <code>damage-charge:&lt;public id&gt;:&lt;kind&gt;:r&lt;revision&gt;</code>; reversal key <code>reversal:&lt;charge key&gt;</code>. The reversal credits the typed balances exactly as taken (platform credit back as platform credit), each pointing at the ledger entry it corrects.</li>
+    </ul>
+
+    <h2>Entry points</h2>
+    <table>
+        <thead><tr><th>Route name</th><th>Method and URL</th><th>Controller@method</th></tr></thead>
+        <tbody>
+        <tr><td><code>damages.index|create|store|show</code></td><td>GET <code>/my-damages</code>; GET/POST <code>/my-damages/report/{order}</code>; GET <code>/my-damages/{damage}</code></td><td><code>Erp\DamageController</code> (store needs the manage-store permission; others need <code>ViewOrders</code>)</td></tr>
+        <tr><td><code>damages.delivery.store</code></td><td>POST <code>/my-damages/{damage}/delivery</code></td><td><code>requestDelivery</code></td></tr>
+        <tr><td><code>damages.receipt.store</code></td><td>POST <code>/my-damages/{damage}/receipt</code></td><td><code>confirmReceipt</code></td></tr>
+        <tr><td><code>admin.damages.store</code></td><td>POST <code>/admin/damages</code></td><td><code>ReturnCaseActionController@openDamage</code> (from a return line)</td></tr>
+        <tr><td><code>admin.cases.damages.show</code></td><td>GET <code>/admin/cases/damages/{damage}</code></td><td><code>AdminCaseController@showDamage</code></td></tr>
+        <tr><td><code>admin.cases.damages.*</code></td><td>POST <code>.../parcel</code>, <code>inspection-start</code>, <code>inspection</code>, <code>rejection</code>, <code>liability</code>, <code>finalization</code>, <code>responsibility</code>, <code>dispatch</code>, <code>receipt</code>, <code>outstanding/{charge}</code>, <code>evidence</code></td><td><code>DamageCaseActionController</code></td></tr>
+        </tbody>
+    </table>
+    <p>No mobile or storefront endpoint for damages was found in the mobile route files; storefront return requests are a different flow (<code>orders/{order}/return-requests</code>). No console commands or schedules.</p>
+
+    <h2>Permissions &amp; scoping</h2>
+    <p>Staff: <code>damage.view</code>, <code>inspect</code>, <code>assign_liability</code>, <code>finalize</code>, <code>dispatch</code> (plus <code>view_self</code> and <code>request_delivery</code> exist in the matrix as names for Partner verbs but are not used to grant). Typical roles: Order Manager and Admin view+inspect; Inventory and Fulfillment Manager view+inspect+dispatch; Finance Manager view+assign_liability+finalize. Separate verbs are intentional so the person who judges the goods does not decide or post the money.</p>
+    <p>Partners are never given <code>damage.*</code>: <code>Gate::before</code> refuses them to business identities (<code>ReturnCasePolicy::isCaseAdministrationAbility</code>). <code>DamagePolicy</code> instead scopes by account: <code>ownedBy()</code> requires the user's account to equal the case's account and the account role to hold <code>ViewOrders</code>; <code>requestDelivery</code> additionally requires the case to be Partner-borne and the role to hold <code>UpdateAccount</code>. <code>MyDamages</code> lists only cases the Partner bears the loss for; <code>DamagePayload</code> exposes no other Partner's data, internal notes, staff names, stock figures or valuation workings. Another Partner's case is a 404.</p>
+
+    <h2>Money, ledger &amp; audit effects</h2>
+    <ul>
+        <li>Money fields: <code>valuation_unit_price</code>, <code>max_recoverable_value</code>, <code>approved_loss_amount</code>, charge <code>amount</code>, dispatch <code>delivery_charge</code>, all <code>Money</code>.</li>
+        <li>Wallet ledger types: <code>DamageLossDebit</code>, <code>DamageDeliveryDebit</code>; reversals credit with <code>ReturnAdjustment</code> (<code>correctsLedgerEntryId</code>). Ledger entries are never edited.</li>
+        <li>Audit actions (module <code>damage</code>): <code>damage.received</code>, <code>.inspection_started</code>, <code>.inspected</code>, <code>.liability_approved</code>, <code>.responsibility_changed</code>, <code>.finalized</code>, <code>.rejected</code>, <code>.delivery_requested</code>, <code>.dispatched</code>, <code>.received_by_partner</code>; opening is audited by <code>ReportDamage::auditOpened</code>.</li>
+        <li>Staff are notified when a Partner reports (<code>StaffQueue::DamageCase</code>); Partner and next actor are notified on each move.</li>
+    </ul>
+
+    <h2>Configuration</h2>
+    <p>The reporting window is the return window from the return terms (<code>ReturnEligibility::windowClosesAt</code>, delivered date plus the configured days). Delivery charges use the delivery-settings rules. No damage-specific env or config keys were found.</p>
+
+    <h2>Rules, invariants &amp; gotchas</h2>
+    <ul>
+        <li>A case "begins as the Partner's" in D35 text, but in code the responsible party is null until <code>ApproveDamageLiability</code> sets it; the first responsibility row has <code>previous_party = null</code>.</li>
+        <li>Valuation uses only line snapshots: suggested unit price, else platform-retained share, else none (maximum zero; write-off only). Never the Partner's store price or today's price.</li>
+        <li>Damaged units are never sellable afterwards, whatever the status; dispatch removes them from the damaged bucket only.</li>
+        <li>Responsibility cannot change once dispatch has been requested (the Partner paid for delivery based on it).</li>
+        <li>Supplier-backed lines cannot be reported (<code>supplierBacked</code>); the report screen says so up front.</li>
+        <li>Repeat calls are safe: each action returns the first result; unique keys settle races.</li>
+    </ul>
+
+    <h2>How to&hellip;</h2>
+    <ol>
+        <li><strong>Add a damage cause or condition:</strong> add the case to <code>DamageCause</code>/<code>DamageCondition</code>, widen the CHECK in a new migration, add <code>statusLabelGroup</code> translations (<code>damage_cause</code>/<code>damage_condition</code>) in en and bn, and the select options on the inspection and report screens.</li>
+        <li><strong>Add a status:</strong> edit <code>DamageStatus::transitionsTo()</code>, the helper predicates, the status CHECK, the history <code>public_note</code> keys in <code>lang/*/damages.php</code>, and the action that performs the move.</li>
+        <li><strong>Change how loss is valued:</strong> edit <code>DamageValuation</code>; remember the value is frozen onto the case at opening and the approval check compares against it.</li>
+        <li><strong>Add a charge kind:</strong> <code>ReturnChargeKind</code> case plus ledger type, widen <code>order_damage_charges_kind_known</code>.</li>
+    </ol>
+
+    <h2>Testing</h2>
+    <p><code>vendor/bin/pest tests/Feature/Damage</code> and <code>tests/Feature/Cases/PartnerDamageReportTest.php</code>, <code>tests/Feature/Concurrency/DamageConcurrencyTest.php</code>, each in its own schema. Helpers in <code>DamageWorkflowTest.php</code>: <code>dmgDeliveredOrder()</code>, <code>dmgReport()</code>, <code>dmgInspection()</code>, <code>dmgReviewable()</code>, <code>dmgApprove()</code>, <code>dmgFinalized()</code>, <code>dmgLossCharge()</code>, <code>dmgDatabaseRefuses()</code>; shared fixtures in <code>tests/Support/CaseFixtures.php</code>. Notifications and translations: <code>tests/Feature/Cases/CaseNotificationsTest.php</code>, <code>CaseTranslationsTest.php</code>.</p>
+
+    <h2>Related modules</h2>
+    <ul><li><a href="cases.html">Cases</a>, <a href="order.html">Order</a>, <a href="inventory.html">Inventory</a>, <a href="wallet.html">Wallet</a>, <a href="notification.html">Notification</a>, <a href="audit.html">Audit</a>, <a href="../guide/decisions.html">Decisions</a></li></ul>
+</main>
+</body>
+</html>

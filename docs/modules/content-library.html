@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Content Library module</title>
+    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+    <script src="../assets/docs.js"></script>
+</head>
+<body>
+<main id="doc">
+    <h1>Content Library module</h1>
+    <p class="lead">Content written once (text, images, videos, links) and released to one or more products, shown to partners on each product's page. Staff author it; partners only read it.</p>
+
+    <h2>Purpose</h2>
+    <p>Staff (Content Manager, Product Manager, Admin) write marketing and instruction content once and release it to chosen products instead of repeating it per product. Released items appear in the partner catalogue product detail (<code>Erp\CatalogController</code> and the mobile catalogue controller load <code>libraryContent</code> and render it through <code>ContentBlocks::present()</code>). Related to, but separate from, the per-product update feed (<code>ProductContent</code>) in <a href="catalog.html">Catalog</a>. Reflects §12 (partners never author catalogue content).</p>
+
+    <h2>Where it lives</h2>
+    <table>
+        <thead><tr><th>Path</th><th>Role</th></tr></thead>
+        <tbody>
+        <tr><td><code>app/Domain/ContentLibrary/Models/ContentLibraryItem.php</code></td><td>The item (<code>HasPublicId</code>, <code>SoftDeletes</code>)</td></tr>
+        <tr><td><code>app/Domain/ContentLibrary/ContentBlocks.php</code></td><td>Block vocabulary; editor and page presentation; embed URL logic</td></tr>
+        <tr><td><code>app/Domain/ContentLibrary/Actions/</code></td><td><code>SaveContentLibraryItem</code>, <code>UploadContentLibraryFile</code>, <code>DeleteContentLibraryItem</code></td></tr>
+        <tr><td><code>app/Domain/ContentLibrary/Policies/ContentLibraryPolicy.php</code></td><td>Static permission checks</td></tr>
+        <tr><td><code>app/Http/Controllers/Admin/ContentLibraryController.php</code>, <code>app/Http/Requests/ContentLibrary/SaveContentLibraryItemRequest.php</code></td><td>Admin controller and validation</td></tr>
+        <tr><td><code>resources/js/pages/admin/content-library/</code> (<code>index.tsx</code>, <code>form.tsx</code>)</td><td>Screens</td></tr>
+        <tr><td><code>lang/en/content_library.php</code>, <code>lang/bn/content_library.php</code></td><td>Strings</td></tr>
+        <tr><td>Migrations <code>2026_10_30_130000_create_content_library.php</code>, <code>2026_10_30_140000_remove_content_library_title_limit.php</code></td><td>Schema</td></tr>
+        <tr><td><code>tests/Feature/ContentLibrary/ContentLibraryTest.php</code></td><td>Tests</td></tr>
+        </tbody>
+    </table>
+
+    <h2>Key terms</h2>
+    <dl>
+        <dt>Item</dt><dd>A title plus an ordered list of blocks, released to a set of products.</dd>
+        <dt>Block</dt><dd>One of <code>text</code>, <code>image</code>, <code>video</code>, <code>link</code>. Structured data, never HTML.</dd>
+        <dt>Release</dt><dd>Creating an item publishes it at once to every chosen product; there is no draft.</dd>
+        <dt>Library upload</dt><dd>A <code>StoredFile</code> with purpose <code>content-library</code>, public visibility.</dd>
+    </dl>
+
+    <h2>Data model</h2>
+    <table>
+        <thead><tr><th>Table</th><th>Columns</th><th>Constraints</th></tr></thead>
+        <tbody>
+        <tr><td><code>content_library_items</code></td><td><code>public_id</code>, <code>title</code>, <code>blocks</code> (jsonb, cast to array), <code>created_by</code>, <code>updated_by</code> (nullable, null on user delete), <code>published_at</code>, timestamps, <code>deleted_at</code></td><td>CHECK title not blank; CHECK <code>blocks</code> is a JSON array. Title length limit removed by a later migration. Soft-deleted.</td></tr>
+        <tr><td><code>content_library_item_product</code></td><td><code>content_library_item_id</code>, <code>product_id</code>, timestamps</td><td>Unique per pair; cascades on delete of item or product. <code>Product::libraryContent()</code> reads it, newest <code>published_at</code> first.</td></tr>
+        </tbody>
+    </table>
+    <p>Block shapes: text <code>{text}</code>; image <code>{file_id, alt?, caption?}</code>; video either <code>{file_id}</code> (uploaded) or <code>{url}</code> (https link), plus optional <code>caption</code>; link <code>{url, label, description?}</code>. Image types: jpeg, png, webp, gif, avif; video types: mp4, webm, ogg, quicktime (SVG deliberately excluded because it can carry script).</p>
+
+    <h2>States &amp; lifecycle</h2>
+    <p>No status enum. An item is live from creation (<code>published_at = now()</code>) until soft-deleted. Editing changes what partners see immediately.</p>
+
+    <h2>Actions &amp; workflows</h2>
+    <ul>
+        <li><code>SaveContentLibraryItem::handle($actor, ?$item, $title, $blocks, $productIds)</code>: creating needs <code>content_library.create</code>, editing needs <code>.edit</code>. Requires a non-empty title, at least one block, and one or more existing products (all public ids must resolve). Blocks are rebuilt from allowed keys per type, unknown types throw; every <code>file_id</code> must be a <code>content-library</code> upload of the right mime kind; links must be full http/https URLs; a video block needs exactly one of file or URL. In a transaction it creates/updates the item and <code>sync()</code>s the products, then audits <code>content_library.published</code> or <code>content_library.updated</code> (before/after title, products, block count).</li>
+        <li><code>UploadContentLibraryFile</code>: for image or video chosen in the editor before the item is saved; needs create or edit; stores via <code>StoreManagedFile</code> (public, no size cap set by the app; the web server limit still applies). Uploaded files are not deleted when an item is.</li>
+        <li><code>DeleteContentLibraryItem</code>: needs <code>.delete</code>; audits <code>content_library.removed</code> with title and products, then soft-deletes.</li>
+    </ul>
+    <p>Presentation: <code>ContentBlocks::forEditor()</code> returns stored blocks plus preview URL and mime; <code>present()</code> resolves files to URLs, drops missing files, and turns YouTube/Vimeo links into embed URLs (<code>youtube-nocookie.com</code>, <code>player.vimeo.com</code>); other video links are shown as plain links.</p>
+
+    <h2>Entry points</h2>
+    <table>
+        <thead><tr><th>Route name (admin.)</th><th>Method and URL</th><th>Controller@method</th><th>Check</th></tr></thead>
+        <tbody>
+        <tr><td><code>content-library.index</code></td><td>GET <code>/admin/content-library</code></td><td><code>index</code></td><td>view</td></tr>
+        <tr><td><code>content-library.create</code> / <code>.store</code></td><td>GET / POST <code>/admin/content-library[/create]</code></td><td><code>create</code>, <code>store</code></td><td>publish (create)</td></tr>
+        <tr><td><code>content-library.edit</code> / <code>.update</code></td><td>GET / PATCH <code>/admin/content-library/{item}[/edit]</code></td><td><code>edit</code>, <code>update</code></td><td>view / edit</td></tr>
+        <tr><td><code>content-library.destroy</code></td><td>DELETE <code>/admin/content-library/{item}</code></td><td><code>destroy</code></td><td>delete</td></tr>
+        <tr><td><code>content-library.uploads.store</code></td><td>POST <code>/admin/content-library/uploads</code></td><td><code>upload</code> (JSON)</td><td>create or edit</td></tr>
+        <tr><td><code>content-library.products</code></td><td>GET <code>/admin/content-library/products</code></td><td><code>products</code> (JSON picker)</td><td>create or edit</td></tr>
+        </tbody>
+    </table>
+    <p>No mobile or storefront endpoint of its own; partners see the content inside catalogue product detail responses.</p>
+
+    <h2>Permissions &amp; scoping</h2>
+    <p>Module <code>content_library</code>: <code>view</code>, <code>create</code> (release), <code>edit</code>, <code>delete</code>. Held by Admin, Content Manager and Product Manager. <code>ContentLibraryPolicy::allows()</code> refuses anyone with an account membership, whatever role they hold. Partners reach content only through the product page, which is itself gated by catalogue eligibility. The product page loads library content only when the viewer passes <code>ContentLibraryPolicy::canView()</code> in the admin editor (<code>ProductController</code> shows it with can-flags).</p>
+
+    <h2>Money, ledger &amp; audit effects</h2>
+    <p>No money. Audit actions (module <code>content_library</code>): <code>content_library.published</code>, <code>.updated</code>, <code>.removed</code>.</p>
+
+    <h2>Configuration</h2>
+    <p>None specific. File storage follows the managed-storage configuration (<a href="storage.html">Storage</a>).</p>
+
+    <h2>Rules, invariants &amp; gotchas</h2>
+    <ul>
+        <li><strong>Content is data, never HTML.</strong> Never render a block as markup; add new block types to <code>ContentBlocks::TYPES</code>, <code>SaveContentLibraryItem::clean()</code> and <code>present()</code> together.</li>
+        <li>There is deliberately no limit on blocks, text length or file size in the app (<code>ContentBlocks::NO_LIMIT</code>).</li>
+        <li>No draft step: an accidental save is public immediately.</li>
+        <li>Public files: uploaded images/videos are public; do not put private material in the library.</li>
+        <li>An item must always target at least one existing product.</li>
+    </ul>
+
+    <h2>How to&hellip;</h2>
+    <ol>
+        <li><strong>Add a block type:</strong> extend <code>ContentBlocks</code> (<code>TYPES</code>, <code>present()</code>), the <code>match</code> in <code>SaveContentLibraryItem::clean()</code>, the editor (<code>pages/admin/content-library/form.tsx</code>), the product detail renderers, and add tests.</li>
+        <li><strong>Allow another image type:</strong> add to <code>ContentBlocks::IMAGE_TYPES</code> (never SVG).</li>
+        <li><strong>Add an embed provider:</strong> extend <code>ContentBlocks::embedUrl()</code> with a strict host and id pattern.</li>
+    </ol>
+
+    <h2>Testing</h2>
+    <p><code>vendor/bin/pest tests/Feature/ContentLibrary</code> (single file <code>ContentLibraryTest.php</code>), in its own schema. Seed roles with <code>RolesAndPermissionsSeeder</code>; use <code>testPlatformStaff()</code>. No factory exists for <code>ContentLibraryItem</code>.</p>
+
+    <h2>Related modules</h2>
+    <ul><li><a href="catalog.html">Catalog</a>, <a href="storage.html">Storage</a>, <a href="access.html">Access</a>, <a href="audit.html">Audit</a></li></ul>
+</main>
+</body>
+</html>

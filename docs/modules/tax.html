@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Tax engine</title>
+    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+    <script src="../assets/docs.js"></script>
+</head>
+<body>
+<main id="doc">
+    <h1>Tax engine</h1>
+    <p class="lead">A configurable tax engine (D19): versioned rates, scoped rules, dated exemptions, and one class, <code>TaxEngine</code>, that every priced charge asks. Exclusive is the default; inclusive is supported. No statutory rate is hardcoded.</p>
+
+    <h2>Purpose</h2>
+    <p>Fees, wholesale goods and delivery must carry tax that an invoice can show per rate and a tax return can reconcile. D19: tax-exclusive by default, admin-configurable rates, product, category and fee rules, exemptions, effective dates, tax breakdown on invoices. Final Bangladesh VAT rates and Mushak format are to be confirmed with an accountant before launch; the migration seeds no rate.</p>
+    <p>Used by admin staff (configure under Admin, Billing) and by the system (every quote). Spec: §9. Decision: D19, with D26 for exact money.</p>
+
+    <h2>Where it lives</h2>
+    <table>
+        <thead><tr><th>Path</th><th>Role</th></tr></thead>
+        <tbody>
+            <tr><td><code>app/Domain/Tax/TaxEngine.php</code></td><td>The only place tax is worked out: <code>charge()</code>, <code>chargeGoods()</code>, <code>apply()</code>, <code>isExempt()</code>.</td></tr>
+            <tr><td><code>app/Domain/Tax/TaxRuleResolver.php</code></td><td>Finds the rule and the rate in force.</td></tr>
+            <tr><td><code>app/Domain/Tax/Models/</code></td><td><code>TaxRate</code>, <code>TaxRule</code>, <code>TaxExemption</code> (all with factories).</td></tr>
+            <tr><td><code>app/Domain/Tax/Enums/</code></td><td><code>TaxMode</code>, <code>TaxScope</code>.</td></tr>
+            <tr><td><code>app/Domain/Tax/Data/</code></td><td><code>TaxCharge</code>, <code>TaxBreakdown</code>.</td></tr>
+            <tr><td><code>app/Domain/Tax/Actions/ManageTaxRules.php</code></td><td>Create and close rates and rules.</td></tr>
+            <tr><td><code>app/Http/Controllers/Admin/BillingController.php</code>; <code>resources/js/pages/admin/billing-tax.tsx</code></td><td>Admin UI (part of the Billing screen).</td></tr>
+            <tr><td><code>database/migrations/2026_09_04_100000_create_tax_tables.php</code></td><td><code>tax_rates</code>, <code>tax_rules</code>, <code>tax_exemptions</code>, <code>payment_tax_lines</code>.</td></tr>
+            <tr><td><code>tests/Feature/Tax/</code></td><td><code>TaxEngineTest</code>, <code>TaxSettingsTest</code>, <code>TaxedQuoteTest</code>.</td></tr>
+        </tbody>
+    </table>
+
+    <h2>Key terms</h2>
+    <dl>
+        <dt>Rate</dt>
+        <dd>A named percentage valid for a period, identified by a <em>code</em> (for example <code>vat-standard</code>). Several rows share a code, one per period. Held in basis points: 1500 is 15.00%.</dd>
+        <dt>Rule</dt>
+        <dd>Says which rate code applies to what (scope and value), in which mode, from when. Points at a code, never a row.</dd>
+        <dt>Mode</dt>
+        <dd><code>exclusive</code> (tax added on top; the amount is net) or <code>inclusive</code> (tax already inside; the amount is gross).</dd>
+        <dt>Scope</dt>
+        <dd><code>everything</code>, <code>fee</code>, <code>category</code>, <code>product</code>, in increasing specificity.</dd>
+        <dt>Exemption</dt>
+        <dd>A dated grant with a reason, for one account.</dd>
+        <dt>Breakdown</dt>
+        <dd>Tax grouped by rate: net, tax, gross per line; what an invoice and a return need.</dd>
+    </dl>
+
+    <h2>Data model</h2>
+    <table>
+        <thead><tr><th>Table / model</th><th>Columns and constraints</th></tr></thead>
+        <tbody>
+            <tr><td><code>tax_rates</code> / <code>TaxRate</code></td><td><code>public_id</code>, <code>code</code> (max 64, lower-cased on write), <code>name</code>, <code>rate_basis_points</code> (unsigned integer), <code>effective_from</code>, <code>effective_until</code>, <code>is_active</code>. Unique <code>(code, effective_from)</code>. Constants <code>BASIS_POINTS_PER_PERCENT = 100</code>, <code>BASIS_POINTS_WHOLE = 10000</code>. Overlap of two open windows for one code is refused in code, not by the database.</td></tr>
+            <tr><td><code>tax_rules</code> / <code>TaxRule</code></td><td><code>public_id</code>, <code>scope</code>, <code>scope_value</code> (a string, not a key), <code>tax_code</code>, <code>mode</code> (default exclusive), <code>priority</code> (0 to 65535), window, <code>is_active</code>, <code>note</code>.</td></tr>
+            <tr><td><code>tax_exemptions</code> / <code>TaxExemption</code></td><td><code>business_account_id</code>, <code>reason</code> (required), <code>certificate_reference</code>, window, <code>granted_by</code>, <code>revoked_at</code>, <code>revoked_by</code>. Revoked rather than deleted.</td></tr>
+            <tr><td><code>payment_tax_lines</code> / <code>PaymentTaxLine</code> (Billing)</td><td>Per payment and rate: code, label, basis points, mode, <code>taxable_amount</code>, <code>tax_amount</code>, currency. Copied from <code>TaxCharge::toPaymentLine()</code>.</td></tr>
+        </tbody>
+    </table>
+    <p>Rates and rules are versioned, never edited: closing sets <code>is_active = false</code> and an end date (<code>now()</code> if none), so a charge resolved against an earlier moment still finds the rate then in force. The monetary columns of <code>payment_tax_lines</code> were originally <code>_minor</code> bigints and were converted to flat Taka by the D26 migration.</p>
+
+    <h2>States &amp; lifecycle</h2>
+    <p>There is no status enum. A rate or rule is open (<code>is_active</code> and inside its window) or closed. Every <code>effectiveAt($at)</code> scope tests <code>is_active</code>, <code>effective_from &lt;= at</code> and <code>effective_until</code> null or after <code>at</code>. An exemption is in force until <code>revoked_at</code> is set or its window ends.</p>
+
+    <h2>Actions &amp; workflows</h2>
+    <table>
+        <thead><tr><th>Class</th><th>Purpose</th></tr></thead>
+        <tbody>
+            <tr><td><code>TaxEngine::charge(Money $amount, ?AllocationType $feeType, ?BusinessAccount, ?CarbonImmutable $at, TaxScope $scope = Fee, ?string $scopeValue)</code></td><td>Tax on one amount. Scope value defaults to the fee type's value.</td></tr>
+            <tr><td><code>TaxEngine::chargeGoods(Money, string $productSku, array $categorySlugs, ?account, ?at)</code></td><td>Tax on goods: product by SKU, then each category slug nearest first, then the catch-all.</td></tr>
+            <tr><td><code>TaxEngine::apply(Money, TaxRate, TaxMode)</code></td><td>Arithmetic for a known rate (no resolution).</td></tr>
+            <tr><td><code>TaxRuleResolver::resolve / resolveFirst / rateFor</code></td><td>Rule and rate lookup.</td></tr>
+            <tr><td><code>ManageTaxRules::createRate / closeRate / createRule / closeRule</code></td><td>Admin writes, in a transaction, audited.</td></tr>
+        </tbody>
+    </table>
+    <h3>How a charge is worked out</h3>
+    <ol>
+        <li>Zero amount: no tax.</li>
+        <li><code>charge()</code> only: a fee type that is not taxable (<code>AllocationType::isTaxable()</code>, which excludes the wallet deposit, tax, gateway charge and discount) is not taxed.</li>
+        <li>An account with an exemption in force at <code>$at</code>: no tax.</li>
+        <li>Find the rule. For <code>charge()</code> the chain is the requested scope then <code>everything</code>; for goods it is product, categories, then <code>everything</code>. The first level with a match wins outright; within a level, higher <code>priority</code> then higher id wins. Priority never crosses levels, so a broad high-priority rule cannot override a targeted one. Scope values compare case-insensitively.</li>
+        <li>No rule: no tax (D19 forbids assuming a rate). A rule whose code has no rate in force on that date also charges nothing, but logs a warning <code>Tax rule matched a code with no rate in force.</code> because that is a misconfiguration. A zero-rate rate charges nothing.</li>
+        <li>The rate is found by code and date (latest <code>effective_from</code> wins if windows overlap), not by row id.</li>
+        <li>Apply in the rule's mode.</li>
+    </ol>
+    <h3>Exclusive and inclusive arithmetic</h3>
+    <table>
+        <thead><tr><th>Mode</th><th>Given</th><th>Computation</th></tr></thead>
+        <tbody>
+            <tr><td>Exclusive</td><td>net</td><td><code>tax = net.percentage(rate, HalfAwayFromZero)</code>; gross = net + tax.</td></tr>
+            <tr><td>Inclusive</td><td>gross</td><td><code>net = round(gross × 10000 ÷ (10000 + bps))</code> at 20-digit working precision, half away from zero; <code>tax = gross − net</code>. The tax is the remainder, so net plus tax always equals the price shown.</td></tr>
+        </tbody>
+    </table>
+    <p>Example: 500.00 at 15% inclusive gives net 434.78 and tax 65.22. Exclusive at 15% gives tax 75.00 on a net of 500.00.</p>
+    <h3>Allocation to lines and exact reconciliation</h3>
+    <ul>
+        <li>Discount before tax: both quotes share a coupon discount across the taxable lines with <code>Money::allocate()</code> (<code>CalculateActivationQuote::afterDiscount</code> across fee types; <code>PriceCheckout::shareDiscount</code> across cart lines), then tax each line on what it actually sells for. Ratios are integer counts of the currency's smallest unit; if the product would overflow an integer, weights are scaled down to millionths of the subtotal. Because <code>allocate()</code> hands out remainder units, the shares sum back to the discount exactly.</li>
+        <li><code>TaxBreakdown::of()</code> merges charges with the same <code>code|basis points|mode</code> (two fees at the standard rate become one invoice line) and drops zero-tax charges, so an invoice never lists "0% — 0.00".</li>
+        <li><code>addedTotal()</code> is the exclusive tax that joins the payable total; <code>includedTotal()</code> is inclusive tax already inside prices (shown, reported, never added again); <code>total()</code> is both; <code>taxableTotal()</code> sums net.</li>
+        <li>The quote's single <code>tax</code> allocation holds only the added total; the per-rate detail goes to <code>payment_tax_lines</code> in the same transaction as the payment.</li>
+        <li>Delivery is taxed with scope <code>fee</code> and value <code>wholesale_delivery</code> (<code>FeeType::WholesaleDelivery</code>) in <code>PriceCheckout</code>.</li>
+    </ul>
+
+    <h2>Entry points</h2>
+    <table>
+        <thead><tr><th>Name</th><th>Method and URL</th><th>Notes</th></tr></thead>
+        <tbody>
+            <tr><td><code>admin.billing.tax-rates.store</code></td><td>POST <code>/admin/billing/tax-rates</code></td><td><code>BillingController@storeTaxRate</code></td></tr>
+            <tr><td><code>admin.billing.tax-rates.close</code></td><td>DELETE <code>/admin/billing/tax-rates/{rate}</code></td><td><code>closeTaxRate</code></td></tr>
+            <tr><td><code>admin.billing.tax-rules.store</code></td><td>POST <code>/admin/billing/tax-rules</code></td><td><code>storeTaxRule</code></td></tr>
+            <tr><td><code>admin.billing.tax-rules.close</code></td><td>DELETE <code>/admin/billing/tax-rules/{rule}</code></td><td><code>closeTaxRule</code></td></tr>
+        </tbody>
+    </table>
+    <p>Admin routes sit under <code>auth</code>, <code>noindex</code>, <code>two-factor</code> and the <code>/admin</code> prefix. Tax is also consulted by <code>CalculateActivationQuote</code>, <code>CalculateRenewalQuote</code>, <code>CalculatePackageChangeQuote</code>, <code>Wholesale\Queries\PriceCheckout</code> and <code>Order\Queries\PriceWebsiteOrder</code>. No console command or scheduled task.</p>
+
+    <h2>Permissions &amp; scoping</h2>
+    <p>Behind the Billing policy: <code>payment.view</code> to see, <code>payment.manage_settings</code> to change (see <a href="billing.html">Billing</a>). Tax configuration is global, not per account; the only per-account element is an exemption.</p>
+
+    <h2>Money, ledger &amp; audit effects</h2>
+    <p>No ledger entry. Audit actions (all <code>module: payment</code>, sensitive): <code>tax.rate_created</code>, <code>tax.rate_closed</code>, <code>tax.rule_created</code>, <code>tax.rule_closed</code>. Invariants: net plus tax equals gross in either mode; discount shares equal the discount; the stored tax lines are copies, so changing a rate later never changes an issued invoice.</p>
+
+    <h2>Configuration</h2>
+    <p>No env or config keys. All of it is data (<code>tax_rates</code>, <code>tax_rules</code>, <code>tax_exemptions</code>). With none configured the system charges no tax.</p>
+
+    <h2>Rules, invariants &amp; gotchas</h2>
+    <div class="callout callout-warn"><p><strong>Gotcha: product and category rules match SKU and slug.</strong> The migration comment says a product rule holds a public id, but <code>TaxEngine::chargeGoods()</code> and <code>PriceCheckout</code> pass <code>$product-&gt;sku</code> and category slugs, compared case-insensitively. Write rules to match what the engine passes.</p></div>
+    <div class="callout callout-warn"><p><strong>Gotcha: a missing rate is silent on screen.</strong> A rule naming a withdrawn code looks fine in settings and charges nothing. <code>createRule</code> refuses a code that never existed, but cannot catch one closed afterwards; watch the warning log.</p></div>
+    <ul>
+        <li>Exclusive is the default so a fee configured at 500 stays 500 of revenue; switching a rule to inclusive would turn it into 434.78 revenue at 15%.</li>
+        <li><code>createRate</code> validates 0 to 10000 basis points, end after start, and refuses a second open window for the code. <code>createRule</code> refuses a tie (same scope, value, priority and overlapping window). Both take row locks for the check.</li>
+        <li><code>TaxRate::percent()</code>, <code>formattedPercent()</code> (uses <code>number_format</code>) and <code>TaxCharge::rate()</code> return floats for display only. Never use them in a calculation.</li>
+        <li>I found no Action or route that grants or revokes a <code>TaxExemption</code>; only the factory and the engine's read. Treat exemptions as read-only in the app until one is built.</li>
+        <li>Rates are looked up by the date of the charge. Pass the original <code>$at</code> when reissuing or refunding so the arithmetic is reproduced.</li>
+    </ul>
+
+    <h2>How to&hellip;</h2>
+    <h3>Change the VAT rate</h3>
+    <ol>
+        <li>Admin, Billing: close the current rate for the code, then add a new rate under the same code starting when it takes effect (<code>ManageTaxRules</code>). Do not edit the old row. Rules need no change because they point at the code.</li>
+    </ol>
+    <h3>Tax a new kind of charge</h3>
+    <ol>
+        <li>Add an <code>AllocationType</code> and set <code>isTaxable()</code> to true.</li>
+        <li>In the quote builder, call <code>TaxEngine::charge()</code> with that fee type and add the result to a <code>TaxBreakdown::of()</code>; add only <code>addedTotal()</code> to the total.</li>
+        <li>Add a fee-scope rule with the allocation type's value as <code>scope_value</code>.</li>
+    </ol>
+    <h3>Add a new scope</h3>
+    <ol>
+        <li>Add the case to <code>TaxScope</code> with <code>specificity()</code> and <code>requiresValue()</code>; update <code>TaxRuleResolver::scopeChain()</code> and any caller of <code>resolveFirst()</code>; extend <code>TaxEngineTest</code>.</li>
+    </ol>
+
+    <h2>Testing</h2>
+    <p><code>vendor/bin/pest tests/Feature/Tax</code> or <code>--group=tax</code>, in your own schema. <code>TaxEngineTest</code> covers resolution and arithmetic, <code>TaxSettingsTest</code> the admin screen and <code>ManageTaxRules</code>, <code>TaxedQuoteTest</code> quotes end to end. Factories: <code>TaxRateFactory</code>, <code>TaxRuleFactory</code>, <code>TaxExemptionFactory</code>.</p>
+
+    <h2>Related modules</h2>
+    <ul>
+        <li><a href="billing.html">Billing</a>: quotes, payment tax lines, invoices, Money API.</li>
+        <li><a href="wholesale.html">Wholesale</a> and <a href="order.html">Order</a>: goods and delivery tax.</li>
+        <li><a href="package.html">Package</a>: activation and renewal fees.</li>
+        <li><a href="../guide/decisions.html">Decisions</a> (D19).</li>
+    </ul>
+</main>
+</body>
+</html>

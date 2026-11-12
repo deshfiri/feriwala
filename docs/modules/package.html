@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Package module</title>
+    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+    <script src="../assets/docs.js"></script>
+</head>
+<body>
+<main id="doc">
+    <h1>Package module</h1>
+    <p class="lead">Packages are the plans Feriwala sells to partner (business) accounts. A package carries a price, a term, wallet requirements and a set of typed entitlements; an account's <em>subscription</em> to it decides which modules the account may use and how much of each. This page explains the model, the subscription lifecycle, and how a feature flag gates code.</p>
+
+    <h2>Purpose</h2>
+    <p>Partners cannot trade until they hold an entitling package (&sect;5.4 activation funnel). The package decides which business methods they get (wholesale, dropshipping), how many products they can publish, how many staff and websites they may have, whether they get a dedicated website with domain and hosting, external-store access and so on (&sect;8.1). Administrators create, edit, take off sale and archive any number of packages (&sect;8). Accounts choose, renew, upgrade, downgrade and cancel (&sect;8.2, &sect;8.3, &sect;8.4). Decision D16 governs downgrades: nothing is auto-removed, and an over-limit downgrade is blocked unless an authorised administrator overrides it with a recorded reason.</p>
+    <p>Users: partners (own subscription screens), administrators (catalogue, assignment, override), and the system (the daily lifecycle sweep, payment settlement).</p>
+
+    <div class="callout callout-rule"><p><strong>Rule.</strong> Entitlements are read from the <em>subscription's captured terms</em>, never from the live package row (&sect;8.3). Editing a package changes what future buyers get, not what existing subscribers already agreed to. Every feature gate must go through <code>App\Domain\Package\Entitlements</code>.</p></div>
+
+    <h2>Where it lives</h2>
+    <table>
+        <thead><tr><th>Path</th><th>Role</th></tr></thead>
+        <tbody>
+            <tr><td><code>app/Domain/Package/Models/</code></td><td><code>Package</code>, <code>PackageFeatureValue</code> (table <code>package_features</code>), <code>PackageCharge</code>, <code>UserPackage</code> (the subscription)</td></tr>
+            <tr><td><code>app/Domain/Package/Enums/</code></td><td><code>PackageFeature</code>, <code>PackageFeatureType</code>, <code>UserPackageStatus</code>, <code>SubscriptionSource</code></td></tr>
+            <tr><td><code>app/Domain/Package/Entitlements.php</code></td><td>The one place feature values are read (<code>allows</code>, <code>limit</code>, <code>hasCapacityFor</code>, <code>remaining</code>, <code>activePackage</code>)</td></tr>
+            <tr><td><code>app/Domain/Package/SubscriptionPolicy.php</code></td><td>Renewal window and "is this term renewable now" rules</td></tr>
+            <tr><td><code>app/Domain/Package/PackageChangePlanner.php</code>, <code>DowngradeGuard.php</code></td><td>Price, credit, effective date and blockers for an upgrade or downgrade</td></tr>
+            <tr><td><code>app/Domain/Package/Data/</code></td><td><code>SubscriptionTerms</code> (the snapshot), <code>PackageChangePlan</code>, <code>DowngradeAssessment</code>, <code>FeatureExcess</code></td></tr>
+            <tr><td><code>app/Domain/Package/Actions/</code></td><td>Workflows (see below)</td></tr>
+            <tr><td><code>app/Domain/Package/Queries/</code></td><td><code>AccountSubscription</code> (what the account sees), <code>AccountHoldings</code> (counts for the downgrade guard)</td></tr>
+            <tr><td><code>app/Domain/Package/Policies/PackagePolicy.php</code></td><td>Admin permissions on packages</td></tr>
+            <tr><td><code>app/Domain/Package/Exceptions/PackageInUse.php</code></td><td>Refusal when archiving a package that is still referenced</td></tr>
+            <tr><td><code>app/Http/Middleware/EnsureAccountIsEntitled.php</code></td><td>Route middleware alias <code>entitled:&lt;feature&gt;</code> (registered in <code>bootstrap/app.php</code>)</td></tr>
+            <tr><td><code>app/Http/Controllers/Admin/PackageController.php</code>, <code>PackageAssignmentController.php</code></td><td>Admin catalogue and manual assignment</td></tr>
+            <tr><td><code>app/Http/Controllers/Erp/{PackageSelectionController,SubscriptionController,RenewalController,PackageChangeController}.php</code></td><td>Partner web screens</td></tr>
+            <tr><td><code>app/Http/Controllers/Api/Mobile/V1/Packages/</code></td><td>Mobile equivalents</td></tr>
+            <tr><td><code>app/Http/Requests/Package/SavePackageRequest.php</code></td><td>Admin form validation (features keyed by the enum)</td></tr>
+            <tr><td><code>app/Notifications/Package/</code></td><td><code>SubscriptionExpiring</code>, <code>SubscriptionExpired</code>, <code>SubscriptionRenewed</code>, <code>SubscriptionCancelled</code>, <code>PackageChanged</code>, <code>PackageAssigned</code></td></tr>
+            <tr><td><code>resources/js/pages/admin/packages/</code>, <code>admin/accounts/assign-package-dialog.tsx</code>, <code>onboarding/packages.tsx</code>, <code>settings/{subscription,package-change}.tsx</code></td><td>Frontend (the renewal page <code>settings/renewal</code> is rendered by <code>RenewalController</code>)</td></tr>
+            <tr><td><code>lang/{en,bn}/package.php</code></td><td>Strings</td></tr>
+            <tr><td><code>database/migrations/2026_09_01_150000_create_package_tables.php</code>, <code>2026_09_05_100000_snapshot_subscription_terms_and_key_scopes_by_id.php</code>, <code>2026_09_10_100000_chain_subscription_terms.php</code></td><td>Schema (later money conversion: <code>2026_10_05_100000_convert_monetary_storage_to_flat_taka.php</code>)</td></tr>
+            <tr><td><code>tests/Feature/Package/</code></td><td>Tests</td></tr>
+        </tbody>
+    </table>
+
+    <h2>Key terms</h2>
+    <dl>
+        <dt>Package</dt>
+        <dd>A sellable plan row in <code>packages</code>. Soft-deleted ("archived"), never hard-deleted.</dd>
+        <dt>Feature</dt>
+        <dd>One entry of the closed <code>PackageFeature</code> enum. The enum names which feature; a <code>package_features</code> row holds what a package sets it to.</dd>
+        <dt>Subscription / term</dt>
+        <dd>A <code>UserPackage</code> row: one account's hold on a package for one period. Renewals, upgrades and downgrades are <em>new rows</em>, chained by <code>renews_user_package_id</code>.</dd>
+        <dt>Terms (snapshot)</dt>
+        <dd><code>SubscriptionTerms</code>, stored as JSON in <code>user_packages.terms</code> at creation: name, fees, validity, grace, deposit, minimum balance, charges and every feature value.</dd>
+        <dt>Source</dt>
+        <dd>How the subscription came about (<code>SubscriptionSource</code>); never changes after write.</dd>
+        <dt>Entitling</dt>
+        <dd>Statuses that grant features: <code>active</code>, <code>renewal_due</code>, <code>grace_period</code>.</dd>
+        <dt>Current pointer</dt>
+        <dd><code>business_accounts.current_user_package_id</code> (relation <code>currentPackage</code>). A cheap hint; <code>Entitlements</code> verifies it rather than trusting it.</dd>
+    </dl>
+
+    <h2>Data model</h2>
+    <p>The original migration declares money as <code>*_minor</code> bigint columns; a later migration (<code>2026_10_05_100000_convert_monetary_storage_to_flat_taka.php</code>) converted storage to flat Taka. The models cast money through <code>MoneyCast</code> (exact decimal Taka plus <code>currency_code</code>).</p>
+    <table>
+        <thead><tr><th>Table / model</th><th>Important columns and notes</th></tr></thead>
+        <tbody>
+            <tr><td><code>packages</code> / <code>Package</code></td><td><code>public_id</code> (ULID, <code>HasPublicId</code>), <code>slug</code> (<code>HasSlug</code>; route key is the slug), <code>name</code>, descriptions, <code>fee</code>, <code>registration_fee</code> (nullable = use the global fee), <code>renewal_fee</code> (nullable), <code>required_deposit</code>, <code>minimum_balance</code>, <code>currency_code</code>, <code>validity_days</code>, <code>renewal_frequency</code>, <code>grace_period_days</code>, <code>available_from</code>/<code>available_until</code>, <code>is_active</code>, <code>is_public</code>, <code>sort_order</code>, soft deletes. Relations: <code>features()</code>, <code>charges()</code>, <code>subscriptions()</code>. Scopes <code>available()</code> and <code>publiclyListed()</code>.</td></tr>
+            <tr><td><code>package_features</code> / <code>PackageFeatureValue</code></td><td><code>package_id</code> (cascade), <code>feature</code> (string, an enum value), <code>value</code> (nullable string; null on a limit means unlimited). Unique <code>(package_id, feature)</code>.</td></tr>
+            <tr><td><code>package_charges</code> / <code>PackageCharge</code></td><td><code>charge_type</code> (e.g. website_setup, website_maintenance, domain, hosting per the migration comment), <code>amount</code> (Money), <code>currency_code</code>, <code>frequency</code> (<code>once</code> by default, monthly, yearly). Unique <code>(package_id, charge_type)</code>.</td></tr>
+            <tr><td><code>user_packages</code> / <code>UserPackage</code></td><td><code>public_id</code>, <code>business_account_id</code>, <code>package_id</code> (restrict on delete), <code>renews_user_package_id</code> (self FK, null on delete), <code>status</code> (<code>UserPackageStatus</code>), <code>source</code> (<code>SubscriptionSource</code>), <code>paid_fee</code> (Money; the price quoted/paid), <code>currency_code</code>, <code>started_at</code>, <code>expires_at</code>, <code>grace_ends_at</code>, <code>cancelled_at</code>, <code>terms</code> (JSON snapshot), <code>terms_captured_at</code>. Uses <code>HasStateMachine</code>.</td></tr>
+        </tbody>
+    </table>
+    <p>The create migration names the original owner column <code>user_id</code> (and <code>users.current_user_package_id</code>); <code>2026_09_03_110000_separate_identity_from_business_account.php</code> separates identity from the business account, and the model and every action use <code>business_account_id</code> / <code>business_accounts.current_user_package_id</code>. Treat the model as authoritative.</p>
+
+    <h3>The feature catalogue (<code>PackageFeature</code>)</h3>
+    <table>
+        <thead><tr><th>Case (value)</th><th>Type</th><th>Default when a package omits it</th></tr></thead>
+        <tbody>
+            <tr><td><code>DedicatedWebsite</code> (<code>dedicated_website</code>)</td><td>boolean</td><td>false</td></tr>
+            <tr><td><code>DomainIncluded</code>, <code>HostingIncluded</code></td><td>boolean</td><td>false</td></tr>
+            <tr><td><code>DomainValidityMonths</code>, <code>HostingValidityMonths</code></td><td>limit</td><td>12</td></tr>
+            <tr><td><code>ExternalStoreAccess</code></td><td>boolean</td><td>false</td></tr>
+            <tr><td><code>ExternalStoreLimit</code></td><td>limit</td><td>0</td></tr>
+            <tr><td><code>ProductPublishLimit</code>, <code>OrderLimit</code>, <code>StaffLimit</code>, <code>WebsiteLimit</code>, <code>SmsQuota</code></td><td>limit</td><td>0</td></tr>
+            <tr><td><code>ApiAccess</code>, <code>FulfillmentEnabled</code>, <code>CourierEnabled</code></td><td>boolean</td><td>false</td></tr>
+            <tr><td><code>WholesaleEnabled</code>, <code>DropshippingEnabled</code></td><td>boolean</td><td><strong>true</strong> (&sect;10.3: an active account may use both unless a package withdraws them)</td></tr>
+            <tr><td><code>SupportLevel</code>, <code>ReportAccess</code></td><td>text</td><td><code>standard</code>, <code>basic</code></td></tr>
+        </tbody>
+    </table>
+    <p><code>PackageFeatureType::cast()</code> turns the stored string into a bool, int or string; <code>serialise()</code> does the reverse. A limit stored as <code>null</code> means <strong>unlimited</strong>; zero is a real answer ("none allowed"). That is why "unlimited" and "zero" must never be conflated.</p>
+
+    <h2>States &amp; lifecycle</h2>
+    <p><code>UserPackageStatus</code> implements <code>TransitionableState</code>. Legal moves (<code>transitionsTo()</code>):</p>
+    <table>
+        <thead><tr><th>From</th><th>To</th><th>Entitles?</th></tr></thead>
+        <tbody>
+            <tr><td><code>pending_payment</code></td><td>active, superseded, cancelled</td><td>No (unpaid grants nothing, &sect;5.1)</td></tr>
+            <tr><td><code>active</code></td><td>renewal_due, cancelled, expired</td><td>Yes</td></tr>
+            <tr><td><code>renewal_due</code></td><td>active, grace_period, cancelled, expired</td><td>Yes</td></tr>
+            <tr><td><code>grace_period</code></td><td>active, expired, cancelled</td><td>Yes</td></tr>
+            <tr><td><code>expired</code>, <code>cancelled</code>, <code>superseded</code></td><td>none (terminal)</td><td>No</td></tr>
+        </tbody>
+    </table>
+    <p>Terminal means a new term is a <em>new subscription row</em>, never the old one revived. <code>UserPackage::entitlesNow()</code> additionally checks <code>started_at</code> (a future-dated downgrade or grant does not entitle yet) and <code>grace_ends_at ?? expires_at</code> (an entitling status past its effective end does not entitle).</p>
+    <p><code>SubscriptionSource</code>: <code>purchase</code>, <code>renewal</code>, <code>upgrade</code>, <code>downgrade</code>, <code>manual</code>, <code>promotional</code>. <code>isPaid()</code> is false only for <code>manual</code> and <code>promotional</code>, so revenue reports can tell a grant from a sale.</p>
+
+    <h2>Actions &amp; workflows</h2>
+    <table>
+        <thead><tr><th>Class</th><th>Purpose</th></tr></thead>
+        <tbody>
+            <tr><td><code>SelectPackage</code></td><td>Applicant chooses a package: supersedes earlier <code>pending_payment</code> rows, creates a <code>pending_payment</code> / <code>purchase</code> subscription with a terms snapshot, moves the account to <code>PaymentPending</code> via <code>ChangeAccountStatus</code> if legal.</td></tr>
+            <tr><td><code>OpenRenewal</code></td><td>Creates a <code>pending_payment</code> / <code>renewal</code> row with fresh terms; idempotent (returns the existing pending renewal).</td></tr>
+            <tr><td><code>ActivateRenewal</code></td><td>On paid settlement: activates the renewal, sets dates, repoints the account, allocates the website. Idempotent.</td></tr>
+            <tr><td><code>OpenPackageChange</code></td><td>Starts an upgrade or downgrade using <code>PackageChangePlanner</code>; refuses when the plan is blocked.</td></tr>
+            <tr><td><code>ActivatePackageChange</code></td><td>On paid settlement: activates the change; closes the replaced term when it was an upgrade.</td></tr>
+            <tr><td><code>AssignPackage</code></td><td>Admin grant without a sale (manual or promotional); reason required.</td></tr>
+            <tr><td><code>CancelSubscription</code></td><td>Ends a term now; reason required; no refund.</td></tr>
+            <tr><td><code>OverrideDowngradeLimit</code></td><td>Records an authorised override of a blocked downgrade (D16).</td></tr>
+            <tr><td><code>ManagePackages</code></td><td><code>create</code>, <code>update</code>, <code>setActive</code>, <code>archive</code>, <code>blockers</code>.</td></tr>
+            <tr><td><code>SweepSubscriptionLifecycle</code></td><td>Daily clock: renewal due, grace period, expiry.</td></tr>
+        </tbody>
+    </table>
+
+    <h3>Choosing and paying (first purchase)</h3>
+    <ol>
+        <li><code>SelectPackage::handle()</code> (requires <code>Package::isAvailable()</code>) in one transaction supersedes the account's other <code>pending_payment</code> rows and writes the new row with <code>paid_fee = package fee</code> and the captured terms.</li>
+        <li>The partner pays through the activation checkout (Billing module). Activation itself is outside this module.</li>
+    </ol>
+
+    <h3>Renewal</h3>
+    <ol>
+        <li><code>SubscriptionPolicy::isRenewable()</code> allows <code>renewal_due</code>, <code>grace_period</code> and <code>expired</code> always, and <code>active</code> only inside the renewal window (<code>expires_at - renewalWindowDays</code>). A term with no expiry never enters the window. Pending, cancelled and superseded terms are not renewable.</li>
+        <li><code>OpenRenewal</code> (row-locks the current term, checks ownership) captures the package's <em>current</em> terms; <code>paid_fee</code> is <code>renewal_fee ?? fee</code>. The renewal page (<code>Erp\RenewalController::show</code>) opens it, so the quote and the record agree. <code>pay</code> re-quotes server-side and hands off to the gateway.</li>
+        <li><code>Billing\Actions\SettlePayment</code> routes <code>PaymentPurpose::PackageRenewal</code> to <code>ActivateRenewal</code>. The new term starts where the old one ends (or now if the old one is over); validity and grace come from the renewal's snapshot. The previous term is moved to <code>expired</code> only if it has actually ended; otherwise the sweep closes it later.</li>
+        <li>The account's <code>current_user_package_id</code> is repointed immediately; <code>Entitlements</code> falls back to whichever term really entitles today. Audit action <code>package.renewed</code> (system actor), notification <code>SubscriptionRenewed</code>.</li>
+    </ol>
+
+    <h3>Upgrade and downgrade</h3>
+    <p><code>PackageChangePlanner::plan()</code> decides direction <em>by fee</em>: a higher target fee is an upgrade, equal or lower is a downgrade.</p>
+    <table>
+        <thead><tr><th></th><th>Upgrade</th><th>Downgrade</th></tr></thead>
+        <tbody>
+            <tr><td>Effective</td><td>Immediately</td><td>At the end of the current term</td></tr>
+            <tr><td>Expiry</td><td>Same as the current term (cycle kept)</td><td>A full new term from the effective date</td></tr>
+            <tr><td>Gross fee</td><td>Target <code>fee</code></td><td>Target <code>renewalFee ?? fee</code></td></tr>
+            <tr><td>Credit</td><td>Unused share of <code>paid_fee</code>, floored, only if <code>package.prorate_upgrades</code> is on (default true)</td><td>Zero</td></tr>
+            <tr><td>Extra deposit</td><td>Only the increase in <code>required_deposit</code></td><td>Same rule (never a refund)</td></tr>
+            <tr><td>Guard</td><td>Always allowed</td><td><code>DowngradeGuard::assess()</code> against <code>ProductPublishLimit</code>, <code>StaffLimit</code>, <code>WebsiteLimit</code></td></tr>
+            <tr><td>On activation</td><td>Replaced term is <code>cancelled</code></td><td>Old term keeps running; the sweep closes it at its expiry</td></tr>
+        </tbody>
+    </table>
+    <p><code>OpenPackageChange</code> refuses a non-entitling current term, the same package, an unavailable target, or a blocked plan. It supersedes any other pending upgrade/downgrade (one change in flight) and stores the quoted dates so activation does not recompute them. If the quote is not payable (free change) the controller redirects to the subscription page with an info message rather than activating silently.</p>
+
+    <h3>Lifecycle sweep</h3>
+    <p><code>SweepSubscriptionLifecycle::handle()</code> returns <code>{due, grace, expired}</code> and does three passes in order, chunked by 200:</p>
+    <ol>
+        <li><strong>Renewal due</strong>: <code>active</code> terms with <code>expires_at</code> within the renewal window move to <code>renewal_due</code> and the owner gets <code>SubscriptionExpiring</code>.</li>
+        <li><strong>Grace</strong>: <code>renewal_due</code> terms past <code>expires_at</code> with <code>grace_ends_at</code> in the future move to <code>grace_period</code> (<code>SubscriptionExpiring</code> with <code>inGracePeriod: true</code>).</li>
+        <li><strong>Expire</strong>: entitling terms past <code>grace_ends_at</code> (or past <code>expires_at</code> where there is no grace) move to <code>expired</code>; the account pointer is moved to a still-entitling successor if one exists; <code>SubscriptionExpired</code> is sent.</li>
+    </ol>
+    <p>Each move happens under <code>lockForUpdate()</code> and only if <code>canTransitionTo()</code>, so a repeat run (or a second server) does nothing and the notification is sent once. A term whose end passed during an outage goes straight from <code>active</code> to <code>expired</code>.</p>
+
+    <h3>Assignment, cancellation, archive</h3>
+    <ul>
+        <li><code>AssignPackage</code>: reason required, <code>expiresAt</code> must be after <code>startsAt</code>. Creates the row <code>pending_payment</code> then transitions to <code>active</code>, <code>paid_fee</code> zero. If it starts now, other entitling terms are cancelled; a future-dated grant leaves the current term running. Audit <code>package.manual_assigned</code> or <code>package.promotional_assigned</code>, sensitive. Notification <code>PackageAssigned</code>.</li>
+        <li><code>CancelSubscription</code>: transitions to <code>cancelled</code> now (no access until expiry), clears or repoints <code>current_user_package_id</code>, audit <code>package.cancelled</code> (sensitive; actor null means the account holder). <strong>No refund</strong>: refunds are a separate workflow (&sect;27, <code>RefundabilityPolicy</code>).</li>
+        <li><code>ManagePackages::archive</code>: refuses with <code>PackageInUse</code> while a live (non-archived) KYC requirement's scope rule names the package (<code>kyc_document_type_scopes.package_public_id</code>) or while any entitling subscription exists. <code>blockers()</code> returns the same list so the screen can show it before the button is pressed. <code>setActive(false)</code> (take off sale) is unguarded: existing subscribers keep entitlements.</li>
+        <li><code>ManagePackages::update</code> replaces features and charges wholesale: an absent feature means "not granted; default applies", so a facility can be withdrawn through the same form that granted it.</li>
+    </ul>
+
+    <h2>How a feature gate works</h2>
+    <p>There are four layers; use the right one.</p>
+    <ol>
+        <li><strong>Route gate</strong> &mdash; middleware <code>entitled:&lt;feature_value&gt;</code> (<code>EnsureAccountIsEntitled</code>). Boolean features pass if allowed; limit features pass if the limit is not exactly <code>0</code> (null = unlimited passes); text features throw <code>InvalidArgumentException</code> (a service level is not an access question). An unknown feature string also throws, so a typo cannot fail open. Accounts with no business account (platform staff) are passed through. Used today as <code>entitled:staff_limit</code> on the settings staff routes and the mobile staff routes. It aborts 403 "Your package does not include this."</li>
+        <li><strong>Capacity check</strong> &mdash; <code>Entitlements::hasCapacityFor($account, $feature, $currentCount, $adding = 1)</code>. The caller supplies the count because only it knows what it is counting. Example: <code>Website\Actions\SetWebsiteProductPublication</code> publishes inside a lock keyed <code>website:publish:&lt;account&gt;</code>, counts the account's other published website products, and throws <code>WebsiteRefused::publishLimitReached</code> when <code>ProductPublishLimit</code> has no room. The same limit is shown as <code>limit/used/remaining</code> on the website product screens.</li>
+        <li><strong>Channel gate</strong> &mdash; <code>SalesChannel::facility()</code> maps <code>Dropshipping</code> to <code>PackageFeature::DropshippingEnabled</code> and <code>Wholesale</code> to <code>WholesaleEnabled</code>. <code>Catalog\ProductEligibility</code> adds the refusal <code>PACKAGE_WITHOUT_CHANNEL</code> when the account's package lacks the facility, and returns an empty query (<code>whereRaw('1 = 0')</code>) for an account with no active package. <code>AccountContext</code> uses the same flags to decide which workspaces an account sees.</li>
+        <li><strong>Snapshot read during allocation</strong> &mdash; <code>Website\Actions\AllocatePackageWebsite</code> reads <code>DedicatedWebsite</code>, <code>WebsiteLimit</code> and the validity-months features straight from the subscription's <code>SubscriptionTerms</code> when a subscription activates.</li>
+    </ol>
+    <p>Behaviour of <code>Entitlements</code> with no entitling package: <code>allows()</code> is false, <code>limit()</code> is <code>0</code> and <code>hasCapacityFor()</code> is false &mdash; unlimited is never inferred from absence. With a package and a null limit, <code>hasCapacityFor()</code> is true and <code>remaining()</code> is null.</p>
+    <p><code>activePackage()</code> checks the account's <code>current_user_package_id</code> pointer, verifies it with <code>entitlesNow()</code>, and otherwise falls back to the newest entitling subscription. The result is cached on the account instance as the <code>resolvedActivePackage</code> relation for the request; <code>$account->refresh()</code> drops it.</p>
+
+    <h2>Entry points</h2>
+    <table>
+        <thead><tr><th>Surface</th><th>Route name</th><th>Method and URL</th><th>Controller</th></tr></thead>
+        <tbody>
+            <tr><td>Admin</td><td><code>admin.packages.index</code></td><td>GET <code>/admin/packages</code></td><td><code>Admin\PackageController@index</code></td></tr>
+            <tr><td>Admin</td><td><code>admin.packages.store</code></td><td>POST <code>/admin/packages</code></td><td><code>@store</code></td></tr>
+            <tr><td>Admin</td><td><code>admin.packages.update</code></td><td>PATCH <code>/admin/packages/{package}</code> (slug)</td><td><code>@update</code></td></tr>
+            <tr><td>Admin</td><td><code>admin.packages.active</code></td><td>PATCH <code>/admin/packages/{package}/active</code></td><td><code>@setActive</code></td></tr>
+            <tr><td>Admin</td><td><code>admin.packages.archive</code></td><td>POST <code>/admin/packages/{package}/archive</code></td><td><code>@archive</code></td></tr>
+            <tr><td>Admin</td><td><code>admin.accounts.assign-package</code></td><td>POST <code>/admin/accounts/{account}/package</code></td><td><code>Admin\PackageAssignmentController</code> (invokable)</td></tr>
+            <tr><td>Partner funnel</td><td><code>packages.index</code>, <code>packages.select</code></td><td>GET <code>/packages</code>, POST <code>/packages/{package}/select</code></td><td><code>Erp\PackageSelectionController</code></td></tr>
+            <tr><td>Partner</td><td><code>subscription.show</code>, <code>subscription.cancel</code></td><td>GET <code>/settings/subscription</code>, POST <code>/settings/subscription/cancel</code></td><td><code>Erp\SubscriptionController</code></td></tr>
+            <tr><td>Partner</td><td><code>subscription.renew.show</code>, <code>subscription.renew.pay</code></td><td>GET, POST <code>/settings/subscription/renew</code></td><td><code>Erp\RenewalController</code></td></tr>
+            <tr><td>Partner</td><td><code>subscription.change.index</code>, <code>subscription.change.store</code></td><td>GET, POST <code>/settings/subscription/change</code></td><td><code>Erp\PackageChangeController</code></td></tr>
+            <tr><td>Partner</td><td><code>subscription.invoices.*</code>, <code>subscription.receipts.*</code></td><td>under <code>/settings/subscription/</code></td><td>Billing controllers (see the Billing page)</td></tr>
+            <tr><td>Mobile (prefix <code>mobile/v1</code>, names prefixed <code>mobile.v1.</code>)</td><td><code>packages.index</code>, <code>packages.select</code>, <code>packages.subscription.{show,cancel,change.index,change.store,renew.show,renew.pay}</code></td><td>GET <code>packages</code>, POST <code>packages/{package}/select</code>, <code>subscription</code>, <code>subscription/cancel</code>, <code>subscription/change</code>, <code>subscription/renew</code></td><td><code>Api\Mobile\V1\Packages\*</code> (<code>routes/mobile/packages.php</code>)</td></tr>
+        </tbody>
+    </table>
+    <p>The subscription, renewal and funnel routes are named <code>packages.</code> or <code>subscription.</code> on purpose: the &sect;5.4 allow-list lets an account with a lapsed package keep using exactly these, so renewal works after expiry (&sect;8.4). The mobile package routes sit outside <code>mobile.activated</code> for the same reason.</p>
+    <p><strong>Scheduled:</strong> <code>subscription-lifecycle-sweep</code>, daily at 01:30 in <code>config('app.timezone')</code>, <code>onOneServer()</code> and <code>withoutOverlapping()</code> (<code>routes/console.php</code>). It runs before the KYC sweep so a term that expires today is expired before anything else reasons about entitlements.</p>
+    <p><strong>Settlement hooks:</strong> <code>Billing\Actions\SettlePayment</code> calls <code>ActivateRenewal</code> for <code>PaymentPurpose::PackageRenewal</code> and <code>ActivatePackageChange</code> for both <code>PaymentPurpose::PackageUpgrade</code> and <code>PaymentPurpose::PackageDowngrade</code>.</p>
+
+    <h2>Permissions &amp; scoping</h2>
+    <table>
+        <thead><tr><th>Ability (<code>PackagePolicy</code>)</th><th>Permission</th></tr></thead>
+        <tbody>
+            <tr><td><code>viewAny</code>, <code>view</code></td><td><code>package.view</code></td></tr>
+            <tr><td><code>create</code></td><td><code>package.create</code></td></tr>
+            <tr><td><code>update</code> (also used for take-off-sale)</td><td><code>package.edit</code>, and the package must not be archived</td></tr>
+            <tr><td><code>archive</code></td><td><code>package.archive</code>, not already archived</td></tr>
+            <tr><td><code>assign</code></td><td><code>package.manage_settings</code>, package not archived</td></tr>
+            <tr><td><code>delete</code></td><td>always false: packages are archived, never removed (&sect;36.2)</td></tr>
+            <tr><td>Downgrade override (action, not policy)</td><td><code>package.approve</code> plus a recorded reason</td></tr>
+        </tbody>
+    </table>
+    <p>Permission names are built with <code>PermissionCatalogue::name(PermissionModule::Package, PermissionAction::X)</code>. Partner screens are self-scoped: the account comes from the signed-in user's membership (<code>ResolvesBusinessAccount</code>), never from the URL, and the actions re-check that the subscription's <code>business_account_id</code> matches. The public catalogue ("what is on sale") is not governed by the policy; it reads <code>Package::scopePubliclyListed()</code>.</p>
+
+    <h2>Money, ledger &amp; audit effects</h2>
+    <ul>
+        <li>All money is <code>Money</code> (exact decimal Taka). <code>PackageChangePlanner::flooredShare()</code> computes the proration with bcmath at scale 20 and floors to the currency scale, so a credit is never larger than owed and no float is involved.</li>
+        <li>This module does not post ledger entries itself. Charging is the Billing module's job (quotes from <code>CalculatePackageChangeQuote</code>, <code>CalculateRenewalQuote</code>, payments via <code>RecordPaymentFromQuote</code>); activation here is reached only from payment settlement, so an unpaid change never moves an account.</li>
+        <li><code>SubscriptionTerms::toArray()</code> stores fees as decimal strings (<code>toDecimal()</code>), restored by <code>Money::fromDecimal</code>.</li>
+        <li>Audit actions (module <code>package</code>): <code>package.created</code>, <code>package.updated</code>, <code>package.archived</code>, <code>package.renewed</code>, <code>package.upgrade</code> / <code>package.downgrade</code> (action is <code>'package.'.$source</code>), <code>package.manual_assigned</code>, <code>package.promotional_assigned</code>, <code>package.cancelled</code>, <code>package.downgrade_limit_overridden</code>. Cancel, assign and override are flagged sensitive.</li>
+    </ul>
+
+    <h2>Configuration</h2>
+    <table>
+        <thead><tr><th>Key</th><th>Meaning</th></tr></thead>
+        <tbody>
+            <tr><td>Setting <code>package.renewal_window_days</code> (<code>SubscriptionPolicy::RENEWAL_WINDOW</code>)</td><td>Days before expiry a term becomes renewable and "renewal due". Default 30, clamped to 1&ndash;180. A settings store failure falls back to 30.</td></tr>
+            <tr><td>Setting <code>package.prorate_upgrades</code> (<code>PackageChangePlanner::PRORATION</code>)</td><td>Whether an upgrade credits the unused part of the term. Default true (also on error).</td></tr>
+            <tr><td><code>config('app.timezone')</code></td><td>Clock for the sweep.</td></tr>
+        </tbody>
+    </table>
+    <p>I found no definition of the two setting rows in <code>app/</code>, <code>database/</code>, <code>config/</code> or <code>lang/</code>; they are read with defaults. Whether they are seeded elsewhere is not verified.</p>
+
+    <h2>Rules, invariants &amp; gotchas</h2>
+    <div class="callout callout-rule"><p><strong>Rule.</strong> Never assign <code>UserPackage::status</code>; use <code>transitionTo()</code> / <code>canTransitionTo()</code>. <code>SelectPackage</code> does contain one bulk <code>update(['status' => Superseded])</code> on pending rows; follow the transition-based pattern in <code>OpenPackageChange::supersedePending</code> for new code.</p></div>
+    <ul>
+        <li><strong>Snapshot vs live row.</strong> Anything that answers "what may this account do" reads <code>UserPackage::terms()</code>. A package that edits a limit does not affect existing subscriptions until they renew (renewal captures fresh terms, &sect;8.3). Rows older than the snapshot migration have <code>terms = null</code> and fall back to the live package.</li>
+        <li><strong>The pointer is a hint.</strong> Cancelling or expiring does not always clear <code>current_user_package_id</code> (<code>CancelSubscription</code> and the sweep repoint, but older code paths and tests should not assume it). Use <code>Entitlements::activePackage()</code>.</li>
+        <li><strong>Defaults.</strong> Missing features default off or zero, except <code>WholesaleEnabled</code> and <code>DropshippingEnabled</code>, which default on.</li>
+        <li><strong>Downgrades are never destructive (D16).</strong> Exceeding a limit after an override leaves the account's existing data alone; only new publishing is refused.</li>
+        <li><strong>Equal fee is a downgrade.</strong> It waits until the term ends.</li>
+        <li><strong>KYC rules key on <code>package_public_id</code></strong> (ULID), not the slug, so renaming a slug cannot orphan a rule.</li>
+        <li><strong>Archived packages stay readable</strong> (<code>withTrashed</code> in the admin index); subscriptions, payments and invoices reference them (<code>restrictOnDelete</code>).</li>
+        <li><code>AccountHoldings::counts()</code> still returns <code>0</code> for <code>ProductPublishLimit</code> and <code>WebsiteLimit</code> (only staff is counted) even though the code comment says those modules "do not exist yet" and they now do. The downgrade guard therefore cannot currently block on products or websites. See the report; this is an observed gap, not a documented decision.</li>
+    </ul>
+
+    <h2>How to&hellip;</h2>
+    <h3>Add a new package feature</h3>
+    <ol>
+        <li>Add a case to <code>PackageFeature</code> and extend <code>type()</code>, <code>label()</code> and <code>default()</code> (all are exhaustive <code>match</code>es).</li>
+        <li>Surface it in the admin form: <code>Admin\PackageController</code> builds its feature list from <code>PackageFeature::cases()</code>; update <code>resources/js/pages/admin/packages/package-dialog.tsx</code> and <code>lang/{en,bn}/package.php</code> as needed. <code>SavePackageRequest</code> rejects unknown keys.</li>
+        <li>Gate the code: route middleware <code>entitled:&lt;value&gt;</code>, or <code>Entitlements::allows()</code> / <code>hasCapacityFor()</code> with a count you supply.</li>
+        <li>Existing subscriptions get the new feature's <em>default</em> (<code>SubscriptionTerms::feature()</code> falls back when the key is missing from the snapshot).</li>
+        <li>If the limit holds existing things (like published products), add it to <code>DowngradeGuard::guardedFeatures()</code> and to <code>AccountHoldings::counts()</code>.</li>
+    </ol>
+    <h3>Gate a new route or module behind a package facility</h3>
+    <ol>
+        <li>Boolean or limit feature only. Add <code>-&gt;middleware('entitled:your_feature')</code> to the route group (see <code>routes/settings.php</code> staff routes).</li>
+        <li>Remember the gate does not run for accounts with no business account.</li>
+        <li>Keep funnel and subscription routes out of the gate and named under <code>packages.</code> / <code>subscription.</code>.</li>
+    </ol>
+    <h3>Change the term or grace behaviour</h3>
+    <ol>
+        <li>Term length comes from <code>validity_days</code>; grace from <code>grace_period_days</code>, both captured into <code>SubscriptionTerms</code>.</li>
+        <li>Date arithmetic lives in <code>ActivateRenewal</code> (renewals), <code>PackageChangePlanner::plan()</code> / <code>OpenPackageChange</code> (changes) and <code>AssignPackage</code> (grants). Change all relevant places and the sweep predicates together.</li>
+    </ol>
+    <h3>Add a new subscription status</h3>
+    <ol>
+        <li>Add the case and its <code>transitionsTo()</code> row; update <code>entitling()</code> if it should grant access, <code>tone()</code>, and the translation group <code>user_package</code>.</li>
+        <li>Check <code>SubscriptionPolicy::isRenewable()</code> (an exhaustive <code>match</code>) and the sweep queries.</li>
+    </ol>
+    <h3>Add a new notification for a lifecycle event</h3>
+    <ol>
+        <li>Create the class under <code>app/Notifications/Package/</code> and send it from the action next to the transition (the sweep uses <code>tell()</code> after a successful <code>move()</code>, so it is sent once).</li>
+    </ol>
+
+    <h2>Testing</h2>
+    <p>Group <code>package</code> covers <code>tests/Feature/Package/</code>: <code>EntitlementsTest</code>, <code>EntitlementGateTest</code>, <code>SubscriptionRecordTest</code>, <code>SubscriptionTermsTest</code>, <code>SubscriptionLifecycleTest</code>, <code>SubscriptionRenewalTest</code>, <code>PackageChangeTest</code>, <code>DowngradeGuardTest</code>, <code>PackageManagementTest</code>, <code>PackageAssignmentTest</code>, <code>PackageInvoiceTest</code>. Related: <code>tests/Feature/Mobile/MobilePackagesTest.php</code>, <code>tests/Feature/ExternalStore/ExternalStoreEntitlementTest.php</code>.</p>
+    <pre><code>vendor/bin/pest tests/Feature/Package   # in its own schema, see the Testing page
+DB_SEARCH_PATH=testing_mine vendor/bin/pest --group=package</code></pre>
+    <p>There is no <code>PackageFactory</code>; each test file defines a prefixed helper (<code>packageWith()</code>, <code>subscribe()</code>, <code>lifecyclePackage()</code>, <code>changeTestPackage()</code>, <code>assignTestPackage()</code> &hellip;). <code>tests/Pest.php</code> provides <code>testAccountWithPackageFeatures(array $features, ?AccountStatus $status)</code> for tests that just need an entitled account. Prefix any new helper with what it belongs to (Pest shares one global function namespace).</p>
+
+    <h2>Related modules</h2>
+    <ul>
+        <li><a href="account.html">Account</a> &mdash; owns <code>BusinessAccount</code>, <code>current_user_package_id</code> and the activation funnel</li>
+        <li><a href="billing.html">Billing</a> &mdash; quotes, payments, invoices and <code>SettlePayment</code></li>
+        <li><a href="kyc.html">KYC</a> &mdash; scope rules that name packages</li>
+        <li><a href="website.html">Website</a> &mdash; <code>AllocatePackageWebsite</code>, publish limit</li>
+        <li><a href="catalog.html">Catalog</a> &mdash; <code>ProductEligibility</code> and channel facilities</li>
+        <li><a href="external-store.html">External store</a> &mdash; <code>ExternalStoreAccess</code> / <code>ExternalStoreLimit</code></li>
+        <li><a href="access.html">Access</a> &mdash; permission catalogue</li>
+        <li><a href="../guide/glossary.html">Glossary</a></li>
+    </ul>
+</main>
+</body>
+</html>

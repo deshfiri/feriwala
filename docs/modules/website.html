@@ -1,0 +1,477 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Website module</title>
+    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+    <script src="../assets/docs.js"></script>
+</head>
+<body>
+<main id="doc">
+    <h1>Website module</h1>
+    <p class="lead">A partner's dedicated storefront, from the request for it through payment, build, connection to the separate storefront app, daily operation and closure. Also the machinery that keeps that storefront current: signed credentials, outbound webhooks, retries and the failed-sync queue. Read this before touching anything under <code>app/Domain/Website</code>, <code>routes/api.php</code> or the <code>storefront.*</code> middleware.</p>
+
+    <h2>Purpose</h2>
+    <p>A Partner whose package includes a dedicated website (§8.1, §16) asks for one. The request raises charges, which the Partner pays from the wallet. Platform staff then build the storefront by hand (D9: no registrar or hosting automation), register the domain, and connect the store to the ERP. The storefront itself is a separate Laravel application (<a href="../storefront-app.html">Storefront app</a>) that never touches the ERP database; it reads the catalogue and posts orders through the frozen <a href="../api/storefront-api.html">Storefront API</a>, and the ERP tells it about changes by signed webhook (D11, D32).</p>
+    <p>Who uses it:</p>
+    <ul>
+        <li><strong>Partner</strong> (business account owner or an account role holding <code>AccountPermission::UpdateAccount</code>): requests websites, pays charges and renewals, edits branding, selects and prices products, reads orders, retries failed deliveries.</li>
+        <li><strong>Platform staff</strong>: <code>website.view</code> / <code>website.edit</code> to administer; <code>website.manage_integrations</code> (Super Admin by default) to connect a store, issue credentials and manage the webhook secret; <code>website.manage_settings</code> for platform-wide price rules.</li>
+        <li><strong>The storefront app</strong>: the machine caller, authenticated by an HMAC-signed credential.</li>
+        <li><strong>System</strong>: the scheduler (lifecycle sweep, webhook retries, inventory and catalogue sync, promotion windows, best sellers).</li>
+    </ul>
+    <p>Implements §15, §15.1, §16.1–§16.4, §17 and §24.3 of <code>requirements.txt</code>; decisions D9, D11, D12, D30 (partly superseded), D31, D32 (credentials and webhooks are staff-managed, Option P1), D34. The contract is <code>requirements/05-storefront-api-contract.md</code>.</p>
+
+    <div class="callout callout-rule"><p><strong>Rule.</strong> Feriwala is merchant of record (D12). A storefront never holds a gateway credential, never computes a price, and never sees a wholesale price, cost or margin. There is no wallet, ledger, KYC, commission or user scope in the API: the surface does not exist to be granted.</p></div>
+
+    <h2>Where it lives</h2>
+    <table>
+        <thead><tr><th>Path</th><th>Role</th></tr></thead>
+        <tbody>
+        <tr><td><code>app/Domain/Website/Models/</code></td><td>Eloquent models: <code>Website</code>, <code>WebsiteDomain</code>, <code>WebsiteHosting</code>, <code>WebsiteCharge</code>, <code>WebsiteAllocation</code>, <code>WebsiteProduct</code>, <code>WebsiteCategory</code>, <code>WebsiteProductPriceRule</code>, <code>WebsiteCredential</code>, <code>WebsiteWebhookEndpoint</code>, <code>WebhookDelivery</code>, <code>WebhookLog</code>, <code>SyncQueueFailure</code>, <code>ApiLog</code>, <code>StorefrontRequest</code>, <code>WebsiteCustomer</code>, <code>WebsiteStatusChange</code>.</td></tr>
+        <tr><td><code>app/Domain/Website/Actions/</code></td><td>All business logic (see Actions &amp; workflows).</td></tr>
+        <tr><td><code>app/Domain/Website/Enums/</code></td><td><code>WebsiteStatus</code>, <code>DomainRoutingStatus</code>, <code>WebhookEvent</code>, <code>WebhookDeliveryState</code>, <code>CredentialScope</code>, <code>CredentialPreset</code>, and the other enums below.</td></tr>
+        <tr><td><code>app/Domain/Website/Api/</code></td><td><code>RequestSignature</code> (request signing), <code>WebhookSignature</code> (webhook signing), <code>StorefrontError</code> (the one error envelope), <code>StorefrontProductPayload</code>.</td></tr>
+        <tr><td><code>app/Domain/Website/Queries/</code></td><td><code>StorefrontSelections</code> (what a website may show), <code>StorefrontProductListing</code> (search, filters, facets), <code>WebsiteCatalogue</code>, <code>WebsiteOverview</code>, <code>ResolveWebsiteHost</code>, <code>ResolveWebsitePriceRule</code>.</td></tr>
+        <tr><td><code>app/Domain/Website/Jobs/</code></td><td><code>DeliverWebhook</code>, <code>AnnouncePaymentMethodsChanged</code>.</td></tr>
+        <tr><td><code>app/Domain/Website/Policies/WebsitePolicy.php</code></td><td>Abilities: <code>viewAny</code>, <code>view</code>, <code>create</code>, <code>provision</code>, <code>manage</code>, <code>pay</code>, <code>administer</code>, <code>manageIntegration</code>.</td></tr>
+        <tr><td><code>app/Domain/Website/*.php</code> (root)</td><td>Support classes: <code>LocalAddress</code>, <code>RequestedAddress</code>, <code>WebsiteAddresses</code>, <code>StorefrontEnvironmentBlock</code>, <code>CheckoutVerification</code>, <code>CodTerms</code>, <code>BannerLink</code>, <code>WebsiteImageStore</code>.</td></tr>
+        <tr><td><code>app/Domain/Website/Exceptions/WebsiteRefused.php</code></td><td>Every refusal, each carrying the form <code>field</code> it belongs to.</td></tr>
+        <tr><td><code>app/Http/Middleware/Storefront/</code></td><td><code>LogStorefrontRequest</code>, <code>AuthenticateStorefrontRequest</code>, <code>VerifyStorefrontHost</code>, <code>LimitStorefrontRate</code>, <code>RequireStorefrontScope</code>, <code>ReplayStorefrontWrite</code>; aliases in <code>bootstrap/app.php</code>.</td></tr>
+        <tr><td><code>app/Http/Controllers/Api/Storefront/V1/</code></td><td>API controllers, all extending <code>StorefrontController</code>.</td></tr>
+        <tr><td><code>app/Http/Controllers/Erp/Website*Controller.php</code></td><td>Partner screens (<code>WebsiteController</code>, <code>WebsiteSettingsController</code>, <code>WebsiteProductController</code>, <code>WebsiteCategoryController</code>, <code>WebsiteOrderController</code>, <code>WebsiteIntegrationController</code>, <code>MyProductWebsiteController</code>).</td></tr>
+        <tr><td><code>app/Http/Controllers/Admin/Website*Controller.php</code></td><td>Staff screens: <code>WebsiteController</code>, <code>WebsiteConnectionController</code>, <code>WebsiteCredentialController</code>, <code>WebsiteWebhookController</code>, <code>WebsitePricingController</code>, plus settings, product and category controllers that reuse the partner Actions.</td></tr>
+        <tr><td><code>app/Notifications/Website/</code></td><td><code>WebsiteStatusChanged</code>, <code>WebsiteRenewalDue</code>.</td></tr>
+        <tr><td><code>app/Providers/ApiServiceProvider.php</code>, <code>WebsiteServiceProvider.php</code></td><td>OpenAPI documents (<code>/docs/storefront</code>); binds <code>TxtRecordResolver</code> to <code>SystemTxtRecordResolver</code>.</td></tr>
+        <tr><td><code>config/website.php</code></td><td>Every tunable (see Configuration).</td></tr>
+        <tr><td><code>resources/js/pages/websites/</code>, <code>pages/admin/websites/</code></td><td>Partner and admin Inertia pages (<code>connect-store.tsx</code>, <code>storefront-webhook.tsx</code>, <code>storefront-credentials.tsx</code> and others).</td></tr>
+        <tr><td><code>lang/{en,bn}/website.php</code></td><td>All user-facing strings, including the <code>website.integration.*</code> and <code>website.connect.*</code> groups.</td></tr>
+        <tr><td><code>database/migrations/2026_09_28_*</code>, <code>2026_09_30_100000_take_website_orders.php</code>, <code>2026_10_30_100000_create_website_allocations_table.php</code></td><td>Tables and the CHECK constraints and triggers behind them.</td></tr>
+        <tr><td><code>tests/Feature/Website/</code>, <code>tests/Feature/WebsiteApi/</code></td><td>Pest groups <code>website</code> and <code>website-api</code>.</td></tr>
+        </tbody>
+    </table>
+
+    <h2>Key terms</h2>
+    <dl>
+        <dt>Website</dt>
+        <dd>One dedicated storefront, owned by exactly one business account. The owning account cannot change; the database refuses it. It is the tenancy boundary of the API.</dd>
+        <dt>Store / connecting a store</dt>
+        <dd>Staff attaching a deployed storefront app to a website: its address is recorded, one credential is issued, and a webhook is registered when possible. Done in one action, <code>ConnectStore</code> (D32).</dd>
+        <dt>Store id, token</dt>
+        <dd>The credential's <code>key_id</code> (<code>wsk_</code> followed by a 26-character ULID) and its secret. The storefront's <code>.env</code> calls them <code>STORE_ID</code> and <code>STORE_TOKEN</code>.</dd>
+        <dt>Credential</dt>
+        <dd>A <code>WebsiteCredential</code>: a key id, an encrypted secret and an explicit list of scopes. Shown once; rotatable; revocable.</dd>
+        <dt>Scope</dt>
+        <dd>A <code>CredentialScope</code> case limiting what a credential may call. Never granted by default.</dd>
+        <dt>Preset</dt>
+        <dd>A <code>CredentialPreset</code>: a starting point that fills the scope checkboxes. What is issued is exactly what staff submit.</dd>
+        <dt>Webhook endpoint</dt>
+        <dd>The single HTTPS address per website the ERP posts signed events to, with its own signing secret.</dd>
+        <dt>Delivery</dt>
+        <dd>One event queued for one website's endpoint, with a stable <code>event_id</code> across retries.</dd>
+        <dt>Dead letter</dt>
+        <dd>A delivery in state <code>failed</code>, with an unresolved <code>SyncQueueFailure</code> for a person to retry.</dd>
+        <dt>Selection</dt>
+        <dd>A <code>WebsiteProduct</code>: a central catalogue product a Partner chose for one storefront. Selection is not authorship; partners never create products (§15, §16.3).</dd>
+        <dt>Price rule</dt>
+        <dd>A <code>WebsiteProductPriceRule</code>: the administrator's bounds on what a Partner may charge (§15.1).</dd>
+        <dt>Allocation</dt>
+        <dd>A <code>WebsiteAllocation</code>: one slot per website a package purchase entitles, carrying the package-based domain and hosting periods (D30 §9).</dd>
+        <dt>Local address</dt>
+        <dd>A plain-HTTP address such as <code>http://127.0.0.1:8001</code>, accepted only while <code>website.allow_local_addresses</code> is on.</dd>
+        <dt>Connection health</dt>
+        <dd><code>WebsiteConnectionHealth</code>: <code>unknown</code>, <code>healthy</code>, <code>degraded</code>, <code>failing</code>, derived from how recent deliveries went.</dd>
+    </dl>
+
+    <h2>Data model</h2>
+    <p>Money columns are <code>MoneyCast</code> columns: exact decimal Taka plus a <code>currency_code</code> column. Public identifiers are ULIDs via <code>HasPublicId</code> where noted; no database id appears in a URL.</p>
+
+    <h3>Website and lifecycle</h3>
+    <table>
+        <thead><tr><th>Model (table)</th><th>Purpose and key columns</th></tr></thead>
+        <tbody>
+        <tr><td><code>Website</code> (<code>websites</code>)</td><td>The storefront. <code>public_id</code>, <code>business_account_id</code> (immutable), <code>user_package_id</code>, <code>name</code>, <code>slug</code>, <code>subdomain</code> (unique), <code>domain</code> (unique, nullable; also holds a local address), <code>requested_address</code> (what the partner asked for), <code>status</code> (<code>WebsiteStatus</code>), snapshotted <code>setup_fee</code>, <code>domain_fee</code>, <code>hosting_fee</code>, <code>required_deposit</code>, <code>minimum_balance</code>, branding (<code>tagline</code>, <code>about</code>, <code>logo_path</code>, <code>banner_path</code>, <code>banner_link_url</code>, <code>primary_color</code>, <code>secondary_color</code>, <code>theme</code>), contact fields, <code>payment_config</code>, <code>shipping_config</code>, <code>sms_verification_enabled</code>, <code>api_connected_at</code>, <code>webhook_connected_at</code>, <code>last_synced_at</code>, <code>connection_health</code>, <code>activated_at</code>, <code>expires_at</code>, <code>grace_ends_at</code>, <code>suspended_at</code>, <code>suspension_reason</code>, <code>maintenance_message</code>, <code>closed_at</code>. CHECK constraints keep status, theme and health in their enums, hosts lowercase and colours hex; a trigger locks the account and key columns. <code>lists_whole_catalogue</code> is legacy and always false.</td></tr>
+        <tr><td><code>WebsiteStatusChange</code> (<code>website_status_history</code>)</td><td>Append-only history of every status move: <code>previous_status</code>, <code>new_status</code>, <code>source</code> (<code>WebsiteStatusChangeSource</code>), <code>changed_by</code>, <code>reason</code>, <code>internal_note</code>, <code>public_note</code>. Triggers refuse update and delete.</td></tr>
+        <tr><td><code>WebsiteDomain</code> (<code>website_domains</code>)</td><td>A registered domain. <code>domain</code> (lowercase), <code>registrar</code>, <code>status</code> (<code>WebsiteServiceStatus</code>), <code>fee</code>, <code>registered_at</code>, <code>expires_at</code>, <code>auto_renew</code>, <code>reminder_stage</code>, <code>reminded_at</code>, and the routing columns: <code>routing_status</code> (<code>DomainRoutingStatus</code>), <code>verification_token</code>, <code>verification_issued_at</code>, <code>verification_checked_at</code>, <code>verification_error</code>, <code>verified_at</code>, <code>activated_at</code>, <code>suspended_at</code>, <code>tls_authorized_at</code>. A partial unique index (<code>website_domains_live_name_unique</code>) stops two websites holding the same live name. Uses <code>HasStateMachine</code> on <code>routing_status</code>.</td></tr>
+        <tr><td><code>WebsiteHosting</code> (<code>website_hostings</code>)</td><td>A hosting term: <code>plan</code>, <code>provider</code> (internal only, never shown to partners), <code>status</code>, <code>fee</code>, <code>started_at</code>, <code>expires_at</code>, reminder columns.</td></tr>
+        <tr><td><code>WebsiteCharge</code> (<code>website_charges</code>)</td><td>An amount owed: <code>type</code> (<code>WebsiteChargeType</code>), <code>status</code> (<code>WebsiteChargeStatus</code>), <code>amount</code>, <code>period_start</code>, <code>period_end</code>, <code>website_domain_id</code>, <code>website_hosting_id</code>, <code>wallet_transaction_id</code> (unique: one wallet transaction can settle only one charge), <code>due_at</code>, <code>paid_at</code>. A trigger locks columns once written.</td></tr>
+        <tr><td><code>WebsiteAllocation</code> (<code>website_allocations</code>)</td><td>One row per permitted website per package purchase: <code>user_package_id</code>, <code>slot</code> (unique with the purchase), <code>website_id</code>, <code>domain_included</code>, <code>hosting_included</code>, validity months, <code>domain_expires_at</code>, <code>hosting_expires_at</code>, <code>previous_allocation_id</code>. <code>public_id</code>.</td></tr>
+        </tbody>
+    </table>
+
+    <h3>Catalogue</h3>
+    <table>
+        <thead><tr><th>Model (table)</th><th>Purpose and key columns</th></tr></thead>
+        <tbody>
+        <tr><td><code>WebsiteProduct</code> (<code>website_products</code>)</td><td>A selection. Unique on <code>(website_id, product_id)</code>. <code>status</code> (<code>WebsiteProductStatus</code>), <code>price</code>, <code>promotional_price</code> with <code>promotion_starts_at</code>/<code>promotion_ends_at</code> (<code>UtcInstantCast</code>), <code>promotion_live</code> (last announced state), <code>promo_title</code>, <code>marketing_description</code>, <code>website_category_id</code>, <code>is_featured</code>, <code>display_order</code>, <code>sync_status</code> (<code>WebsiteSyncStatus</code>), <code>synced_availability</code> (what stock the storefront was last told), <code>last_synced_at</code>, <code>sync_error</code>. CHECK constraints: prices not negative, promotional below regular, a published row must have a price. <code>sellingPrice()</code> is the one definition of the price a customer pays now; <code>auto_listed</code> is legacy.</td></tr>
+        <tr><td><code>WebsiteCategory</code> (<code>website_categories</code>)</td><td>The storefront's own categories, separate from the central catalogue's. Unique <code>(website_id, slug)</code>. Deleting one only unplaces its products.</td></tr>
+        <tr><td><code>WebsiteProductPriceRule</code> (<code>website_product_price_rules</code>)</td><td>Administrator bounds: <code>product_id</code>/<code>package_id</code> scoping (both nullable), <code>allows_user_pricing</code>, <code>min_price</code>, <code>max_price</code>, <code>suggested_price</code>, <code>max_margin_percent</code>, <code>locked_fields</code> (subset of <code>LOCKABLE_FIELDS</code>), <code>effective_from</code>, <code>effective_to</code>. Opened and closed, never edited in place.</td></tr>
+        <tr><td><code>WebsiteCustomer</code> (<code>website_customers</code>)</td><td>A storefront's customer, keyed on <code>(website_id, normalised mobile)</code>. Never an ERP user account. <code>storefront_customer_reference</code>, <code>is_guest</code>.</td></tr>
+        </tbody>
+    </table>
+
+    <h3>Integration</h3>
+    <table>
+        <thead><tr><th>Model (table)</th><th>Purpose and key columns</th></tr></thead>
+        <tbody>
+        <tr><td><code>WebsiteCredential</code> (<code>website_credentials</code>)</td><td><code>key_id</code> (unique, CHECK <code>^wsk_[0-9A-Z]{26}$</code>), <code>secret</code> and <code>previous_secret</code> (<code>encrypted</code> casts, both in <code>$hidden</code>), <code>secret_hint</code> (last four), <code>previous_secret_expires_at</code>, <code>scopes</code> (jsonb array), <code>last_used_at</code>, <code>rotated_at</code>, <code>revoked_at</code>, <code>revoked_reason</code> (CHECK: a revocation needs a reason), <code>revoked_by</code>. <code>public_id</code>. The website and key id are locked by a trigger.</td></tr>
+        <tr><td><code>WebsiteWebhookEndpoint</code> (<code>website_webhook_endpoints</code>)</td><td>One per website (<code>website_id</code> unique). <code>url</code> (CHECK: starts <code>https://</code>), encrypted <code>secret</code>, <code>previous_secret</code> and <code>previous_secret_expires_at</code>, <code>secret_hint</code>, <code>is_active</code>, <code>rotated_at</code>. <code>public_id</code>.</td></tr>
+        <tr><td><code>WebhookDelivery</code> (<code>webhook_deliveries</code>)</td><td><code>event_id</code> (ULID, unique, stable across retries), <code>event_type</code> (<code>WebhookEvent</code>), <code>payload_version</code> (1), <code>payload</code>, <code>subject_type</code>/<code>subject_id</code>, <code>state</code> (<code>WebhookDeliveryState</code>), <code>attempt</code> (CHECK: at most 9), <code>response_status</code>, <code>last_error</code>, <code>dispatched_at</code>, <code>responded_at</code>, <code>next_retry_at</code> (CHECK: a retrying row has one), <code>delivered_at</code>, <code>retried_by</code>, <code>retried_at</code>.</td></tr>
+        <tr><td><code>WebhookLog</code> (<code>webhook_logs</code>)</td><td>One row per attempt: <code>url</code>, <code>response_status</code>, <code>duration_ms</code>, redacted <code>request_headers</code>, 500-character <code>response_excerpt</code>, <code>error</code>. Append-only (trigger plus a model guard).</td></tr>
+        <tr><td><code>SyncQueueFailure</code> (<code>sync_queue_failures</code>)</td><td>The failed-sync queue: <code>kind</code> (<code>webhook_delivery</code>), <code>webhook_delivery_id</code>, <code>error</code>, <code>attempts</code>, <code>failed_at</code>, <code>retry_count</code>, <code>last_retried_at</code>, <code>last_retried_by</code>, <code>resolved_at</code>. <code>public_id</code>.</td></tr>
+        <tr><td><code>ApiLog</code> (<code>api_logs</code>)</td><td>Every storefront API call, refused ones included: <code>request_id</code> (ULID, the one in error bodies), <code>website_id</code>, <code>website_credential_id</code>, <code>key_id</code>, <code>method</code>, <code>path</code>, <code>status</code>, <code>duration_ms</code>, <code>error_code</code>, <code>ip</code>, <code>request_summary</code>. Append-only.</td></tr>
+        <tr><td><code>StorefrontRequest</code> (<code>storefront_requests</code>)</td><td>The idempotency store: <code>(website_id, idempotency_key)</code>, <code>method</code>, <code>path</code>, a keyed <code>fingerprint</code>, <code>response_status</code>, <code>response_body</code>.</td></tr>
+        </tbody>
+    </table>
+
+    <h2>States &amp; lifecycle</h2>
+    <h3>WebsiteStatus (14 cases)</h3>
+    <p>The map in <code>WebsiteStatus::transitionsTo()</code> is deliberately conservative. Whether a move is allowed <em>now</em> (a charge still owed, a lapsed package) belongs to the Action making it. Only <code>MoveWebsiteStatus</code> changes it.</p>
+    <table>
+        <thead><tr><th>Group</th><th>Cases</th><th>Meaning</th></tr></thead>
+        <tbody>
+        <tr><td>Being built</td><td><code>setup_pending</code>, <code>deposit_pending</code>, <code>development</code>, <code>api_connection_pending</code></td><td>Nothing served to customers. <code>isBeingBuilt()</code>.</td></tr>
+        <tr><td>Live</td><td><code>active</code>, <code>low_wallet_balance</code>, <code>grace_period</code>, <code>domain_renewal_pending</code>, <code>hosting_renewal_pending</code></td><td><code>isLive()</code>. Still answers: taking a shop down the hour a renewal falls due punishes the customer for the partner's lapse (§24.3).</td></tr>
+        <tr><td>Not serving</td><td><code>temporarily_disabled</code>, <code>package_expired</code>, <code>suspended</code>, <code>maintenance</code></td><td>Credentials stop working, except in <code>maintenance</code> (see Gotchas).</td></tr>
+        <tr><td>Closed</td><td><code>closed</code></td><td>Terminal; <code>isTerminal()</code>. Releases the domain.</td></tr>
+        </tbody>
+    </table>
+    <table>
+        <thead><tr><th>From</th><th>May move to</th></tr></thead>
+        <tbody>
+        <tr><td><code>setup_pending</code></td><td><code>deposit_pending</code>, <code>development</code>, <code>closed</code></td></tr>
+        <tr><td><code>deposit_pending</code></td><td><code>setup_pending</code>, <code>development</code>, <code>closed</code></td></tr>
+        <tr><td><code>development</code></td><td><code>api_connection_pending</code>, <code>active</code>, <code>suspended</code>, <code>closed</code></td></tr>
+        <tr><td><code>api_connection_pending</code></td><td><code>active</code>, <code>development</code>, <code>suspended</code>, <code>closed</code></td></tr>
+        <tr><td><code>active</code></td><td><code>low_wallet_balance</code>, <code>grace_period</code>, <code>domain_renewal_pending</code>, <code>hosting_renewal_pending</code>, <code>package_expired</code>, <code>temporarily_disabled</code>, <code>maintenance</code>, <code>suspended</code>, <code>closed</code></td></tr>
+        <tr><td><code>low_wallet_balance</code></td><td><code>active</code>, <code>grace_period</code>, <code>package_expired</code>, <code>temporarily_disabled</code>, <code>maintenance</code>, <code>suspended</code>, <code>closed</code></td></tr>
+        <tr><td><code>grace_period</code></td><td><code>active</code>, <code>package_expired</code>, <code>temporarily_disabled</code>, <code>suspended</code>, <code>closed</code></td></tr>
+        <tr><td><code>domain_renewal_pending</code>, <code>hosting_renewal_pending</code></td><td><code>active</code>, <code>temporarily_disabled</code>, <code>maintenance</code>, <code>suspended</code>, <code>closed</code></td></tr>
+        <tr><td><code>package_expired</code></td><td><code>active</code>, <code>grace_period</code>, <code>temporarily_disabled</code>, <code>suspended</code>, <code>closed</code></td></tr>
+        <tr><td><code>temporarily_disabled</code></td><td><code>active</code>, <code>maintenance</code>, <code>suspended</code>, <code>closed</code></td></tr>
+        <tr><td><code>maintenance</code></td><td><code>active</code>, <code>temporarily_disabled</code>, <code>suspended</code>, <code>closed</code></td></tr>
+        <tr><td><code>suspended</code></td><td><code>active</code>, <code>temporarily_disabled</code>, <code>closed</code></td></tr>
+        <tr><td><code>closed</code></td><td>nothing</td></tr>
+        </tbody>
+    </table>
+    <p>Predicates: <code>isLive()</code> decides whether the API serves and what <code>isLive</code> means for announcements; <code>acceptsSync()</code> is <code>isLive()</code> plus <code>maintenance</code> and <code>api_connection_pending</code>, and gates whether events are queued at all.</p>
+
+    <h3>Who moves it</h3>
+    <table>
+        <thead><tr><th>Trigger</th><th>Move</th><th><code>WebsiteStatusChangeSource</code></th></tr></thead>
+        <tbody>
+        <tr><td><code>RequestWebsite</code></td><td>created in <code>setup_pending</code> (history row with a null previous status)</td><td><code>account</code></td></tr>
+        <tr><td><code>SettleWebsiteCharge</code>: wallet cannot cover a charge</td><td><code>setup_pending</code> to <code>deposit_pending</code></td><td><code>billing</code></td></tr>
+        <tr><td><code>SettleWebsiteCharge</code>: last outstanding charge paid</td><td><code>setup_pending</code>/<code>deposit_pending</code> to <code>development</code></td><td><code>billing</code></td></tr>
+        <tr><td>Staff (<code>admin.websites.status.store</code>)</td><td>any move the map allows, for example <code>development</code> to <code>active</code></td><td><code>staff</code></td></tr>
+        <tr><td><code>SweepWebsiteLifecycle</code> (daily 02:15)</td><td>grace, package expiry, restore, low balance, renewal due, term expiry (<code>temporarily_disabled</code>)</td><td><code>scheduler</code></td></tr>
+        <tr><td><code>RenewWebsiteService</code></td><td>back from <code>domain_renewal_pending</code>/<code>hosting_renewal_pending</code> to <code>active</code></td><td><code>billing</code></td></tr>
+        <tr><td>Partner maintenance toggle (<code>websites.maintenance.update</code>)</td><td>to and from <code>maintenance</code></td><td><code>account</code></td></tr>
+        </tbody>
+    </table>
+    <p>Side effects of <code>MoveWebsiteStatus::handle()</code>, in order: lock the row; return unchanged if already in the target status; refuse (<code>WebsiteRefused::statusDoesNotAllow</code>) if the map forbids it; on <code>closed</code>, cancel the website's pending and active domains, reset their routing to <code>unverified</code> and move the domain into <code>requested_address</code> so the name can be reused; set the caller's attributes (<code>grace_ends_at</code>, <code>suspended_at</code> and so on) in the same transaction; <code>transitionWithHistory()</code> writes the history row; then, after commit, write the audit entry <code>website.status_changed</code>, notify the owner for <code>active</code>, <code>suspended</code>, <code>temporarily_disabled</code>, <code>grace_period</code> and <code>package_expired</code> (<code>WebsiteStatusChanged</code>, public note only), and publish <code>website.suspended</code> or <code>website.restored</code> when the website crossed the line between served (live or maintenance) and not served.</p>
+
+    <h3>Supporting enums</h3>
+    <table>
+        <thead><tr><th>Enum</th><th>Cases</th><th>Notes</th></tr></thead>
+        <tbody>
+        <tr><td><code>DomainRoutingStatus</code></td><td><code>unverified</code>, <code>verified</code>, <code>active</code>, <code>suspended</code></td><td>Moves: unverified to verified; verified to active or unverified; active to suspended or unverified; suspended to active or unverified. Uses <code>transitionTo()</code>.</td></tr>
+        <tr><td><code>WebsiteServiceStatus</code></td><td><code>pending</code>, <code>active</code>, <code>expired</code>, <code>cancelled</code></td><td>For <code>WebsiteDomain</code> and <code>WebsiteHosting</code>; <code>isRunning()</code>.</td></tr>
+        <tr><td><code>WebsiteChargeType</code></td><td><code>setup</code>, <code>domain</code>, <code>hosting</code>, <code>maintenance</code></td><td>Each maps to a <code>FeeType</code> (<code>feeType()</code>) and a <code>LedgerTransactionType</code> (<code>ledgerType()</code>: <code>WebsiteSetupDebit</code>, <code>DomainChargeDebit</code>, <code>HostingChargeDebit</code>, <code>MaintenanceChargeDebit</code>).</td></tr>
+        <tr><td><code>WebsiteChargeStatus</code></td><td><code>due</code>, <code>paid</code>, <code>waived</code>, <code>cancelled</code></td><td><code>isOutstanding()</code>, <code>isClosed()</code>.</td></tr>
+        <tr><td><code>WebsiteProductStatus</code></td><td><code>selected</code>, <code>published</code>, <code>unpublished</code></td><td>A selection opens unpublished and unpriced.</td></tr>
+        <tr><td><code>WebsiteSyncStatus</code></td><td><code>pending</code>, <code>synced</code>, <code>failed</code></td><td>Whether the storefront has been told about the selection's latest state.</td></tr>
+        <tr><td><code>WebhookDeliveryState</code></td><td><code>pending</code>, <code>retrying</code>, <code>delivered</code>, <code>failed</code></td><td><code>isFinished()</code> is true for delivered and failed.</td></tr>
+        <tr><td><code>WebsiteConnectionHealth</code></td><td><code>unknown</code>, <code>healthy</code>, <code>degraded</code>, <code>failing</code></td><td>See "Webhook deliveries" below.</td></tr>
+        <tr><td><code>PackageWebsiteStatus</code></td><td><code>pending_setup</code>, <code>active</code>, <code>suspended</code>, <code>expired</code></td><td>Display status of an allocation slot, derived by <code>PackageWebsiteStatus::for()</code>.</td></tr>
+        <tr><td><code>WebsiteTheme</code></td><td><code>classic</code>, <code>modern</code>, <code>minimal</code></td><td>Selected in branding.</td></tr>
+        <tr><td><code>WebsiteStatusReason</code></td><td><code>charges_settled</code>, <code>insufficient_balance</code>, <code>renewed</code>, <code>package_lapsed</code>, <code>grace_ended</code>, <code>package_restored</code>, <code>balance_below_minimum</code>, <code>balance_restored</code>, <code>domain_expired</code>, <code>hosting_expired</code>, <code>domain_renewal_due</code>, <code>hosting_renewal_due</code></td><td>The machine reason on a history row; <code>note()</code> gives the translated public note.</td></tr>
+        </tbody>
+    </table>
+
+    <h2>Actions &amp; workflows</h2>
+    <h3>Actions</h3>
+    <table>
+        <thead><tr><th>Class (<code>app/Domain/Website/Actions</code>)</th><th>Purpose</th></tr></thead>
+        <tbody>
+        <tr><td><code>SubmitWebsiteRequest</code></td><td>Reads the address a partner typed (local URL, plain label, or their own domain), then calls <code>RequestWebsite</code>. Refusals become validation errors on the right field.</td></tr>
+        <tr><td><code>RequestWebsite</code></td><td>Entitlement, capacity under an account row lock, website creation, allocation slot, snapshotted fees raised as charges. <code>quote()</code> and <code>allowance()</code> are what the screens show.</td></tr>
+        <tr><td><code>AllocatePackageWebsite</code></td><td>Turns a confirmed package purchase into allocation slots with domain and hosting periods; idempotent on <code>(user_package_id, slot)</code>. Called by every path that activates a subscription.</td></tr>
+        <tr><td><code>SettleWebsiteCharge</code></td><td>Pays one charge from the wallet under a distributed lock; idempotent.</td></tr>
+        <tr><td><code>RenewWebsiteService</code></td><td>Raises a renewal charge at today's price, settles it, then extends the domain or hosting term.</td></tr>
+        <tr><td><code>MoveWebsiteStatus</code></td><td>The one status mover (see above).</td></tr>
+        <tr><td><code>SweepWebsiteLifecycle</code></td><td>The daily pass over every open website's clock.</td></tr>
+        <tr><td><code>ProvisionWebsiteService</code></td><td>Records a domain registration or hosting term somebody arranged by hand (D9). Registers nothing externally.</td></tr>
+        <tr><td><code>ManageWebsiteRecords</code></td><td>Staff corrections to domain, term, hosting. Renaming a domain restarts its verification.</td></tr>
+        <tr><td><code>ManageWebsiteDomainRouting</code></td><td>Issue a DNS token, verify it, activate, suspend a custom domain (D30 §3).</td></tr>
+        <tr><td><code>FreeAddressOfClosedWebsites</code></td><td>Lets a closed website's domain go when somebody wants it.</td></tr>
+        <tr><td><code>ConnectStore</code></td><td>One-step connection: address, credential, webhook (<code>handle</code>, <code>rotate</code>, <code>disconnect</code>).</td></tr>
+        <tr><td><code>ManageWebsiteCredentials</code></td><td><code>issue</code>, <code>rotate</code>, <code>revoke</code>.</td></tr>
+        <tr><td><code>ManageWebhookEndpoint</code></td><td><code>configure</code>, <code>regenerate</code>, <code>rotate</code>, <code>disable</code>.</td></tr>
+        <tr><td><code>PublishWebsiteEvent</code></td><td>Queues one event for one website's endpoint; coalesces pending duplicates.</td></tr>
+        <tr><td><code>AttemptWebhookDelivery</code></td><td>One send attempt and everything that follows (log, state, failure queue, health).</td></tr>
+        <tr><td><code>DispatchDueWebhookRetries</code>, <code>RetryWebhookDelivery</code></td><td>Scheduler dispatch of due retries; a person's manual retry of a dead letter.</td></tr>
+        <tr><td><code>SyncWebsiteProduct</code>, <code>SyncWebsiteCatalogue</code>, <code>SyncWebsiteInventory</code></td><td>Announce one product, reconcile the catalogue (scheduled <code>sweep()</code> or manual <code>handle()</code>), announce stock changes.</td></tr>
+        <tr><td><code>AnnounceWebsiteUpdated</code>, <code>AnnouncePaymentMethodsChanged</code>, <code>AnnouncePromotionWindows</code></td><td>Send <code>website.updated</code> (one pending per website), tell every affected website the platform's payment methods changed (queued job), and announce flash deals opening and closing.</td></tr>
+        <tr><td><code>SelectProductForWebsite</code>, <code>SetPurchasedProductOnWebsite</code>, <code>UpdateWebsiteProduct</code>, <code>SetWebsiteProductPublication</code></td><td>Select a product, put a bought product on a storefront from My Products, edit price and presentation, publish and unpublish.</td></tr>
+        <tr><td><code>ManageWebsiteCategories</code>, <code>ManageWebsiteBranding</code></td><td>The storefront's own categories; branding, contact details, colours, theme, images. No route to the catalogue.</td></tr>
+        <tr><td><code>SetWebsiteSmsVerification</code>, <code>ConfigureCheckoutVerificationPolicy</code></td><td>A partner's cash-on-delivery SMS confirmation choice, and the platform-wide requirement under Admin, SMS.</td></tr>
+        <tr><td><code>RecordWebsiteCustomer</code></td><td>Finds or records a customer by mobile on that website; never overwrites an existing name or email.</td></tr>
+        <tr><td><code>RefreshWebsiteBestSellers</code>, <code>PruneStorefrontRequests</code></td><td>Rebuild 30-day best sellers in one transaction under an advisory lock; forget old idempotency records.</td></tr>
+        </tbody>
+    </table>
+
+    <h3>Flow 1: request, pay, build</h3>
+    <ol>
+        <li>The partner submits the request form. <code>SubmitWebsiteRequest</code> interprets the address: a local URL (when allowed) is stored as the domain; a plain label must not be reserved (<code>website.reserved_subdomains</code>) and must be unique; anything else (<code>myshop.com</code>, a URL) is kept in <code>requested_address</code> and the website gets a generated subdomain label. Asking never claims a domain.</li>
+        <li><code>RequestWebsite::handle()</code> checks entitlement (account can transact, package includes <code>PackageFeature::DedicatedWebsite</code>, website limit not reached, slots not all lapsed), then inside one transaction locks the <code>business_accounts</code> row, re-checks, creates the website in <code>setup_pending</code> with the fee snapshot, writes the first history row, attaches an allocation slot (<code>AllocatePackageWebsite::attachWebsite</code>; no slot means the whole request rolls back), and creates a <code>due</code> <code>WebsiteCharge</code> per positive fee. A package that includes the domain or the hosting (<code>PackageFeature::DomainIncluded</code>, <code>HostingIncluded</code>) charges nothing for it.</li>
+        <li>A unique-constraint failure becomes <code>WebsiteRefused::subdomainTaken()</code>. After commit: audit <code>website.created</code> and an announcement on the staff queue (<code>StaffQueue::WebsiteRequest</code>).</li>
+        <li>The partner pays each charge (<code>websites.charges.pay</code>). <code>SettleWebsiteCharge</code> locks <code>website:charge:{id}</code>, debits the wallet with idempotency key <code>website-charge:{public_id}</code>, marks the charge paid with its <code>wallet_transaction_id</code>, audits <code>website.charge_paid</code>, and when nothing is outstanding moves the website to <code>development</code>. An uncovered wallet moves a <code>setup_pending</code> website to <code>deposit_pending</code> and throws <code>WebsiteRefused::insufficientBalance()</code>.</li>
+        <li>Staff build the storefront and register the domain by hand: <code>admin.websites.domains.store</code> (<code>ProvisionWebsiteService::registerDomain</code>, which also makes it the website's primary domain), <code>admin.websites.hostings.store</code>.</li>
+    </ol>
+
+    <h3>Flow 2: connect the store (D32)</h3>
+    <p>Staff holding <code>website.manage_integrations</code> open the website in Admin, Websites, and use "Connect the store" (<code>admin.websites.connection</code>, <code>WebsiteConnectionController::store</code>). <code>ConnectStore::handle()</code>:</p>
+    <ol>
+        <li>Refuses if a non-revoked credential already exists (<code>WebsiteRefused::alreadyConnected()</code>): one store connection per website. To change the token, rotate.</li>
+        <li>Parses the address. If <code>LocalAddress::parse()</code> accepts it (only while local addresses are allowed) the host and port are taken as typed; otherwise <code>normalise()</code> strips scheme and path and rejects anything with a port, whitespace or no dot.</li>
+        <li>In one transaction: <code>FreeAddressOfClosedWebsites</code> releases the name if a closed website held it; the address is recorded (a local one straight onto <code>websites.domain</code>, refusing if another website holds it; a real one through <code>ProvisionWebsiteService::registerDomain()</code> unless this website already holds that domain); then <code>ManageWebsiteCredentials::issue()</code> creates a credential named "Storefront" with <code>CredentialPreset::Storefront</code> scopes.</li>
+        <li>For a real address only, after the transaction: <code>registerWebhook()</code> configures the endpoint at <code>https://&lt;domain&gt;/webhooks/feriwala</code> (<code>ConnectStore::WEBHOOK_PATH</code>). If <code>ManageWebhookEndpoint::configure()</code> refuses it (no DNS yet, private address) the store is connected <em>without</em> a webhook; the storefront refreshes its catalogue by cache expiry. If an endpoint was left from an earlier connection, its secret cannot be read back, so a new one is issued by rotating.</li>
+        <li>Audit <code>website.store_connected</code> (sensitive), then return a <code>ConnectedStore</code>. The controller answers once with <code>store_id</code>, <code>token</code>, <code>address</code>, <code>local</code>, <code>webhook_url</code>, <code>webhook_secret</code>, <code>erp_base_url</code> and an <code>env</code> block (<code>ERP_BASE_URL</code>, <code>STORE_ID</code>, <code>STORE_TOKEN</code>, optionally <code>WEBHOOK_SECRET</code>, and <code>APP_ENV=local</code> for a local address), with <code>Cache-Control: no-store, private</code>. Nothing secret goes to the session, a flash message, a prop, the audit trail or a log.</li>
+    </ol>
+    <p><code>rotate()</code> issues a new token and keeps the old one valid for the grace window; <code>disconnect()</code> (a reason of at least five characters is required) revokes every active credential and disables the webhook in one transaction, audits <code>website.store_disconnected</code>, and leaves the address recorded.</p>
+
+    <h3>Credentials and scopes</h3>
+    <table>
+        <thead><tr><th><code>CredentialScope</code></th><th>Value</th><th>Grants</th></tr></thead>
+        <tbody>
+        <tr><td><code>CatalogRead</code></td><td><code>catalog:read</code></td><td><code>/site</code>, products, facets, categories, delivery areas.</td></tr>
+        <tr><td><code>InventoryRead</code></td><td><code>inventory:read</code></td><td>Stock availability.</td></tr>
+        <tr><td><code>OrdersWrite</code></td><td><code>orders:write</code></td><td>Quote a cart, submit, pay again, cancel, confirm a cash-on-delivery order.</td></tr>
+        <tr><td><code>OrdersRead</code></td><td><code>orders:read</code></td><td>Read the website's own orders.</td></tr>
+        <tr><td><code>CustomersWrite</code></td><td><code>customers:write</code></td><td>Create and update the website's customers.</td></tr>
+        <tr><td><code>ReturnsWrite</code></td><td><code>returns:write</code></td><td>Submit return requests.</td></tr>
+        </tbody>
+    </table>
+    <p><code>CredentialScope::defaults()</code> is catalogue and inventory read. <code>CredentialPreset::Catalogue</code> is <code>catalog:read</code> only (a preview or a site that does not sell yet). <code>CredentialPreset::Storefront</code> is all six scopes and is what <code>ConnectStore</code> issues. A credential with no scope is refused with an <code>InvalidArgumentException</code>; there is no implicit grant (ER-7).</p>
+    <p>The secret is 32 random bytes as hex, encrypted at rest, returned only by the <code>issue()</code>/<code>rotate()</code> call. Rotation moves the current secret to <code>previous_secret</code> with an expiry of <code>website.api.rotation_grace_minutes</code> (default 1440) and <code>acceptedSecrets()</code> returns both while the window is open. Revocation is immediate and final: it clears the previous secret and needs a reason; a revoked credential is never un-revoked.</p>
+
+    <h3>Webhook endpoint, signing secret and rotation</h3>
+    <p><code>ManageWebhookEndpoint</code> owns one <code>WebsiteWebhookEndpoint</code> per website.</p>
+    <ul>
+        <li><code>configure($website, $actor, $url, $acceptUnresolved = false)</code>: refuses a closed website; validates the URL (<code>https</code> only, no embedded credentials, port 443 only, not <code>localhost</code>, <code>*.localhost</code> or <code>*.internal</code>, not a private or reserved IP literal); then resolves the name through <code>OutboundAddressGuard</code>, which refuses any private resolution. A name that does not resolve yet is refused, unless <code>$acceptUnresolved</code> is true. A first call creates the endpoint and returns the secret once; later calls only change the URL and reactivate it (the secret is returned as <code>null</code>). Audit <code>website.webhook_configured</code>.</li>
+        <li><code>rotate($endpoint, $actor)</code>: new secret, old one kept as <code>previous_secret</code> for the same grace window as credentials; audit <code>website.webhook_secret_rotated</code>. Returns the new secret.</li>
+        <li><code>regenerate($website, $actor)</code>: <strong>a secret is available even when connecting skipped the webhook.</strong> If an endpoint exists it rotates it; if none exists (the store was connected before its DNS resolved, or the webhook was never set) it registers one at <code>https://&lt;website host&gt;/webhooks/feriwala</code> and returns the freshly issued secret. This is what the admin page calls through <code>admin.websites.webhook.rotate</code>; the button reads "Rotate" when an endpoint exists and "Generate webhook secret" (<code>website.integration.generate</code>) when it does not (<code>storefront-webhook.tsx</code>).</li>
+        <li><code>disable($endpoint, $actor)</code>: <code>is_active = false</code>; audit <code>website.webhook_disabled</code>. Nothing is queued for an inactive endpoint.</li>
+    </ul>
+    <p>The controller (<code>Admin\WebsiteWebhookController</code>) is the only response that may carry the secret, marked <code>no-store</code>. Hand-typed addresses (<code>admin.websites.webhook.store</code>) pass <code>acceptUnresolved: true</code>, because staff may be ahead of their DNS; every automatic path keeps the strict default.</p>
+    <p>The storefront verifies with <code>WEBHOOK_SECRET</code> and, during a rotation, <code>WEBHOOK_SECRET_PREVIOUS</code>; see the <a href="../storefront-app.html">Storefront app</a> page and the signature scheme in the <a href="../api/storefront-api.html">Storefront API</a> page.</p>
+
+    <h3>Webhook deliveries, retries and the dead letter</h3>
+    <ol>
+        <li><strong>Queue.</strong> A domain action calls <code>PublishWebsiteEvent::handle($website, $event, $data, $subjectType, $subjectId)</code>. Nothing is queued if the website does not <code>acceptsSync()</code> (except <code>website.suspended</code> and <code>website.restored</code>, which must reach a shop that is not served) or has no active endpoint. The payload is <code>{event, occurred_at, website_id (public id), data}</code>. A pending, never-attempted delivery for the same event and subject is updated in place (a burst of five price nudges becomes one delivery). Otherwise a <code>WebhookDelivery</code> is created with a fresh ULID <code>event_id</code>, and <code>DeliverWebhook</code> is dispatched after the surrounding transaction commits, so a rolled-back change never tells a storefront it happened.</li>
+        <li><strong>Attempt.</strong> <code>DeliverWebhook</code> runs on the <code>webhooks</code> queue (<code>WEBSITE_WEBHOOK_QUEUE</code>), <code>$tries = 1</code>, guarded by <code>WithoutOverlapping('webhook-delivery:{id}')</code>. <code>AttemptWebhookDelivery::handle()</code> locks the delivery row, skips one already finished or not yet due, increments <code>attempt</code>, then resolves the endpoint host again, requires every address public and pins the connection to the checked address with <code>CURLOPT_RESOLVE</code> (no DNS rebinding), sets the four <code>X-Feriwala-*</code> headers, posts with a 10-second timeout and <code>allow_redirects = false</code>. A <code>3xx</code> is just a non-2xx answer.</li>
+        <li><strong>Log.</strong> Every attempt writes a <code>WebhookLog</code> with redacted headers (<code>PaymentLogRedactor</code>), the status, duration, the first 500 characters of the response, and the transport error.</li>
+        <li><strong>Outcome.</strong> Any 2xx: <code>delivered</code>, the website's <code>webhook_connected_at</code> and <code>last_synced_at</code> are set, the product named by a product event is marked <code>synced</code> (only if it has not changed since the event was queued), and open failures for that delivery are resolved. Otherwise the delay after attempt <em>n</em> is <code>website.webhooks.backoff[n-1]</code>: 10 s, 30 s, 2 min, 10 min, 30 min, 2 h, 6 h, 12 h. The state becomes <code>retrying</code> with <code>next_retry_at</code>. Once the delays are used up (the ninth attempt failing; the database caps <code>attempt</code> at 9) the state becomes <code>failed</code>, a <code>SyncQueueFailure</code> is created or updated, and the product is marked <code>sync_status = failed</code> with the error.</li>
+        <li><strong>Retry schedule.</strong> The schedule lives in the delivery row, not in delayed queue jobs: a worker restart mid-backoff loses nothing. <code>DispatchDueWebhookRetries</code> runs every minute and queues deliveries whose <code>next_retry_at</code> has passed.</li>
+        <li><strong>Manual retry.</strong> <code>RetryWebhookDelivery</code> (<code>websites.deliveries.retry</code>, partner and admin) accepts only a <code>failed</code> delivery, keeps the <em>same</em> <code>event_id</code> so the storefront recognises it, sets state to <code>retrying</code> with <code>attempt = min(attempt, 8)</code> (so one more attempt, and a failure goes straight back to <code>failed</code>), increments the failure's <code>retry_count</code>, and audits <code>website.webhook_retried</code>.</li>
+        <li><strong>Health.</strong> After every attempt <code>connection_health</code> is recomputed: <code>failing</code> if an unresolved failure from the last day exists; else <code>degraded</code> if any of the last 20 deliveries is <code>retrying</code>; else <code>healthy</code> if any is <code>delivered</code>; otherwise unchanged. A first authenticated API call also lifts <code>unknown</code> to <code>healthy</code> (<code>AuthenticateStorefrontRequest::noteUse</code>).</li>
+    </ol>
+    <p>Events (<code>WebhookEvent</code>): <code>product.published</code>, <code>product.updated</code>, <code>product.unpublished</code>, <code>product.price_changed</code>, <code>inventory.updated</code>, <code>inventory.out_of_stock</code>, <code>category.updated</code>, <code>order.status_changed</code>, <code>order.cancelled</code>, <code>cod.confirmation_required</code>, <code>cod.confirmed</code>, <code>cod.expired</code>, <code>shipment.updated</code>, <code>return.status_changed</code>, <code>refund.completed</code>, <code>website.suspended</code>, <code>website.restored</code>, <code>website.updated</code>. I found emitters for every case except <code>shipment.updated</code> (no <code>WebhookEvent::ShipmentUpdated</code> reference outside the enum; not verified whether it is emitted dynamically). A webhook is a hint, never the source of truth (contract §7.5).</p>
+
+    <h3>Sync queue and catalogue synchronisation</h3>
+    <ul>
+        <li><strong>Real time.</strong> Partner and admin edits call <code>UpdateWebsiteProduct</code>, <code>SetWebsiteProductPublication</code>, <code>ManageWebsiteCategories</code> and so on, each of which marks the selection <code>sync_status = pending</code> and publishes an event.</li>
+        <li><strong>Scheduled.</strong> <code>SyncWebsiteCatalogue::sweep()</code> every 15 minutes re-announces products whose catalogue record changed after the shop last synchronised, and selections whose last event never went out. <code>SyncWebsiteInventory</code> every 5 minutes compares each published product's availability with <code>synced_availability</code> and sends only changes (<code>inventory.updated</code>; <code>inventory.out_of_stock</code> when the last unit goes). <code>AnnouncePromotionWindows</code> every minute sends one <code>product.price_changed</code> per promotion opening or closing, recording the new state with <code>promotion_live</code> under a row lock.</li>
+        <li><strong>Manual.</strong> "Synchronise now" (<code>websites.sync.store</code>) calls <code>SyncWebsiteCatalogue::handle()</code> for everything.</li>
+        <li><strong>The failed-sync queue</strong> is the set of unresolved <code>SyncQueueFailure</code> rows shown on the integration page with a Retry button.</li>
+    </ul>
+
+    <h3>Selections, pricing and publishing</h3>
+    <ol>
+        <li><code>SelectProductForWebsite</code> checks the product is still eligible for the account on the dropshipping channel (<code>ProductEligibility</code>) and creates an <em>unpublished, unpriced</em> selection, pre-filled with the suggested price where one is set. From My Products, <code>SetPurchasedProductOnWebsite</code> selects and publishes in one step.</li>
+        <li><code>UpdateWebsiteProduct</code> resolves the pricing terms with <code>ResolveWebsitePriceRule::for()</code> and checks every figure on every save. The resolver walks outward: a rule naming this product and package, then the product only, then the package only, then the global rule; specificity beats recency, and the latest <code>effective_from</code> wins at one scope. Where a rule states no bound, the product's own <code>minimum_selling_price</code>, <code>maximum_selling_price</code> and <code>suggested_selling_price</code> stand. With nothing configured anywhere a partner may price freely above zero. A locked field is refused, not ignored.</li>
+        <li><code>SetWebsiteProductPublication</code> publishes only when: a price is set, the product is still eligible, the account has not used its publish limit (counted under a lock across all the account's storefronts), and the owner has units left to sell (D34). Unpublishing is always allowed.</li>
+        <li>A product is listed by the API only while it is published on that website, eligible for the owner to sell by dropshipping, and bought by the owner (<code>StorefrontSelections</code>). Every catalogue read starts there, so nothing listed is refused at checkout for being ineligible.</li>
+    </ol>
+
+    <h3>Custom domains and the shared TLS check</h3>
+    <p><code>ManageWebsiteDomainRouting</code> proves a custom domain by DNS TXT. <code>issueVerification()</code> issues <code>banij-verify-&lt;40 random characters&gt;</code> and returns the domain to <code>unverified</code>; <code>verify()</code> reads TXT records at <code>_banij-verify.&lt;domain&gt;</code> through <code>App\Integrations\Dns\Contracts\TxtRecordResolver</code> and moves it to <code>verified</code> only on a match. A failed lookup is a failure with a reason, never a pass and never a demotion. <code>activate()</code> needs a verified or suspended domain whose registration is running on a website that is not closed; <code>suspend()</code> needs an active one and a reason. Steps that change which hosts serve announce <code>website.updated</code>. <code>ResolveWebsiteHost</code> answers "which website does this host belong to": a subdomain of <code>STOREFRONT_DOMAIN</code>, or a verified and active domain whose registration is running, on a website that is not closed. It backs the stated-host check on the API, <code>WebsiteAddresses</code> (whether a customer may be redirected to a return URL), and Caddy's on-demand certificate check (<code>GET /api/internal/tls/authorize</code>, off until <code>STOREFRONT_TLS_ASK_TOKEN</code> is set).</p>
+
+    <h3>Renewals and the daily sweep</h3>
+    <p><code>RenewWebsiteService::renewDomain()/renewHosting()</code> raise the charge at today's price, settle it from the wallet, and only then extend the term from the later of the current expiry and today; the reminder stage is reset and a website in the matching renewal-pending status goes back to <code>active</code>. <code>SweepWebsiteLifecycle</code> asks, per open website: still entitled? If not, a live website enters <code>grace_period</code> for <code>website.grace_days</code> (7) and then <code>package_expired</code>; if entitled again it is restored to <code>active</code>. Does the wallet still meet the agreed minimum (<code>DepositGuard</code>)? Flag or clear <code>low_wallet_balance</code>. Has a domain or hosting term run out? Mark the service <code>expired</code> and move a live website to <code>temporarily_disabled</code>. Is a term inside a reminder stage (<code>website.renewal_reminder_days</code>: 30, 14, 7, 1)? Move an <code>active</code> website to the renewal-pending status and notify the owner once per stage (<code>WebsiteRenewalDue</code>). It is idempotent: every move goes through the status map, and the stored reminder stage prevents a second message.</p>
+
+    <h2>Entry points</h2>
+    <h3>Partner web routes (middleware: <code>auth</code>, <code>business.activated</code>; no prefix; self-scoped through the membership)</h3>
+    <table>
+        <thead><tr><th>Name</th><th>Method and URL</th><th>Controller</th></tr></thead>
+        <tbody>
+        <tr><td><code>websites.index</code>, <code>.create</code>, <code>.store</code>, <code>.show</code></td><td>GET/POST <code>/websites</code>, <code>/websites/create</code>, <code>/websites/{website}</code></td><td><code>Erp\WebsiteController</code></td></tr>
+        <tr><td><code>websites.charges.pay</code></td><td>POST <code>/websites/{website}/charges/{charge}/payment</code></td><td><code>WebsiteController@payCharge</code></td></tr>
+        <tr><td><code>websites.domains.renew</code>, <code>websites.hostings.renew</code></td><td>POST <code>.../domains/{domain}/renewal</code>, <code>.../hostings/{hosting}/renewal</code></td><td><code>WebsiteController</code></td></tr>
+        <tr><td><code>websites.maintenance.update</code></td><td>PUT <code>/websites/{website}/maintenance</code></td><td><code>WebsiteController</code></td></tr>
+        <tr><td><code>websites.settings.edit</code>, <code>.update</code>, <code>.sms-verification.update</code>, <code>.image.update</code>, <code>.image.destroy</code></td><td><code>/websites/{website}/settings[...]</code></td><td><code>Erp\WebsiteSettingsController</code></td></tr>
+        <tr><td><code>websites.products.index</code>, <code>.store</code>, <code>.update</code>, <code>.publication.update</code>, <code>.destroy</code></td><td><code>/websites/{website}/products[/{selection}[/publication]]</code></td><td><code>Erp\WebsiteProductController</code></td></tr>
+        <tr><td><code>websites.categories.index</code>, <code>.store</code>, <code>.reorder</code>, <code>.update</code>, <code>.destroy</code></td><td><code>/websites/{website}/categories[...]</code></td><td><code>Erp\WebsiteCategoryController</code></td></tr>
+        <tr><td><code>websites.orders.*</code></td><td><code>/websites/{website}/orders[...]</code>: list, detail, cancellation, returns</td><td><code>Erp\WebsiteOrderController</code></td></tr>
+        <tr><td><code>websites.integration.show</code>, <code>websites.deliveries.retry</code>, <code>websites.sync.store</code></td><td>GET <code>/websites/{website}/integration</code>; POST <code>.../deliveries/{delivery}/retry</code>; POST <code>.../sync</code></td><td><code>Erp\WebsiteIntegrationController</code></td></tr>
+        <tr><td><code>catalog.mine.websites.update</code></td><td>PUT <code>/my-products/{product}/websites/{website}</code></td><td><code>MyProductWebsiteController</code></td></tr>
+        </tbody>
+    </table>
+    <p>The partner never sees credentials or the webhook secret. The integration page shows the address, the secret's last four characters, delivery records and recent API calls.</p>
+
+    <h3>Admin routes (prefix <code>/admin</code>, names <code>admin.*</code>, middleware <code>auth</code>, <code>noindex</code>, <code>two-factor</code>)</h3>
+    <table>
+        <thead><tr><th>Name</th><th>Method and URL</th><th>Notes</th></tr></thead>
+        <tbody>
+        <tr><td><code>admin.websites.index</code>, <code>.create</code>, <code>.store</code>, <code>.show</code>, <code>.destroy</code></td><td><code>/admin/websites[...]</code></td><td>Staff stand a website up for a partner (<code>provision</code>) and close one (<code>destroy</code>).</td></tr>
+        <tr><td><code>admin.websites.status.store</code></td><td>POST <code>.../status</code></td><td>Manual status move through <code>MoveWebsiteStatus</code>.</td></tr>
+        <tr><td><code>admin.websites.domains.store</code>, <code>hostings.store</code>, <code>details.update</code>, <code>domains.update</code>, <code>hostings.update</code></td><td>record and correct domain, hosting, details</td><td><code>website.edit</code>.</td></tr>
+        <tr><td><code>admin.websites.domains.verification.store</code>, <code>.verification.check</code>, <code>.activation.store</code>, <code>.suspension.store</code></td><td>POST <code>.../domains/{domain}/verification</code>, <code>/verification/check</code>, <code>/activation</code>, <code>/suspension</code></td><td>Custom-domain routing.</td></tr>
+        <tr><td><code>admin.websites.connection</code>, <code>.connection.rotation</code>, <code>.connection.disconnection</code></td><td>POST <code>.../connection</code>, <code>/connection/rotation</code>, <code>/connection/disconnection</code></td><td>One-step connection. <code>website.manage_integrations</code>.</td></tr>
+        <tr><td><code>admin.websites.credentials.store</code>, <code>.credentials.rotate</code>, <code>.credentials.revoke</code></td><td>POST <code>.../credentials[/{credential}/rotation|/revocation]</code></td><td>Hand-made credential with chosen scopes. The response's <code>env</code> block uses <code>StorefrontEnvironmentBlock</code> names (see Gotchas).</td></tr>
+        <tr><td><code>admin.websites.webhook.store</code>, <code>.webhook.rotate</code>, <code>.webhook.disable</code></td><td>PUT <code>.../webhook</code>, POST <code>.../webhook/rotation</code>, DELETE <code>.../webhook</code></td><td><code>rotate</code> calls <code>regenerate()</code>.</td></tr>
+        <tr><td><code>admin.websites.settings.*</code>, <code>.products.*</code>, <code>.categories.*</code>, <code>.images.*</code></td><td><code>/admin/websites/{website}/...</code></td><td>Staff edit a partner's storefront with the same Actions; paying a charge is deliberately not here.</td></tr>
+        <tr><td><code>admin.website-pricing.index</code>, <code>.store</code>, <code>.close</code></td><td><code>/admin/website-pricing[/{rule}]</code></td><td>Price rules. <code>website.manage_settings</code>.</td></tr>
+        </tbody>
+    </table>
+
+    <h3>Storefront API (<code>/api/storefront/v1</code>)</h3>
+    <p>Routes, scopes and middleware are listed in the <a href="../api/storefront-api.html">Storefront API</a> page. The chain is <code>storefront.log</code>, <code>storefront.auth</code>, <code>storefront.host</code>, then per group <code>storefront.rate:{read|write|other}</code>, <code>storefront.scope:{scope}</code> and, on writes, <code>storefront.idempotent</code>. No route names a website: the credential does.</p>
+
+    <h3>Scheduled tasks (<code>routes/console.php</code>)</h3>
+    <table>
+        <thead><tr><th>Name</th><th>Cadence</th><th>Action</th></tr></thead>
+        <tbody>
+        <tr><td><code>website-lifecycle-sweep</code></td><td>daily 02:15 in <code>app.timezone</code>, one server, no overlap</td><td><code>SweepWebsiteLifecycle</code></td></tr>
+        <tr><td><code>website-webhook-retries</code></td><td>every minute</td><td><code>DispatchDueWebhookRetries</code></td></tr>
+        <tr><td><code>website-inventory-sync</code></td><td>every 5 minutes</td><td><code>SyncWebsiteInventory</code></td></tr>
+        <tr><td><code>website-catalogue-sync</code></td><td>every 15 minutes</td><td><code>SyncWebsiteCatalogue::sweep()</code></td></tr>
+        <tr><td><code>website-best-sellers</code></td><td>every 15 minutes</td><td><code>RefreshWebsiteBestSellers</code></td></tr>
+        <tr><td><code>website-promotion-windows</code></td><td>every minute</td><td><code>AnnouncePromotionWindows</code></td></tr>
+        <tr><td><code>storefront-request-prune</code></td><td>daily 03:40</td><td><code>PruneStorefrontRequests</code></td></tr>
+        </tbody>
+    </table>
+    <p>All run with <code>onOneServer()</code> and <code>withoutOverlapping()</code>.</p>
+
+    <h2>Permissions &amp; scoping</h2>
+    <table>
+        <thead><tr><th>Ability (<code>WebsitePolicy</code>)</th><th>Who</th></tr></thead>
+        <tbody>
+        <tr><td><code>viewAny</code></td><td>Holders of <code>website.view</code> (platform staff).</td></tr>
+        <tr><td><code>view</code></td><td>The owning account, or <code>website.view</code>.</td></tr>
+        <tr><td><code>create</code></td><td>A person who "runs the business": the account role holds <code>AccountPermission::UpdateAccount</code>.</td></tr>
+        <tr><td><code>provision</code>, <code>administer</code></td><td><code>website.edit</code>.</td></tr>
+        <tr><td><code>manage</code></td><td>Owning account running the business, or <code>administer</code>.</td></tr>
+        <tr><td><code>pay</code></td><td>Owning account running the business only. Deliberately not platform staff: taking money out of a partner's wallet is the partner's own act.</td></tr>
+        <tr><td><code>manageIntegration</code></td><td><code>website.manage_integrations</code> only (Super Admin by default). Never the owner: the owner never handles a raw secret.</td></tr>
+        </tbody>
+    </table>
+    <p><code>WebsitePolicy::isWebsiteAdministrationAbility()</code> is what the ordered <code>Gate::before</code> uses to refuse <code>website.*</code> abilities to a business identity whatever it holds. Self-scoping is a query concern: partner routes find a website among the signed-in account's (<code>Website::forAccount()</code>) or not at all; another account's website is a 404. Staff controllers reuse the same Actions through <code>ResolvesWebsiteForStaff</code>. The API is scoped by the credential, never by a parameter. The same mobile number on two websites is two <code>WebsiteCustomer</code> rows.</p>
+
+    <h2>Money, ledger &amp; audit effects</h2>
+    <ul>
+        <li>Website fees are snapshotted at request time (<code>setup_fee</code>, <code>domain_fee</code>, <code>hosting_fee</code>, <code>required_deposit</code>, <code>minimum_balance</code>) so a later fee-rule change never re-prices an existing website. Renewals are priced at the renewal date.</li>
+        <li>Charges are paid only from the wallet, never by a gateway: <code>WalletService::debit()</code> with a ledger type from <code>WebsiteChargeType::ledgerType()</code>, idempotency key <code>website-charge:{public_id}</code>, inside <code>DB::transaction</code> and a <code>DistributedLock</code> (<code>website:charge:{id}</code>, TTL 15 s, wait 5 s). The charge's unique <code>wallet_transaction_id</code> means one transaction can settle one charge.</li>
+        <li>Prices shown to the storefront are the website's own selling price. Wholesale price, cost and margin never appear in any payload or error.</li>
+        <li>Audit actions (module <code>website</code>): <code>website.created</code>, <code>website.status_changed</code>, <code>website.store_connected</code>, <code>website.store_disconnected</code>, <code>website.credential_issued</code>, <code>website.credential_rotated</code>, <code>website.credential_revoked</code>, <code>website.webhook_configured</code>, <code>website.webhook_secret_rotated</code>, <code>website.webhook_disabled</code>, <code>website.webhook_retried</code>, <code>website.domain_registered</code>, <code>website.hosting_started</code>, <code>website.domain_verification_issued</code>, <code>website.domain_verified</code>, <code>website.domain_activated</code>, <code>website.domain_suspended</code>, <code>website.charge_paid</code>. Secrets are never written to audit rows: only the key id, the hint and the expiry. Credential and webhook entries use <code>PermissionAction::ManageIntegrations->isSensitive()</code>; the connect and disconnect entries are marked sensitive.</li>
+    </ul>
+
+    <h2>Configuration</h2>
+    <table>
+        <thead><tr><th>Key</th><th>Env</th><th>Meaning</th></tr></thead>
+        <tbody>
+        <tr><td><code>website.storefront_domain</code></td><td><code>STOREFRONT_DOMAIN</code> (default <code>feriwala.shop</code>)</td><td>Every website's <code>{subdomain}.{domain}</code> address.</td></tr>
+        <tr><td><code>website.allow_local_addresses</code></td><td><code>WEBSITE_ALLOW_LOCAL_ADDRESSES</code> (default: true when <code>APP_ENV=local</code>)</td><td>Accept <code>http://127.0.0.1:8001</code>-style addresses on the setup form and in <code>ConnectStore</code>, and let the storefront API be called over plain http. Never on in production.</td></tr>
+        <tr><td><code>website.reserved_subdomains</code></td><td>none</td><td>Names nobody may claim (<code>www</code>, <code>api</code>, <code>admin</code>, ...).</td></tr>
+        <tr><td><code>website.grace_days</code></td><td>none (7)</td><td>Grace period after a package lapses.</td></tr>
+        <tr><td><code>website.renewal_reminder_days</code></td><td>none (30, 14, 7, 1)</td><td>Renewal reminder stages.</td></tr>
+        <tr><td><code>website.term_months</code></td><td>none (12)</td><td>Default term in months.</td></tr>
+        <tr><td><code>website.api.clock_skew_seconds</code>, <code>nonce_ttl_seconds</code></td><td>none (300, 600)</td><td>Frozen with the contract; read, not tuned.</td></tr>
+        <tr><td><code>website.api.rotation_grace_minutes</code></td><td><code>STOREFRONT_ROTATION_GRACE_MINUTES</code> (1440)</td><td>How long a rotated credential or webhook secret keeps verifying.</td></tr>
+        <tr><td><code>website.api.default_page_size</code>, <code>max_page_size</code></td><td>none (50, 200)</td><td>Cursor page sizes.</td></tr>
+        <tr><td><code>website.api.rate_limits</code></td><td>none (<code>read</code> 600, <code>write</code> 120, <code>other</code> 300 per minute)</td><td>Per credential and per website.</td></tr>
+        <tr><td><code>website.webhooks.queue</code></td><td><code>WEBSITE_WEBHOOK_QUEUE</code> (<code>webhooks</code>)</td><td>Queue name for <code>DeliverWebhook</code>. A worker must listen on it.</td></tr>
+        <tr><td><code>website.webhooks.timeout_seconds</code>, <code>backoff</code></td><td>none (10; 10, 30, 120, 600, 1800, 7200, 21600, 43200)</td><td>Frozen with the contract.</td></tr>
+        <tr><td><code>website.tls.ask_token</code>, <code>ask_allowed_ips</code>, <code>ask_rate_limit</code></td><td><code>STOREFRONT_TLS_ASK_TOKEN</code>, <code>STOREFRONT_TLS_ASK_ALLOWED_IPS</code> (comma-separated IPs or CIDRs), none (120)</td><td>Caddy's certificate pre-issue check; answers nothing until a token is set.</td></tr>
+        </tbody>
+    </table>
+    <p>Settings rows read by the module: <code>orders.website_sms_verification_required</code> (platform SMS requirement, via <code>CheckoutVerification</code>), a platform cash-on-delivery default (via <code>CodTerms</code>, overridden by <code>websites.payment_config</code>).</p>
+
+    <h2>Rules, invariants &amp; gotchas</h2>
+    <div class="callout callout-rule"><p><strong>Rule.</strong> A secret is shown once and never stored in the clear, put in the session, a prop, a flash, the audit trail or a log. A screen that can show a secret again is a screen that can leak it again. The partner sees only the last four characters.</p></div>
+    <div class="callout callout-warn"><p><strong>Gotcha: a webhook secret can exist without a working webhook.</strong> <code>ConnectStore</code> skips the webhook when the storefront is not reachable yet, and always skips it for a local address. Do not assume a connected store has an endpoint. Use "Generate webhook secret" (<code>ManageWebhookEndpoint::regenerate</code>) once the address resolves.</p></div>
+    <div class="callout callout-note"><p><strong>One <code>.env</code> vocabulary.</strong> Both <code>ConnectedStore::env()</code> (the one-step connect) and <code>StorefrontEnvironmentBlock</code> (the hand-made credential endpoint, <code>admin.websites.credentials.store</code>) emit <code>ERP_BASE_URL</code>, <code>STORE_ID</code> and <code>STORE_TOKEN</code>, which is what <code>storefront/config/erp.php</code> reads. <code>StorefrontEnvironmentBlock</code> used to emit <code>BANIJ_*</code> names that the storefront never read; the constants and the tests that pin them were changed together.</p></div>
+    <div class="callout callout-warn"><p><strong>Gotcha: maintenance still authenticates.</strong> <code>AuthenticateStorefrontRequest::websiteIsServing()</code> accepts live statuses plus <code>development</code>, <code>api_connection_pending</code> and <code>maintenance</code>. Credentials of a <code>suspended</code>, <code>temporarily_disabled</code>, <code>package_expired</code> or <code>closed</code> website get <code>403 website_unavailable</code>. But <code>PublishWebsiteEvent</code> treats <code>maintenance</code> and <code>api_connection_pending</code> as sync-accepting while <code>development</code> is not, so a website in <code>development</code> receives no webhooks even though it may call the API.</p></div>
+    <div class="callout callout-note"><p><strong>Intended.</strong> A website that is already in the target status is returned unchanged by <code>MoveWebsiteStatus</code>, not refused: the daily sweep would otherwise refuse every website it already fixed.</p></div>
+    <ul>
+        <li>The retry schedule is data in <code>webhook_deliveries</code>, not delayed queue jobs. A manual retry reuses the <code>event_id</code>; consumers deduplicate on it. Delivery is at-least-once and unordered.</li>
+        <li>Webhook address rules are applied twice: when the endpoint is saved and before every attempt. A name that later resolves to a private address is refused at send time with <code>AttemptWebhookDelivery::ADDRESS_REFUSED</code>; the partner reads a translated summary (<code>AttemptWebhookDelivery::describe()</code>), never the transport error, which names internal hosts and stays in <code>webhook_logs</code>.</li>
+        <li>Idempotent replays: a stored answer is returned byte for byte with <code>Idempotent-Replay: true</code>; <code>5xx</code>, <code>401</code>, <code>403</code> and <code>429</code> answers are not stored. The request fingerprint is an HMAC keyed with <code>app.key</code>, so a one-time confirmation code in a body cannot be recovered from the table.</li>
+        <li>Only admins create products. The website Actions have no route into the catalogue (<code>ManageWebsiteBranding</code> says so in its docblock, §16.3).</li>
+        <li>Closing a website cancels its domains and frees the name; the address stays on the closed website as <code>requested_address</code>.</li>
+        <li>A non-resolving webhook host is refused for automatic paths on purpose. Do not relax <code>OutboundAddressGuard</code> to "just register it"; it exists to stop the ERP calling its own network.</li>
+        <li>Legacy columns <code>websites.lists_whole_catalogue</code> and <code>website_products.auto_listed</code> are unused and slated for a cleanup migration.</li>
+    </ul>
+
+    <h2>How to&hellip;</h2>
+    <h3>Add a webhook event</h3>
+    <ol>
+        <li>Add a case to <code>App\Domain\Website\Enums\WebhookEvent</code>. It is additive under contract §8 (a storefront must tolerate unknown events); add it to <code>concernsProduct()</code> only if it decides a selection's sync status.</li>
+        <li>Call <code>PublishWebsiteEvent::handle($website, WebhookEvent::X, $data, $subjectType, $subjectId)</code> from the Action that makes the change, inside its transaction. Pass a subject so duplicates coalesce. Never put a cost or margin in <code>$data</code>.</li>
+        <li>Add a row to the events table in <code>requirements/05-storefront-api-contract.md</code> (§7.1) and to the OpenAPI description source <code>docs/api/storefront.md</code> if consumers must know. Make the storefront app tolerate it (its <code>Webhooks::apply()</code> ignores unknown events).</li>
+        <li>Test with <code>Http::fake()</code> against <code>WebhookDeliveryTest</code>'s pattern; fake DNS (see Testing).</li>
+    </ol>
+    <h3>Add a credential scope</h3>
+    <ol>
+        <li>Add a case to <code>CredentialScope</code> with a <code>label()</code>; decide whether any <code>CredentialPreset</code> includes it.</li>
+        <li>Guard the new routes with <code>storefront.scope:&lt;value&gt;</code> in <code>routes/api.php</code>. Update the scope table in the contract (§3.4); a new scope is additive, a removed one is breaking (needs v2).</li>
+        <li>The <code>website_credentials.scopes</code> column is a JSON array that the database only checks to be an array (the scope values are not enumerated in a CHECK), so no migration should be needed; existing credentials simply lack the scope.</li>
+        <li>Add the lang strings for the label in <code>lang/en/website.php</code> and <code>lang/bn/website.php</code> if it is shown in a screen.</li>
+    </ol>
+    <h3>Add a status or a legal move</h3>
+    <ol>
+        <li>Edit <code>WebsiteStatus</code>: the case, <code>transitionsTo()</code>, and <code>isLive()</code>, <code>isBeingBuilt()</code>, <code>acceptsSync()</code> as appropriate.</li>
+        <li>The <code>websites.status</code> and history CHECK constraints are built from <code>WebsiteStatus::values()</code> at migration time, so add a migration that replaces them (look at <code>2026_09_28_100000_create_websites.php</code> and <code>..._110000_create_website_status_history.php</code>).</li>
+        <li>Add the translated label under <code>website.statuses</code> in both language files and a pill tone in the frontend.</li>
+        <li>Make the move through <code>MoveWebsiteStatus</code> only; add a <code>WebsiteStatusReason</code> case if the sweep or billing makes it.</li>
+    </ol>
+    <h3>Make a change visible to storefronts</h3>
+    <ol>
+        <li>If it changes how a website is presented (branding, hosts, payment methods) call <code>AnnounceWebsiteUpdated</code>; its payload is intentionally minimal, so also expose the data through <code>GET /site</code> (<code>SiteController</code>).</li>
+        <li>If it changes a product, mark the selection <code>pending</code> and publish through <code>SyncWebsiteProduct</code>.</li>
+    </ol>
+    <h3>Connect a storefront on your own machine</h3>
+    <ol>
+        <li>Run the ERP with <code>APP_ENV=local</code> (or set <code>WEBSITE_ALLOW_LOCAL_ADDRESSES=true</code>) and run the storefront with <code>php artisan serve --port=8001</code>.</li>
+        <li>In Admin, Websites, open the website, "Connect the store", and enter <code>http://127.0.0.1:8001</code>. No webhook is registered for a local address.</li>
+        <li>Paste the shown <code>ERP_BASE_URL</code>, <code>STORE_ID</code>, <code>STORE_TOKEN</code> into the storefront's <code>.env</code> and run <code>php artisan storefront:doctor</code>. See <a href="../storefront-app.html">Storefront app</a>.</li>
+    </ol>
+
+    <h2>Testing</h2>
+    <table>
+        <thead><tr><th>Area</th><th>Files</th></tr></thead>
+        <tbody>
+        <tr><td>Lifecycle, status, provisioning, billing</td><td><code>tests/Feature/Website/</code>: <code>WebsiteStatusTest</code>, <code>WebsiteLifecycleTest</code>, <code>WebsiteProvisioningTest</code>, <code>AdminWebsiteProvisioningTest</code>, <code>WebsiteAllocationTest</code>, <code>WebsiteServiceRecordTest</code>, <code>AdminEditsWebsiteRecordsTest</code>, <code>AdminEditsPartnerWebsiteTest</code>, <code>WebsiteDomainRoutingTest</code>, <code>LocalWebsiteAddressTest</code>, <code>WebsitePolicyTest</code></td></tr>
+        <tr><td>Catalogue, promotions, checkout options</td><td><code>WebsiteProductSelectionTest</code>, <code>WebsitePromotionWindowTest</code>, <code>WebsiteCheckoutOptionsTest</code>, <code>WebsiteManagementTest</code>, <code>WebsiteOrderScreensTest</code></td></tr>
+        <tr><td>API, credentials, webhooks</td><td><code>tests/Feature/WebsiteApi/</code>: <code>StorefrontAuthenticationTest</code>, <code>StorefrontIsolationTest</code>, <code>ConnectStoreTest</code> (one-step connect, rotate, disconnect), <code>WebsiteCredentialManagementTest</code>, <code>WebhookDeliveryTest</code>, <code>WebhookAddressGuardTest</code>, <code>WebhookAddressRefusalTest</code>, <code>WebsiteUpdatedEventTest</code>, <code>StorefrontCatalogueTest</code>, <code>StorefrontSiteTest</code>, <code>WebsiteOrderIntakeTest</code>, <code>WebsiteCodOrderTest</code>, <code>WebsiteReturnApiTest</code> and others</td></tr>
+        </tbody>
+    </table>
+    <pre><code>vendor/bin/pest tests/Feature/Website
+vendor/bin/pest tests/Feature/WebsiteApi
+vendor/bin/pest --group=website-api</code></pre>
+    <p>Run one suite at a time, in its own schema if another run is in progress (see <a href="../guide/testing.html">Testing</a>). Outbound HTTP is faked with <code>Http::fake()</code>. The DNS guard is faked by binding <code>App\Integrations\Store\Contracts\HostResolver</code> to an anonymous class returning a public address (see <code>externalStoreFakeDns()</code> in <code>tests/Pest.php</code> and <code>webhookRefusalNoDns()</code> in <code>WebhookAddressRefusalTest.php</code>). Test helpers are global in Pest, so prefix any you add.</p>
+
+    <h2>Related modules</h2>
+    <ul>
+        <li><a href="../api/storefront-api.html">Storefront API</a> and <a href="../storefront-app.html">Storefront app</a>: the other two sides of the integration.</li>
+        <li><a href="../integrations/overview.html">Integrations</a>: <code>OutboundAddressGuard</code> and the DNS resolver.</li>
+        <li><a href="external-store.html">External store</a>: the separate, read-only mirror of stores a partner runs elsewhere.</li>
+        <li><a href="package.html">Package</a>: entitlement and the website limit. <a href="wallet.html">Wallet</a> and <a href="billing.html">Billing</a>: charge settlement and fee rules.</li>
+        <li><a href="order.html">Order</a>: website orders, cash-on-delivery confirmation, returns. <a href="catalog.html">Catalog</a>: the central products selections point at.</li>
+        <li><a href="access.html">Access</a>, <a href="audit.html">Audit</a>, <a href="notification.html">Notification</a>.</li>
+    </ul>
+</main>
+</body>
+</html>

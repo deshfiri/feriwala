@@ -1,0 +1,459 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Wallet and ledger</title>
+    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+    <script src="../assets/docs.js"></script>
+</head>
+<body>
+<main id="doc">
+    <h1>Wallet and ledger</h1>
+    <p class="lead">The wallet holds an account's money. Every change to it goes through one service, <code>WalletService</code>, which writes an immutable ledger entry in the same database transaction. This page covers wallets, typed balances (platform credit and withdrawable), the ledger, holds and reservations, deposit rules and low-balance enforcement, plus the shared <code>Concurrency</code> and <code>Idempotency</code> helpers that financial code leans on.</p>
+
+    <div class="callout callout-rule"><p><strong>Rule.</strong> Nothing writes a wallet balance column outside <code>App\Domain\Wallet\WalletService</code>. Ledger entries are never updated or deleted: a mistake is answered by a new correcting entry. Every posting runs under a row lock inside a transaction and is idempotent on a key. Money is an exact decimal Taka string (<code>Money</code>), never a float, never poisha. See <a href="billing.html#money-api">the Money API reference</a>.</p></div>
+
+    <h2>Purpose</h2>
+    <p>Every active business account has exactly one wallet (§23, §24). It is where a partner's earnings land (sales, commission, COD collection), where top-ups and deposits are held, where service charges, returns and damage costs are debited, and where withdrawals are reserved and paid from. The wallet belongs to the business account, not to the person who clicked (D1, D23).</p>
+    <p>Who uses it:</p>
+    <ul>
+        <li><strong>Client / Partner</strong> reads their own wallet and statement, tops it up through a payment gateway, and withdraws from it (see <a href="withdrawal.html">Withdrawal</a>).</li>
+        <li><strong>Admin staff</strong> view any wallet, post manual adjustments, reverse postings, convert platform credit to withdrawable money, and set deposit rules.</li>
+        <li><strong>The system</strong> credits settled gateway payments, posts referral rewards, charges services, and runs the daily balance check and ledger integrity check.</li>
+    </ul>
+    <p>Specification sections: §23 (wallet and ledger), §23.1 (transaction types), §23.2 (immutable ledger entries), §23.3 (transaction statuses), §24.1 to §24.4 (deposit, minimum balance, restrictions, refundability), §26.3 (what a payment is for), §28.1 (reconciliation), §31.3 (self-scoping), §36.1 (money and concurrency). Decisions: D4 and D26 (currency, flat Taka), D17 (refundability), D24 (referral rewards), D25 (Supplier wallets are a separate domain), D36 (Partner-gateway receivable debit). The code calls the typed-balance decision "D-new"; it has no numbered entry in <code>requirements/04-decisions.md</code> that I verified.</p>
+    <p>Supplier wallets are a different model (<code>App\Domain\Supplier\Models\SupplierWallet</code>, <code>SupplierWalletService</code>) and are covered on the <a href="supplier.html">Supplier</a> page.</p>
+
+    <h2>Where it lives</h2>
+    <table>
+        <thead><tr><th>Path</th><th>Role</th></tr></thead>
+        <tbody>
+            <tr><td><code>app/Domain/Wallet/WalletService.php</code></td><td>The only writer of balances. credit, debit, hold, reserve, release, capture, convertToWithdrawable.</td></tr>
+            <tr><td><code>app/Domain/Wallet/Models/</code></td><td><code>Wallet</code>, <code>WalletTransaction</code>, <code>LedgerEntry</code>, <code>WalletTransactionEvent</code>, <code>DepositRule</code>, <code>DepositRuleChange</code>, <code>WalletDepositObligation</code>, <code>WalletRestriction</code>.</td></tr>
+            <tr><td><code>app/Domain/Wallet/Enums/</code></td><td><code>LedgerTransactionType</code>, <code>LedgerDirection</code>, <code>BalanceType</code>, <code>WalletTransactionStatus</code>, <code>WalletBalanceState</code>, <code>WalletRestrictionStage</code>, <code>DepositFrequency</code>, <code>DepositRefundability</code>.</td></tr>
+            <tr><td><code>app/Domain/Wallet/Actions/</code></td><td>Opening, top-up, crediting, correcting, converting, deposit rules, balance evaluation and enforcement, restoration, integrity check, statement export.</td></tr>
+            <tr><td><code>app/Domain/Wallet/Queries/</code></td><td><code>WalletStatement</code> (one statement shape for member, admin and CSV), <code>ResolveDepositRule</code>.</td></tr>
+            <tr><td><code>app/Domain/Wallet/Data/</code></td><td><code>PostingContext</code> (everything a posting needs besides the amount), <code>TopUpPlan</code>.</td></tr>
+            <tr><td><code>app/Domain/Wallet/Policies/WalletPolicy.php</code></td><td>Static permission checks (not a registered model policy).</td></tr>
+            <tr><td><code>app/Domain/Wallet/DepositGuard.php</code>, <code>WalletPaymentMethod.php</code>, <code>AccountStatusRoute.php</code></td><td>"May this service be granted?", "pay an order from the wallet" offer, and the legal path through account statuses for restrictions.</td></tr>
+            <tr><td><code>app/Domain/Wallet/Events/WalletCredited.php</code></td><td>Dispatched after commit when real value arrives. Listener: <code>app/Listeners/ReleasePartnerReceivablesOnWalletCredit.php</code>.</td></tr>
+            <tr><td><code>app/Support/Money/</code>, <code>app/Support/Concurrency/</code>, <code>app/Support/Idempotency/</code></td><td>Money value object, distributed lock, cache-backed idempotency. Covered below and on the Billing page.</td></tr>
+            <tr><td><code>app/Http/Controllers/Erp/WalletController.php</code>, <code>WalletTopUpController.php</code></td><td>The account's own wallet, statement, CSV export, top-up.</td></tr>
+            <tr><td><code>app/Http/Controllers/Admin/WalletController.php</code>, <code>WalletAdjustmentController.php</code>, <code>WalletConversionController.php</code>, <code>WalletCreditRetryController.php</code>, <code>DepositRuleController.php</code></td><td>Staff views and money-moving staff actions.</td></tr>
+            <tr><td><code>app/Http/Controllers/Api/Mobile/V1/Wallet/</code>, <code>.../WalletTopups/</code></td><td>Mobile API for the same reads and top-up.</td></tr>
+            <tr><td><code>app/Console/Commands/VerifyTypedWalletBalancesCommand.php</code></td><td>Deployment check: <code>wallets:verify-typed-balances</code>.</td></tr>
+            <tr><td><code>resources/js/pages/wallet/</code> (<code>show</code>, <code>transaction</code>, <code>top-up</code>); <code>resources/js/pages/admin/wallets/</code> (<code>index</code>, <code>show</code>, <code>transaction</code>, adjust / convert / reverse dialogs); <code>resources/js/pages/admin/deposit-rules.tsx</code></td><td>Inertia pages.</td></tr>
+            <tr><td><code>lang/en/wallet.php</code>, <code>lang/bn/wallet.php</code></td><td>User-facing strings (the enum labels for ledger types live in the enum itself).</td></tr>
+            <tr><td><code>database/migrations/2026_09_16_*</code> to <code>2026_09_18_*</code>, <code>2026_11_14_*</code></td><td>wallets, ledger_entries (+ append-only trigger), wallet_transactions, wallet_transaction_events, deposit_rules, deposit_rule_changes, wallet_deposit_obligations, wallet_restrictions, typed balances and typed reservations.</td></tr>
+            <tr><td><code>tests/Feature/Wallet/</code>, <code>tests/Feature/Concurrency/WalletConcurrencyTest.php</code>, <code>tests/Unit/Support/</code></td><td>See the Testing section.</td></tr>
+        </tbody>
+    </table>
+
+    <h2>Key terms</h2>
+    <dl>
+        <dt>Wallet</dt>
+        <dd>One row per business account (<code>wallets.business_account_id</code> is unique). Stores primitive buckets only; "usable" and "withdrawable" are computed in <code>Wallet</code>, never stored.</dd>
+        <dt>Total</dt>
+        <dd>Everything the account holds. Every other bucket is a claim against it.</dd>
+        <dt>Platform credit</dt>
+        <dd>Money spendable inside Banij and never withdrawable: top-ups, deposits, referral and joining rewards, promotional credit. The only stored split (<code>wallets.platform_credit</code>).</dd>
+        <dt>Withdrawable</dt>
+        <dd>Everything that is not platform credit: sales earnings, commission, COD collection. Derived as <code>total - platform_credit</code>.</dd>
+        <dt>Reserved</dt>
+        <dd>Money set aside against a coming charge (a withdrawal request is the main case). Records how much of it was platform credit (<code>reserved_platform_credit</code>).</dd>
+        <dt>Hold</dt>
+        <dd>Money frozen under review. Records its platform-credit part (<code>hold_platform_credit</code>).</dd>
+        <dt>Pending</dt>
+        <dd>A bucket for money credited but not yet cleared. See the gotcha below: nothing in the code writes it today.</dd>
+        <dt>Minimum balance, required deposit</dt>
+        <dd>Obligations captured from a deposit rule. Both stand against the wallet; neither can be withdrawn. The deposit can be spent on services only when <code>deposit_usable_for_charges</code> is true.</dd>
+        <dt>Claim</dt>
+        <dd>A <code>WalletTransaction</code> whose status is the life of a reservation or hold: <code>pending</code> (reserved) or <code>on_hold</code>. Released (<code>cancelled</code>) or captured (<code>settled</code>) exactly once.</dd>
+        <dt>Ledger entry</dt>
+        <dd>The frozen record of value that moved. One row per kind of money moved; written once.</dd>
+        <dt>Posting context</dt>
+        <dd><code>PostingContext</code>: source, description, idempotency key, reason, internal note, actor, payment id and so on.</dd>
+        <dt>Obligation (captured)</dt>
+        <dd>A <code>WalletDepositObligation</code> row: the figures from the deposit rule as they were when captured. Restrictions read these, not the live rule.</dd>
+        <dt>Restriction stage</dt>
+        <dd>One of the graded §24.3 consequences of a short wallet (notice, services restricted, website setup paused, website disabled, account restricted, account disabled).</dd>
+    </dl>
+
+    <h2>Data model</h2>
+    <h3>wallets (<code>Wallet</code>)</h3>
+    <table>
+        <thead><tr><th>Column</th><th>Meaning</th></tr></thead>
+        <tbody>
+            <tr><td><code>public_id</code> (ULID, <code>HasPublicId</code>), <code>business_account_id</code> (unique), <code>currency_code</code></td><td>Identity. No database id appears in a URL; wallets are reached through the signed-in account.</td></tr>
+            <tr><td><code>total</code>, <code>platform_credit</code></td><td>Everything held, and the platform-credit part of it.</td></tr>
+            <tr><td><code>reserved</code>, <code>reserved_platform_credit</code>, <code>hold</code>, <code>hold_platform_credit</code></td><td>Claims and the platform-credit part of each. The wallet-level counters must equal the sum over open claims (checked by the integrity sweep).</td></tr>
+            <tr><td><code>pending</code>, <code>cod_receivable</code></td><td>Read and zero-initialised only; see gotchas.</td></tr>
+            <tr><td><code>required_deposit</code>, <code>minimum_balance</code>, <code>deposit_usable_for_charges</code>, <code>deposit_rule_id</code>, <code>obligation_captured_at</code>, <code>deposit_due_at</code></td><td>Captured obligation (written by <code>CaptureDepositObligation</code>).</td></tr>
+            <tr><td><code>balance_state</code> (<code>WalletBalanceState</code>), <code>balance_checked_at</code>, <code>shortfall_since</code>, <code>grace_ends_at</code></td><td>State from the daily balance check and the stamped grace deadline.</td></tr>
+        </tbody>
+    </table>
+    <p>All money columns are <code>NUMERIC(19,2)</code> cast with <code>MoneyCast</code> (currency read from <code>currency_code</code>). The model only reads: <code>usableBalance()</code>, <code>availableForWithdrawal()</code>, <code>platformCreditAvailable()</code>, <code>allocateSpend()</code>, <code>toBalances()</code> and the derived holdings.</p>
+
+    <h3>The formulas (do not shortcut them)</h3>
+    <p>From <code>.ai/rules/wallet.md</code> and <code>Wallet.php</code>:</p>
+    <ul>
+        <li><strong>Available to spend</strong> (<code>usableBalance()</code>) = <code>total - reserved - hold - pending - minimum_balance - (required_deposit if the deposit may not cover charges)</code>, floored at 0.</li>
+        <li><strong>Platform credit available</strong> = <code>min(max(0, platform_credit - reserved_pc - hold_pc), usableBalance())</code>.</li>
+        <li><strong>Withdrawable available</strong> (<code>availableForWithdrawal()</code>) = <code>max(0, (total - platform_credit) - reserved_w - hold_w - pending - minimum_balance - required_deposit)</code>, where <code>reserved_w = reserved - reserved_platform_credit</code> and likewise for hold.</li>
+    </ul>
+    <p>Never compute withdrawable as <code>total - platform_credit</code>: that is a holding, and it still contains reserved, held and pending money. Pending, minimum balance and required deposit are untyped and always stand against withdrawable money first. A spend takes platform credit first, then withdrawable; <code>debit(..., $only)</code> and <code>allocateSpend($amount, $only)</code> take the whole amount from one kind or fail. Supplier wallets use their own variant (see the Supplier page).</p>
+
+    <h3>wallet_transactions (<code>WalletTransaction</code>)</h3>
+    <p>The mutable half: what happens to a movement over time. <code>HasPublicId</code>, <code>HasReference</code> (reference prefix <code>Transaction</code>), <code>HasStateMachine</code>.</p>
+    <table>
+        <thead><tr><th>Column</th><th>Meaning</th></tr></thead>
+        <tbody>
+            <tr><td><code>wallet_id</code>, <code>business_account_id</code>, <code>user_id</code></td><td>Owner. Payments carry no <code>user_id</code>: they belong to the business.</td></tr>
+            <tr><td><code>type</code> (<code>LedgerTransactionType</code>), <code>direction</code> (<code>LedgerDirection</code>), <code>source</code>, <code>description</code></td><td>What it is and where it came from.</td></tr>
+            <tr><td><code>amount</code>, <code>platform_credit_amount</code>, <code>conversion_reference</code></td><td>Amount, how much of it was platform credit (remembered so release, capture and refund return the same split), and the id shared by the two halves of a conversion.</td></tr>
+            <tr><td><code>status</code> (<code>WalletTransactionStatus</code>)</td><td>Moves only through <code>transitionTo()</code>.</td></tr>
+            <tr><td><code>payment_id</code>, <code>reason</code>, <code>internal_note</code> (hidden), <code>created_by</code>, <code>approved_by</code></td><td>Related payment and audit detail.</td></tr>
+            <tr><td><code>idempotency_key</code> (unique, nullable, up to 191 chars)</td><td>The durable half of idempotency.</td></tr>
+        </tbody>
+    </table>
+
+    <h3>ledger_entries (<code>LedgerEntry</code>)</h3>
+    <p>The immutable half. Debit and credit are both stored positive and told apart by which column holds the amount. No <code>updated_at</code>.</p>
+    <table>
+        <thead><tr><th>Column</th><th>Meaning</th></tr></thead>
+        <tbody>
+            <tr><td><code>public_id</code>, <code>reference</code> (unique)</td><td>Identity, shown to users.</td></tr>
+            <tr><td><code>wallet_id</code>, <code>business_account_id</code>, <code>user_id</code>, <code>wallet_transaction_id</code>, <code>payment_id</code>, <code>user_package_id</code></td><td>Links. The migration also reserves plain id columns for later modules (<code>order_id</code>, <code>withdrawal_id</code>, <code>website_id</code>, <code>service_id</code>, <code>commission_id</code>, <code>referral_id</code>); <code>WalletService</code> does not populate them.</td></tr>
+            <tr><td><code>type</code>, <code>balance_type</code> (<code>platform_credit</code> or <code>withdrawable</code>), <code>source</code>, <code>conversion_reference</code></td><td>What moved, which kind of money.</td></tr>
+            <tr><td><code>debit</code>, <code>credit</code>, <code>balance_before</code>, <code>balance_after</code></td><td>One of debit and credit is zero. Before and after are totals, stored so any entry can be checked against its neighbours.</td></tr>
+            <tr><td><code>pending</code>, <code>reserved</code>, <code>available</code>, <code>hold</code></td><td>What each bucket held immediately after this entry (§23.2).</td></tr>
+            <tr><td><code>status</code>, <code>description</code>, <code>internal_note</code> (hidden), <code>created_by</code>, <code>approved_by</code></td><td>Frozen snapshot and audit detail.</td></tr>
+            <tr><td><code>idempotency_key</code> (unique), <code>corrects_ledger_entry_id</code></td><td>Key; and the entry this one corrects.</td></tr>
+        </tbody>
+    </table>
+    <p>Immutability is enforced twice. The model throws on <code>updating</code> and <code>deleting</code>. Because the query builder and psql bypass model events, <code>2026_09_16_120000_protect_ledger_entries.php</code> adds Postgres triggers <code>ledger_entries_no_update</code> and <code>ledger_entries_no_delete</code> that raise an exception. <code>LedgerEntry::MEMBER_VISIBLE</code> lists the only columns an account member's statement may select; <code>internal_note</code> is never among them.</p>
+
+    <h3>Other tables</h3>
+    <table>
+        <thead><tr><th>Table / model</th><th>Purpose and constraints</th></tr></thead>
+        <tbody>
+            <tr><td><code>wallet_transaction_events</code> / <code>WalletTransactionEvent</code></td><td>Append-only trail of every status change of a transaction, including reservation and release that never touch the ledger: from and to status, bucket before and after, total before and after, actor, reason, key, <code>ledger_entry_id</code>. Triggers <code>wallet_transaction_events_no_update</code> and <code>..._no_delete</code>.</td></tr>
+            <tr><td><code>deposit_rules</code> / <code>DepositRule</code></td><td>One dated deposit requirement in one scope (<code>RuleScope</code>, resolved by the shared <code>RuleResolver</code>: most specific scope, then priority, then newest, then id). Figures: required initial deposit, minimum balance, required top-up, low and critical thresholds, deadline and grace days, frequency, refundability, the five restriction switches, <code>restores_automatically</code>. Never edited: raising a figure closes one row and opens another.</td></tr>
+            <tr><td><code>deposit_rule_changes</code> / <code>DepositRuleChange</code></td><td>Before and after of every rule change. Append-only triggers.</td></tr>
+            <tr><td><code>wallet_deposit_obligations</code> / <code>WalletDepositObligation</code></td><td>Captured copy of a rule's figures for one wallet, with source (<code>activation</code>, <code>package_change</code>, <code>service_setup</code>, <code>reapplied</code>). Append-only triggers. Restrictions and top-up planning read this, not the rule table.</td></tr>
+            <tr><td><code>wallet_restrictions</code> / <code>WalletRestriction</code></td><td>A restriction standing on a wallet: stage, cause, the account status found and the one applied, started and lifted timestamps. A partial unique index <code>wallet_restrictions_live</code> allows one live restriction per stage per wallet.</td></tr>
+        </tbody>
+    </table>
+
+    <h2>States &amp; lifecycle</h2>
+    <h3>WalletTransactionStatus (§23.3)</h3>
+    <p>Twelve statuses; <code>transitionsTo()</code> declares the legal moves and <code>HasStateMachine::transitionTo()</code> refuses anything else.</p>
+    <table>
+        <thead><tr><th>From</th><th>May move to</th></tr></thead>
+        <tbody>
+            <tr><td><code>initiated</code></td><td>pending, on_hold, under_review, approved, failed, cancelled</td></tr>
+            <tr><td><code>pending</code></td><td>on_hold, under_review, approved, available, settled, failed, cancelled</td></tr>
+            <tr><td><code>on_hold</code></td><td>under_review, approved, available, settled, rejected, cancelled</td></tr>
+            <tr><td><code>under_review</code></td><td>approved, rejected, on_hold, cancelled</td></tr>
+            <tr><td><code>approved</code></td><td>available, settled, paid, reversed</td></tr>
+            <tr><td><code>available</code></td><td>settled, paid, reversed</td></tr>
+            <tr><td><code>settled</code></td><td>paid, reversed</td></tr>
+            <tr><td><code>paid</code></td><td>reversed</td></tr>
+            <tr><td><code>rejected</code>, <code>failed</code>, <code>cancelled</code>, <code>reversed</code></td><td>none (terminal; retry is a new transaction)</td></tr>
+        </tbody>
+    </table>
+    <p>What <code>WalletService</code> actually produces today: <code>credit</code> and <code>debit</code> create a transaction already <code>settled</code>; <code>reserve</code> creates <code>pending</code>; <code>hold</code> creates <code>on_hold</code>; <code>release</code> moves a claim to <code>cancelled</code>; <code>capture</code> moves it to <code>settled</code>. The rest of the graph exists for later workflows. A reversal is not a status move: it is a new correcting entry (see below).</p>
+
+    <h3>WalletBalanceState (§24.3)</h3>
+    <table>
+        <thead><tr><th>Case</th><th>Label</th><th>Meaning</th></tr></thead>
+        <tbody>
+            <tr><td><code>healthy</code></td><td>Healthy</td><td>At or above everything asked of it.</td></tr>
+            <tr><td><code>low</code></td><td>Low balance</td><td>Below the low threshold but still meeting the obligation. A warning only.</td></tr>
+            <tr><td><code>critical</code></td><td>Below required balance</td><td>Below what it must hold. The state the graded actions and the grace period act on.</td></tr>
+        </tbody>
+    </table>
+
+    <h3>WalletRestrictionStage (§24.3), in severity order</h3>
+    <table>
+        <thead><tr><th>Stage</th><th>Severity</th><th>Takes away</th></tr></thead>
+        <tbody>
+            <tr><td><code>notified</code></td><td>10</td><td>Nothing; the account is told.</td></tr>
+            <tr><td><code>services_restricted</code></td><td>20</td><td>Chargeable services.</td></tr>
+            <tr><td><code>website_setup_paused</code></td><td>30</td><td>New website setup and renewal.</td></tr>
+            <tr><td><code>website_disabled</code></td><td>40</td><td>The dedicated website.</td></tr>
+            <tr><td><code>account_restricted</code></td><td>50</td><td>Account features.</td></tr>
+            <tr><td><code>account_disabled</code></td><td>60</td><td>The account, temporarily.</td></tr>
+        </tbody>
+    </table>
+    <p>Each stage after the notice is optional and authorised by the captured rule (<code>restricts_chargeable_services</code>, <code>pauses_website_setup</code>, <code>disables_website</code>, <code>restricts_account</code>, <code>disables_account</code>). Account-status consequences walk the legal path through <code>AccountStatus</code> via <code>AccountStatusRoute</code> (a breadth-first search over each status's own <code>transitionsTo()</code>; it never routes through Suspended or Closed).</p>
+
+    <h2>Actions &amp; workflows</h2>
+    <table>
+        <thead><tr><th>Class</th><th>Purpose</th></tr></thead>
+        <tbody>
+            <tr><td><code>WalletService</code></td><td>credit, debit, hold, reserve, release, capture, convertToWithdrawable. The single write path.</td></tr>
+            <tr><td><code>OpenWallet</code></td><td>Opens an empty wallet for an account; idempotent (unique index settles a race). Part of activation.</td></tr>
+            <tr><td><code>PlanWalletTopUp</code></td><td>Server-side plan for a top-up amount: minimum, how much closes the obligation shortfall, and the purpose (<code>wallet_deposit</code> if any deposit shortfall is closed, else <code>wallet_top_up</code>). Floor <code>1.00</code> unless the captured <code>required_top_up</code> is higher.</td></tr>
+            <tr><td><code>RecordTopUpPayment</code></td><td>Creates the draft <code>Payment</code> (revenue zero), reusing an open attempt for the same account and amount.</td></tr>
+            <tr><td><code>StartWalletTopUp</code></td><td>Plan, record, open the gateway session; for mobile it returns the redirect URL.</td></tr>
+            <tr><td><code>CreditSettledPayment</code></td><td>Turns a settled deposit or top-up payment into a wallet credit; records a "wallet credit failed" flag on the payment if it cannot.</td></tr>
+            <tr><td><code>CorrectLedgerEntry</code></td><td><code>reverse()</code>, <code>reverseTransaction()</code>, <code>adjust()</code>: the only ways to put a posting right.</td></tr>
+            <tr><td><code>ConvertWalletBalance</code></td><td>Platform credit to withdrawable, with actor, reason and audit.</td></tr>
+            <tr><td><code>CaptureDepositObligation</code></td><td>Copies the applicable rule into the wallet (activation, package change, service setup, reapply). Idempotent.</td></tr>
+            <tr><td><code>EvaluateWalletBalance</code>, <code>EnforceBalanceRules</code>, <code>RestoreWalletServices</code>, <code>SweepWalletBalances</code></td><td>Read the state, apply graded restrictions, lift them after a sufficient top-up, and run all wallets daily.</td></tr>
+            <tr><td><code>ManageDepositRules</code></td><td>Create and close deposit rules (never edit), refuse overlap, write <code>DepositRuleChange</code>.</td></tr>
+            <tr><td><code>VerifyLedgerIntegrity</code></td><td>Re-derives every wallet from its ledger and logs a critical alert on mismatch. Reads only.</td></tr>
+            <tr><td><code>ExportWalletStatement</code>; query <code>WalletStatement</code></td><td>Statement for screen, admin view and CSV.</td></tr>
+            <tr><td><code>DepositGuard</code> (class, not an Action)</td><td><code>permits()</code> / <code>assert()</code> / <code>shortfallFor()</code>: does the wallet meet its obligation plus a charge?</td></tr>
+        </tbody>
+    </table>
+
+    <h3>Flow 1: a credit or debit (<code>WalletService::post()</code>)</h3>
+    <ol>
+        <li>Resolve direction: the type's own (<code>LedgerTransactionType::direction()</code>), else the context's, else the caller's. Correction types return null and make the caller say.</li>
+        <li><code>assertPostable()</code>: amount positive, currency equals the wallet's (D4: no conversion), a reason when <code>requiresReason()</code> (every correction and conversion), an actor when <code>requiresActor()</code> (manual adjustment and conversions).</li>
+        <li>A credit needs a kind: the one passed, else <code>creditBalanceType()</code>; a type that maps to none is refused (<code>balanceTypeRequired</code>).</li>
+        <li>Fast path: if a transaction with this <code>idempotency_key</code> exists, return it.</li>
+        <li>Open a database transaction and re-read the wallet with <code>lockForUpdate()</code>.</li>
+        <li>For a debit, re-check <code>usableBalance()</code> inside the lock (a check before the lock proves nothing) and split the amount with <code>allocateSpend()</code>: platform credit first unless a kind is demanded.</li>
+        <li>Create the settled <code>WalletTransaction</code>, update <code>total</code> and <code>platform_credit</code>, write one ledger entry per kind moved (keys <code>key:platform_credit</code> and <code>key:withdrawable</code> when it splits), then append a <code>WalletTransactionEvent</code>.</li>
+        <li>After commit, for a real credit (not a conversion), dispatch <code>WalletCredited</code>.</li>
+        <li>A <code>UniqueConstraintViolationException</code> (two identical commands raced) is caught; the winner's transaction is returned.</li>
+    </ol>
+
+    <h3>Flow 2: reserve, release, capture</h3>
+    <ol>
+        <li><code>reserve()</code> (status <code>pending</code>, bucket <code>reserved</code>) or <code>hold()</code> (status <code>on_hold</code>, bucket <code>hold</code>) locks the wallet, checks <code>usableBalance()</code>, splits the claim (a <code>WithdrawalDebit</code> claim may take only withdrawable money), raises the bucket and its platform-credit counter, and writes an event. No ledger entry: no value moved.</li>
+        <li><code>release()</code> locks the claim, requires <code>canTransitionTo(cancelled)</code> (otherwise <code>alreadySettled</code>), lowers the bucket by exactly the remembered split.</li>
+        <li><code>capture()</code> does the same, but also lowers <code>total</code> and <code>platform_credit</code> and writes the ledger entry (key = claim key + <code>:capture</code>), because only now has value left.</li>
+    </ol>
+
+    <h3>Flow 3: a gateway top-up</h3>
+    <ol>
+        <li><code>Erp\WalletTopUpController::store</code> (or mobile <code>WalletTopUpController::store</code>) parses the amount with <code>DecimalAmount::parse()</code>, then <code>PlanWalletTopUp</code> and <code>RecordTopUpPayment</code> create a draft <code>Payment</code>.</li>
+        <li>A gateway session opens (see <a href="billing.html">Billing</a>); the payer pays.</li>
+        <li><code>SettlePayment</code> verifies with the gateway under a lock and marks the payment paid. Its <code>applyPurpose()</code> calls <code>CreditSettledPayment</code> for <code>wallet_deposit</code> and <code>wallet_top_up</code> only.</li>
+        <li>The credit posts as <code>deposit_credit</code> or <code>top_up_credit</code> (platform credit) with key <code>payment:{payment reference}</code>, so IPN, browser return, reconciliation sweep and manual retry all land on one posting.</li>
+        <li>If the account has no wallet, nothing is credited, a critical line goes to the <code>wallet</code> log channel and the payment is flagged <code>wallet_credit_failed_at</code>. An admin clears it with <code>admin.payments.wallet-credit</code>, which is idempotent on the same key.</li>
+        <li>After commit, <code>WalletCredited</code> triggers <code>ReleasePartnerReceivablesOnWalletCredit</code>, which lets waiting Partner-gateway order receivables collect (D36; see <a href="billing.html">Billing</a>).</li>
+    </ol>
+
+    <h3>Flow 4: correction, reversal, manual adjustment</h3>
+    <ol>
+        <li><code>CorrectLedgerEntry::reverse()</code> posts the opposite movement of the same amount, pointing at the original through <code>corrects_ledger_entry_id</code>, with key <code>reversal:{original entry reference}</code>. The type is <code>commission_reversal</code> for a commission credit, <code>referral_reward_reversal</code> for referral and joining rewards, otherwise <code>manual_adjustment</code>.</li>
+        <li>A credit's reversal is taken from the kind it came in as and is refused if that kind is gone; it is never paid out of the other kind. A debit's reversal returns to the kind it was spent from.</li>
+        <li><code>reverseTransaction()</code> reverses every ledger entry of a transaction (a spend that used both kinds wrote two).</li>
+        <li><code>adjust()</code> is a person's decision: reason and actor required, a credit must name its kind. Both write an audit row <code>wallet.{ledger type}</code> flagged sensitive.</li>
+    </ol>
+
+    <h3>Flow 5: platform credit to withdrawable</h3>
+    <p><code>ConvertWalletBalance</code> checks <code>WalletPolicy::canConvertBalance()</code> again inside the action, then calls <code>convertToWithdrawable()</code>: a required idempotency key, one lock, <code>amount</code> must not exceed <code>platformCreditAvailable()</code>, <code>platform_credit</code> falls by the amount (total unchanged), and two entries (<code>balance_conversion_debit</code> on platform credit, <code>balance_conversion_credit</code> on withdrawable) share a <code>conversion_reference</code>. Keys are <code>wallet-conversion:{wallet public id}:{caller key}:debit</code> and <code>:credit</code>. There is no reverse. Audit: <code>wallet.balance_converted</code>, sensitive.</p>
+
+    <h3>Flow 6: deposit obligation and the daily balance check</h3>
+    <ol>
+        <li>On activation, package change or service setup, <code>CaptureDepositObligation</code> resolves the rule for the account (<code>ResolveDepositRule</code>) and writes the captured figures to <code>wallets</code> and a <code>wallet_deposit_obligations</code> row. Capturing the same figures twice writes nothing new and never moves a deadline.</li>
+        <li><code>SweepWalletBalances</code> (scheduled 02:30) runs per wallet, restore first, then enforce. <code>RestoreWalletServices</code> lifts only restrictions this mechanism placed and returns the account to the status it had, and only when the wallet is <code>healthy</code> again.</li>
+        <li><code>EvaluateWalletBalance</code> sets <code>balance_state</code>. The grace deadline is stamped once, when the shortfall begins, and cleared when the account is back above the line.</li>
+        <li><code>EnforceBalanceRules</code>: send the notice (<code>WalletBalanceLow</code>) for low or critical; while the grace period runs, do nothing more; after it, apply each authorised stage in severity order, once. Audit actions <code>wallet.restriction_applied</code> and <code>wallet.restriction_lifted</code>.</li>
+        <li>One wallet's exception is logged and counted; the sweep carries on.</li>
+    </ol>
+
+    <h3>Flow 7: ledger integrity</h3>
+    <p><code>VerifyLedgerIntegrity</code> (scheduled 03:00) checks, per wallet: credits minus debits equals <code>total</code> (<code>balance_mismatch</code>); the platform-credit entries net to <code>platform_credit</code> (<code>platform_credit_mismatch</code>); <code>reserved_platform_credit</code> and <code>hold_platform_credit</code> equal the sum of open claims (<code>*_mismatch</code>); each entry satisfies <code>before + movement = after</code> (<code>entry_does_not_balance</code>); and each entry's <code>balance_before</code> equals the previous one's <code>balance_after</code> (<code>broken_chain</code>). It never repairs anything and logs one critical entry to the <code>wallet</code> channel per sweep.</p>
+
+    <h2>Entry points</h2>
+    <h3>Web routes</h3>
+    <p>Account side: <code>routes/web.php</code>, inside <code>auth</code> + <code>business.activated</code> (+ <code>noindex</code>). Admin side: <code>auth</code>, <code>noindex</code>, <code>two-factor</code>, prefix <code>/admin</code>, names <code>admin.*</code>. No id of the wallet appears in an account-side URL.</p>
+    <table>
+        <thead><tr><th>Name</th><th>Method and URL</th><th>Controller</th><th>Gate</th></tr></thead>
+        <tbody>
+            <tr><td><code>wallet.show</code></td><td>GET <code>/wallet</code></td><td><code>Erp\WalletController@show</code></td><td>Own account only (membership)</td></tr>
+            <tr><td><code>wallet.quick-view</code></td><td>GET <code>/wallet/quick-view</code></td><td><code>Erp\WalletController@quickView</code></td><td>Own account; <code>Cache-Control: no-store, private</code></td></tr>
+            <tr><td><code>wallet.top-up.create</code> / <code>.store</code></td><td>GET, POST <code>/wallet/top-up</code></td><td><code>Erp\WalletTopUpController</code></td><td>Own account</td></tr>
+            <tr><td><code>wallet.download</code></td><td>GET <code>/wallet/statement.csv</code></td><td><code>Erp\WalletController@export</code></td><td>Own account</td></tr>
+            <tr><td><code>wallet.transactions.show</code></td><td>GET <code>/wallet/transactions/{transaction}</code></td><td><code>Erp\WalletController@transaction</code></td><td>Scoped to own wallet before the public id is used</td></tr>
+            <tr><td><code>admin.wallets.index</code>, <code>.show</code>, <code>.download</code>, <code>.transactions.show</code></td><td>GET <code>/admin/wallets</code>, <code>/{wallet}</code>, <code>/{wallet}/statement.csv</code>, <code>/{wallet}/transactions/{transaction}</code></td><td><code>Admin\WalletController</code></td><td><code>wallet.view</code>; export needs <code>wallet.export</code></td></tr>
+            <tr><td><code>admin.wallets.adjustments.store</code></td><td>POST <code>/admin/wallets/{wallet}/adjustments</code></td><td><code>Admin\WalletAdjustmentController@store</code></td><td><code>wallet.adjust_wallet</code> + <code>RequirePassword</code></td></tr>
+            <tr><td><code>admin.wallets.reversals.store</code></td><td>POST <code>/admin/wallets/{wallet}/transactions/{transaction}/reversal</code></td><td><code>Admin\WalletAdjustmentController@reverse</code></td><td><code>wallet.reverse_transaction</code> + <code>RequirePassword</code></td></tr>
+            <tr><td><code>admin.wallets.conversions.store</code></td><td>POST <code>/admin/wallets/{wallet}/conversions</code></td><td><code>Admin\WalletConversionController@store</code></td><td><code>wallet.convert_balance</code> + <code>RequirePassword</code></td></tr>
+            <tr><td><code>admin.payments.wallet-credit</code></td><td>POST <code>/admin/payments/{payment}/wallet-credit</code></td><td><code>Admin\WalletCreditRetryController@store</code></td><td><code>wallet.adjust_wallet</code> + <code>RequirePassword</code></td></tr>
+            <tr><td><code>admin.deposit-rules.index</code>, <code>.store</code>, <code>.close</code></td><td>GET, POST <code>/admin/deposit-rules</code>; POST <code>/admin/deposit-rules/{rule}/close</code></td><td><code>Admin\DepositRuleController</code></td><td>view: <code>wallet.view</code>; change: <code>wallet.manage_settings</code></td></tr>
+        </tbody>
+    </table>
+    <h3>Mobile API (<code>/api/mobile/v1</code>, names <code>mobile.v1.*</code>, inside <code>mobile.activated</code>)</h3>
+    <table>
+        <thead><tr><th>Name</th><th>Method and URL</th><th>Controller</th></tr></thead>
+        <tbody>
+            <tr><td><code>wallet.show</code>, <code>wallet.usable</code></td><td>GET <code>/wallet</code>, <code>/wallet/usable</code></td><td><code>Api\Mobile\V1\Wallet\WalletController</code></td></tr>
+            <tr><td><code>wallet.transactions.index</code>, <code>.show</code></td><td>GET <code>/wallet/transactions</code>, <code>/wallet/transactions/{transaction}</code></td><td>same</td></tr>
+            <tr><td><code>wallet-topups.top-up.options</code>, <code>.store</code></td><td>GET, POST <code>/wallet/top-up</code></td><td><code>Api\Mobile\V1\WalletTopups\WalletTopUpController</code></td></tr>
+            <tr><td><code>wallet-topups.statement.export</code></td><td>GET <code>/wallet/statement.csv</code></td><td>same</td></tr>
+        </tbody>
+    </table>
+    <p>The full mobile contract is on the <a href="../api/mobile-api.html">Mobile API</a> page.</p>
+    <h3>Scheduled tasks and commands (<code>routes/console.php</code>)</h3>
+    <table>
+        <thead><tr><th>Name</th><th>When</th><th>What</th></tr></thead>
+        <tbody>
+            <tr><td><code>wallet-balance-check</code></td><td>daily 02:30 (app timezone), <code>onOneServer</code>, <code>withoutOverlapping</code></td><td><code>SweepWalletBalances</code></td></tr>
+            <tr><td><code>ledger-integrity-check</code></td><td>daily 03:00, same guards</td><td><code>VerifyLedgerIntegrity</code></td></tr>
+            <tr><td><code>php artisan wallets:verify-typed-balances --snapshot=FILE</code> then <code>--against=FILE</code></td><td>Manual, around a deployment</td><td>Read-only proof that typed balances changed no balance and touched neither ledger (account and Supplier). Refuses to write a snapshot inside the repo, <code>public/</code> or <code>storage/</code>; writes mode 0600.</td></tr>
+        </tbody>
+    </table>
+    <p>There is no artisan command for the integrity check; it runs from the scheduler. See the <a href="../guide/commands.html">Commands guide</a>.</p>
+
+    <h2>Permissions &amp; scoping</h2>
+    <table>
+        <thead><tr><th>Permission</th><th>Allows</th></tr></thead>
+        <tbody>
+            <tr><td><code>wallet.view</code></td><td>Admin wallet screens (<code>WalletPolicy::canViewAny</code>).</td></tr>
+            <tr><td><code>wallet.export</code></td><td>Export another account's statement.</td></tr>
+            <tr><td><code>wallet.adjust_wallet</code></td><td>Manual adjustment; retrying a payment's wallet credit.</td></tr>
+            <tr><td><code>wallet.reverse_transaction</code></td><td>Reverse a posted entry. Deliberately separate from adjust.</td></tr>
+            <tr><td><code>wallet.convert_balance</code></td><td>Convert platform credit to withdrawable.</td></tr>
+            <tr><td><code>wallet.manage_settings</code></td><td>Create and close deposit rules.</td></tr>
+            <tr><td><code>ledger.view_sensitive_data</code></td><td>See <code>internal_note</code> on entries (the account holder never does).</td></tr>
+        </tbody>
+    </table>
+    <p><code>wallet.approve</code> exists in <code>PermissionCatalogue</code> for the Wallet module but no <code>WalletPolicy</code> method uses it (not verified elsewhere).</p>
+    <p><strong>Self-scoping is structural.</strong> <code>Erp\WalletController</code> uses <code>ResolvesBusinessAccount</code> to find the wallet through the signed-in membership, then queries <code>WalletTransaction</code> with <code>where wallet_id = ...</code> before the public id is applied, so a borrowed id finds nothing instead of being refused later (§31.3). <code>WalletPolicy::canView()</code> allows the owning account or a holder of <code>wallet.view</code>; <code>canExport()</code> allows the owner or <code>wallet.export</code>. Admin adjustments, reversals, conversions and credit retries also require a freshly confirmed password (<code>RequirePassword</code> middleware), on top of the admin panel's two-factor requirement.</p>
+
+    <h2>Money, ledger &amp; audit effects</h2>
+    <h3>Ledger types (<code>LedgerTransactionType</code>)</h3>
+    <table>
+        <thead><tr><th>Group</th><th>Cases (value)</th><th>Direction and default kind</th></tr></thead>
+        <tbody>
+            <tr><td>Platform credit in</td><td><code>deposit_credit</code>, <code>top_up_credit</code>, <code>referral_reward_credit</code>, <code>joining_reward_credit</code>, <code>promotional_credit</code></td><td>Credit, platform credit</td></tr>
+            <tr><td>Withdrawable in</td><td><code>sales_credit</code>, <code>commission_credit</code>, <code>cod_collection_credit</code></td><td>Credit, withdrawable</td></tr>
+            <tr><td>Service debits</td><td><code>registration_fee_debit</code>, <code>package_fee_debit</code>, <code>website_setup_debit</code>, <code>domain_charge_debit</code>, <code>hosting_charge_debit</code>, <code>renewal_fee_debit</code>, <code>maintenance_charge_debit</code>, <code>fulfillment_charge_debit</code>, <code>courier_charge_debit</code>, <code>payment_gateway_charge_debit</code>, <code>platform_fee_debit</code>, <code>service_fee_debit</code></td><td>Debit</td></tr>
+            <tr><td>Other debits</td><td><code>withdrawal_debit</code>, <code>refund_debit</code>, <code>wholesale_order_debit</code>, <code>return_charge_debit</code>, <code>exchange_delivery_debit</code>, <code>damage_loss_debit</code>, <code>damage_delivery_debit</code>, <code>partner_gateway_receivable_debit</code></td><td>Debit</td></tr>
+            <tr><td>Refund credit</td><td><code>order_refund_credit</code></td><td>Credit; no default kind, goes back as the kind spent</td></tr>
+            <tr><td>Corrections</td><td><code>return_adjustment</code>, <code>commission_reversal</code>, <code>referral_reward_reversal</code>, <code>manual_adjustment</code></td><td>Direction (and, for a credit, kind) stated by the caller; reason required; the posting service demands it</td></tr>
+            <tr><td>Conversion</td><td><code>balance_conversion_debit</code> (platform credit), <code>balance_conversion_credit</code> (withdrawable)</td><td>Reason and actor required</td></tr>
+        </tbody>
+    </table>
+    <h3>Idempotency keys seen on postings</h3>
+    <table>
+        <thead><tr><th>Key</th><th>Where</th></tr></thead>
+        <tbody>
+            <tr><td><code>payment:{payment reference}</code></td><td><code>CreditSettledPayment</code></td></tr>
+            <tr><td><code>reversal:{entry reference}</code></td><td><code>CorrectLedgerEntry::reverse</code></td></tr>
+            <tr><td><code>wallet-conversion:{wallet public id}:{key}:debit|credit</code></td><td><code>ConvertWalletBalance</code></td></tr>
+            <tr><td><code>account-withdrawal-reserve:{key}</code>; capture adds <code>:capture</code></td><td><code>RequestAccountWithdrawal</code> / <code>capture()</code></td></tr>
+            <tr><td><code>referral-commission:{commission public id}</code>, <code>referral-commission-reversal:{id}</code></td><td>Referral module</td></tr>
+            <tr><td><code>refund:{refund public id}</code>, <code>order-refund:{refund public id}:{kind}</code>; <code>order-wallet-payment:{payment reference}</code> is read by the wallet refund path</td><td>Billing refunds</td></tr>
+            <tr><td><code>{key}:{kind}</code></td><td>Added by <code>writeEntriesFor()</code> when one posting splits into two ledger entries</td></tr>
+        </tbody>
+    </table>
+    <h3>Audit</h3>
+    <p>Audit actions written by this module: <code>wallet.{ledger type value}</code> (reversal and manual adjustment, sensitive, <code>module: wallet</code>), <code>wallet.balance_converted</code>, <code>wallet.deposit_rule_*</code> (from <code>ManageDepositRules</code>), <code>wallet.restriction_applied</code>, <code>wallet.restriction_lifted</code>. Plain credits and debits write no audit row: the ledger and <code>wallet_transaction_events</code> are their record.</p>
+    <p><strong>Invariants</strong>: <code>total</code> equals credits minus debits of its entries; <code>platform_credit</code> equals the net of platform-credit entries; each entry's before plus movement equals after; each open claim's remembered split sums to the wallet's typed counters; an amount posted is positive and in the wallet's currency.</p>
+
+    <h2>Configuration</h2>
+    <table>
+        <thead><tr><th>Key</th><th>Purpose</th></tr></thead>
+        <tbody>
+            <tr><td>Log channels <code>wallet</code> and <code>payment</code> (<code>config/logging.php</code>)</td><td>Daily files <code>storage/logs/wallet.log</code> and <code>payment.log</code>, 90 days. Nothing secret may be written to them.</td></tr>
+            <tr><td><code>REDIS_LOCK_DB</code>, <code>REDIS_CACHE_LOCK_CONNECTION=locks</code> (<code>.env.example</code>); <code>config/database.php</code> connection <code>locks</code></td><td>Locks live on a Redis database separate from the cache, so <code>cache:clear</code> cannot drop a lock guarding money.</td></tr>
+            <tr><td>Deposit rules (<code>deposit_rules</code> rows)</td><td>All deposit, minimum balance, threshold, grace and restriction settings are data, edited under Admin, not config.</td></tr>
+            <tr><td><code>PlanWalletTopUp::FLOOR = '1.00'</code></td><td>Smallest top-up unless the captured <code>required_top_up</code> is higher.</td></tr>
+        </tbody>
+    </table>
+    <p>Never switch cache, session or queue to <code>file</code>, <code>sync</code> or <code>database</code> to work around a local problem; the app must stay stateless (§40, D10) and locks need Redis.</p>
+
+    <h2>Rules, invariants &amp; gotchas</h2>
+    <div class="callout callout-warn"><p><strong>Gotcha: the typed figures in <code>toBalances()</code>.</strong> In the array and the UI, <code>platform_credit</code> and <code>withdrawable</code> are what can be spent or withdrawn <em>now</em> (<code>platformCreditAvailable()</code> and <code>availableForWithdrawal()</code>). The holdings, before any claim, are <code>platform_credit_held</code> and <code>withdrawable_held</code>. Mixing them up is the classic way to show a withdrawal button for money that is reserved.</p></div>
+    <div class="callout callout-warn"><p><strong>Gotcha: idempotency does not compare the payload.</strong> <code>WalletService</code> returns the existing transaction for a known key whatever amount the retry carries. Keys must therefore be derived from the thing being paid (a payment reference, a refund id, a commission id), never reused across different intents. <code>IdempotencyService</code> (below) does fingerprint bodies; the wallet's database key does not.</p></div>
+    <div class="callout callout-warn"><p><strong>Gotcha: "pending" means two things.</strong> A reservation's transaction status is <code>pending</code>; the <code>wallets.pending</code> bucket ("credited but not cleared") is a different thing. I found no code in <code>app/</code> that writes <code>wallets.pending</code> or <code>wallets.cod_receivable</code>; they are zero from <code>OpenWallet</code> and only read and displayed. Do not assume either is maintained.</p></div>
+    <ul>
+        <li><strong>Debits check the usable balance, withdrawals check the withdrawable balance.</strong> <code>WalletService::debit/reserve</code> test <code>usableBalance()</code>. <code>RequestAccountWithdrawal</code> additionally tests <code>availableForWithdrawal()</code> under the same lock, because the required deposit stays out of a withdrawal's reach even when it can cover service charges.</li>
+        <li><strong>A debit is never overdrawn.</strong> A negative available balance is refused (<code>WalletOperationRefused::insufficientBalance</code>), before anything is written.</li>
+        <li><strong>A wallet is never created on demand by a payment.</strong> <code>CreditSettledPayment</code> flags the payment instead. (Referral payout calls <code>OpenWallet</code> for a beneficiary, which does create one.)</li>
+        <li><strong>Reversal of a credit may be impossible.</strong> If the kind it came in as has been spent, the reversal is refused. Referral reversals turn this into a "reversal owed" state that is retried.</li>
+        <li><strong>Derived balances are floored at zero</strong> so "minus two hundred taka to spend" is never shown; the shortfall figures say the same thing the right way up.</li>
+        <li><strong>A conversion is one-way.</strong> There is no platform-credit-from-withdrawable path.</li>
+        <li><strong>Capture exists only for claims.</strong> <code>settleClaim()</code> treats a claim as <code>hold</code> when its status is <code>on_hold</code>, otherwise as <code>reserved</code>. Do not call release or capture on a settled posting; the state machine refuses it.</li>
+        <li><strong>Cross-currency postings fail loudly</strong> (D4). There is no exchange-rate accounting on the ledger.</li>
+        <li><strong>Plain <code>DB::table('ledger_entries')-&gt;update()</code> fails</strong> thanks to the trigger; do not "fix" data that way. Post a correction.</li>
+        <li><strong>The balance sweep restores only what it placed</strong> (<code>fromLowBalance()</code> scope) and returns the account to the status recorded on the restriction, not to "active".</li>
+        <li><strong>Verification runs after commit and is wrapped.</strong> In <code>SettlePayment</code>, a failed wallet credit never rolls back the payment; it is logged and flagged for an admin.</li>
+    </ul>
+
+    <h3>Shared helpers: DistributedLock and IdempotencyService</h3>
+    <table>
+        <thead><tr><th>Class</th><th>Behaviour</th></tr></thead>
+        <tbody>
+            <tr><td><code>App\Support\Concurrency\DistributedLock</code></td><td>Named Redis locks (key prefixed <code>lock:</code>). <code>run($key, $callback, $ttlSeconds = 10, $waitSeconds = 5)</code> blocks and throws <code>LockTimeout</code>; <code>attempt()</code> runs only if free and otherwise returns null; <code>isHeld()</code>. It asserts the cache store implements <code>LockProvider</code> and throws <code>RuntimeException</code> otherwise, so a non-Redis store cannot silently leave money unguarded.</td></tr>
+            <tr><td><code>App\Support\Idempotency\IdempotencyService</code></td><td>Cache-backed, 24 hour window (<code>DEFAULT_TTL</code> 86400). <code>execute($key, $payload, $callback)</code> runs once; a replay with the same key and body returns the stored value (<code>IdempotentOutcome::replayed</code> true); the same key with a different body throws <code>IdempotencyKeyReused</code>. The fingerprint is sha256 of the recursively key-sorted JSON (lists keep their order). A concurrent duplicate waits on a lock (<code>idempotency:{key}</code>, 30s ttl, 10s wait).</td></tr>
+        </tbody>
+    </table>
+    <div class="callout callout-rule"><p><strong>Rule.</strong> A distributed lock is coordination, not correctness. Money and stock still need a database transaction with row locking; the lock reduces contention and the database keeps the invariant true (§36.1). Durable idempotency for money is a unique database key (<code>wallet_transactions.idempotency_key</code>, <code>ledger_entries.idempotency_key</code>, <code>payments.idempotency_key</code>); <code>IdempotencyService</code> covers replay windows for external requests.</p></div>
+    <p>Both helpers are used well beyond the wallet (settlement, order, inventory, storefront replay, referral plan opening). Search <code>app/</code> for <code>DistributedLock</code> and <code>IdempotencyService</code> before adding a third pattern.</p>
+
+    <h2>How to&hellip;</h2>
+    <h3>Add a new ledger transaction type</h3>
+    <ol>
+        <li>Add the case to <code>app/Domain/Wallet/Enums/LedgerTransactionType.php</code>. Keep the value at or under 40 characters (the column is <code>string(40)</code>).</li>
+        <li>Add it to <code>direction()</code> (or leave it null if it is a correction), to <code>creditBalanceType()</code> if it is a credit with a default kind, and to <code>label()</code>. Every <code>match</code> is total, so the compiler will point at the rest.</li>
+        <li>Decide <code>requiresReason()</code> / <code>requiresActor()</code> (they follow <code>isCorrection()</code> and <code>isConversion()</code>).</li>
+        <li>Post it with <code>WalletService::credit/debit</code> and a <code>PostingContext</code> whose key is derived from the thing being paid. Wrap the whole business step in one transaction.</li>
+        <li>Update <code>tests/Feature/Wallet/TransactionTypeTest.php</code> and add a service-level test.</li>
+    </ol>
+    <h3>Charge an account for a service from its wallet</h3>
+    <ol>
+        <li>Ask <code>DepositGuard::assert()</code> (or <code>permits()</code> for a screen) with the charge, so the account is not pushed below its obligation.</li>
+        <li>Call <code>WalletService::debit()</code> with the right ledger type; it re-checks under the lock. Use <code>reserve()</code> then <code>capture()</code> when the charge is confirmed later.</li>
+        <li>Catch <code>WalletOperationRefused</code> and return its message; never catch it to retry with a smaller amount.</li>
+    </ol>
+    <h3>Add a field to deposit rules</h3>
+    <ol>
+        <li>Migration on <code>deposit_rules</code>, <code>wallet_deposit_obligations</code> and, if the wallet reads it directly, <code>wallets</code>.</li>
+        <li>Casts and docblock on <code>DepositRule</code> and <code>WalletDepositObligation</code>; copy it in <code>CaptureDepositObligation::handle()</code>.</li>
+        <li>Include it in the snapshot that <code>ManageDepositRules</code> writes to <code>DepositRuleChange</code>, the controller validation in <code>Admin\DepositRuleController</code>, and <code>resources/js/pages/admin/deposit-rules.tsx</code>. Add strings to <code>lang/en</code> and <code>lang/bn</code>.</li>
+    </ol>
+    <h3>Add a restriction stage</h3>
+    <ol>
+        <li>Add the case, <code>severity()</code> (leave gaps of 10), <code>label()</code> and <code>tone()</code> in <code>WalletRestrictionStage</code>.</li>
+        <li>Add a switch column on the rule and the obligation, and map it in <code>EnforceBalanceRules::authorisedStages()</code>.</li>
+        <li>Make whatever the stage takes away actually check <code>WalletRestriction::standing()</code>; the enum alone enforces nothing.</li>
+    </ol>
+    <h3>Check a wallet against its ledger by hand</h3>
+    <ol>
+        <li>Run <code>VerifyLedgerIntegrity::problemsFor($wallet)</code> from a test or a one-off script; it is read-only.</li>
+        <li>If it reports a problem, do not edit rows. Find the cause, then post a correction with <code>CorrectLedgerEntry</code>.</li>
+    </ol>
+
+    <h2>Testing</h2>
+    <p>Run a slice in its own schema (see the <a href="../guide/testing.html">Testing guide</a>): <code>DB_SEARCH_PATH=testing_mine vendor/bin/pest tests/Feature/Wallet</code>, or <code>pest --group=wallet</code> (declared in <code>tests/Pest.php</code>). One Pest run at a time per schema.</p>
+    <table>
+        <thead><tr><th>File</th><th>Covers</th></tr></thead>
+        <tbody>
+            <tr><td><code>tests/Feature/Wallet/WalletServiceTest.php</code>, <code>TypedBalanceTest.php</code>, <code>TransactionTypeTest.php</code></td><td>Posting, typed balances, ledger type table.</td></tr>
+            <tr><td><code>LedgerEntryTest.php</code>, <code>LedgerCorrectionTest.php</code>, <code>LedgerIntegrityTest.php</code></td><td>Immutability, reversals and adjustments, integrity sweep.</td></tr>
+            <tr><td><code>WalletTransactionLifecycleTest.php</code>, <code>ReservationAuditTest.php</code></td><td>Claim lifecycle and event trail.</td></tr>
+            <tr><td><code>PaymentSettlementCreditTest.php</code>, <code>WalletTopUpTest.php</code></td><td>Settled payment to wallet credit; top-up planning.</td></tr>
+            <tr><td><code>DepositRule*Test.php</code>, <code>DepositObligationTest.php</code>, <code>DepositRefundabilityTest.php</code></td><td>Rules, capture, history.</td></tr>
+            <tr><td><code>BalanceSweepTest.php</code>, <code>BalanceThresholdTest.php</code>, <code>LowBalanceEnforcementTest.php</code></td><td>Daily check and graded enforcement.</td></tr>
+            <tr><td><code>WalletStatementTest.php</code>, <code>WalletAdministrationTest.php</code>, <code>WalletCreationTest.php</code>, <code>WalletBackfillTest.php</code>, <code>VerifyTypedBalancesCommandTest.php</code></td><td>Statement, admin screens, opening, backfill migration, deployment command.</td></tr>
+            <tr><td><code>tests/Feature/Concurrency/WalletConcurrencyTest.php</code></td><td>Real concurrent postings. See <code>.ai/rules/concurrency.md</code>: purge Redis connections before <code>pcntl_fork</code>, or a forked worker reads another worker's replies and hangs until the lock TTL.</td></tr>
+            <tr><td><code>tests/Feature/Mobile/MobileWalletTest.php</code></td><td>Mobile reads.</td></tr>
+            <tr><td><code>tests/Unit/Support/DistributedLockTest.php</code>, <code>IdempotencyServiceTest.php</code></td><td>The shared helpers.</td></tr>
+        </tbody>
+    </table>
+    <p>There is no wallet factory in <code>database/factories</code>; the tests build wallets with per-file helpers (for example <code>serviceWallet()</code>, <code>correctionWallet()</code>) over <code>OpenWallet</code> and <code>WalletService</code>. Pest loads every test file into one global function namespace, so prefix any new helper with what it belongs to, as those do.</p>
+
+    <h2>Related modules</h2>
+    <ul>
+        <li><a href="billing.html">Billing</a>: payments, settlement, refunds, the Money API reference.</li>
+        <li><a href="withdrawal.html">Withdrawal</a> and <a href="payout.html">Payout</a>: reserve, capture and release on this wallet; payout methods.</li>
+        <li><a href="referral.html">Referral</a>: rewards credited as platform credit and reversed by compensating entries.</li>
+        <li><a href="supplier.html">Supplier</a>: its own wallet and ledger.</li>
+        <li><a href="order.html">Order</a>, <a href="damage.html">Damage</a>, <a href="cases.html">Cases</a>, <a href="website.html">Website</a>: callers of <code>WalletService</code> for order payment, return and damage charges, website charges and Partner-gateway receivables.</li>
+        <li><a href="account.html">Account</a>: activation opens the wallet; restrictions change account status.</li>
+        <li><a href="audit.html">Audit</a>, <a href="../guide/conventions.html">Conventions</a>, <a href="../guide/decisions.html">Decisions</a>, <a href="../guide/glossary.html">Glossary</a>.</li>
+    </ul>
+</main>
+</body>
+</html>

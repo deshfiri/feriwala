@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Wholesale module</title>
+    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+    <script src="../assets/docs.js"></script>
+</head>
+<body>
+<main id="doc">
+    <h1>Wholesale module</h1>
+    <p class="lead">The partner's wholesale cart and checkout: server-priced lines, quantity pricing, coupon, delivery, tax, an address, and a confirmation that is bound to an exact fingerprint of what was priced. Placing the order itself lives in the Order module.</p>
+
+    <h2>Purpose</h2>
+    <p>A business account with the wholesale facility buys central-catalogue products in bulk for itself or its own resale stock (§14, D34). <code>app/Domain/Wholesale</code> owns the cart, the pricing of cart and checkout, and the confirmation step. <code>Order\Actions\PlaceWholesaleOrder</code> turns a confirmed checkout into an order, a payment and stock reservations; payment and order tracking are covered in <a href="order.html">Order</a> and <a href="billing.html">Billing</a>. Every figure is computed on the server on every read; the browser sends intent (units, quantity, payment method, fingerprint), never a price, total or tax.</p>
+
+    <h2>Where it lives</h2>
+    <table>
+        <thead><tr><th>Path</th><th>Role</th></tr></thead>
+        <tbody>
+        <tr><td><code>app/Domain/Wholesale/Models/</code></td><td><code>Cart</code>, <code>CartItem</code></td></tr>
+        <tr><td><code>app/Domain/Wholesale/Actions/</code></td><td><code>OpenCart</code>, <code>SetCartLine</code>, <code>AcceptCartPrices</code>, <code>ApplyCheckoutCoupon</code>, <code>SaveCheckoutAddress</code>, <code>UseSavedAddressForCheckout</code>, <code>ConfirmCheckout</code>, <code>CloseOrderedCart</code></td></tr>
+        <tr><td><code>app/Domain/Wholesale/Queries/</code></td><td><code>PriceCart</code>, <code>PriceCheckout</code></td></tr>
+        <tr><td><code>app/Domain/Wholesale/Data/</code></td><td><code>CartLineQuote</code>, <code>CartQuote</code>, <code>CheckoutQuote</code>, <code>CheckoutLineCharge</code>, <code>WholesalePaymentQuote</code></td></tr>
+        <tr><td><code>app/Domain/Wholesale/Exceptions/</code></td><td><code>CartRefused</code>, <code>CheckoutRefused</code> (messages from <code>lang/*/wholesale.php</code>, each carrying a <code>field</code>)</td></tr>
+        <tr><td><code>app/Domain/Catalog/WholesalePriceResolver.php</code>, <code>WholesalePriceCalculator.php</code></td><td>Unit price at a quantity; percentage markup (see <a href="catalog.html">Catalog</a>)</td></tr>
+        <tr><td><code>app/Domain/Order/Actions/PlaceWholesaleOrder.php</code></td><td>Confirmed checkout to order</td></tr>
+        <tr><td><code>app/Http/Controllers/Erp/Wholesale{Cart,Checkout,Order,OrderPaymentReturn}Controller.php</code></td><td>Web</td></tr>
+        <tr><td><code>app/Http/Controllers/Api/Mobile/V1/Wholesale/</code> (+ <code>Concerns/GuardsWholesaleFacility.php</code>)</td><td>Mobile API</td></tr>
+        <tr><td><code>app/Console/Commands/VerifyWholesalePricingCommand.php</code></td><td>Deployment price check</td></tr>
+        <tr><td><code>resources/js/pages/wholesale/</code> (<code>cart.tsx</code>, <code>checkout.tsx</code>, <code>orders/index.tsx</code>, <code>orders/show.tsx</code>)</td><td>Screens</td></tr>
+        <tr><td><code>lang/en/wholesale.php</code>, <code>lang/bn/wholesale.php</code>; <code>tests/Feature/Wholesale/</code></td><td>Strings; tests</td></tr>
+        </tbody>
+    </table>
+
+    <h2>Key terms</h2>
+    <dl>
+        <dt>Cart</dt><dd>One per user (unique <code>user_id</code>), tied to the business account they work in. Holds intent only.</dd>
+        <dt>Cart line</dt><dd>A stockable unit (product, or one variation) and a quantity.</dd>
+        <dt>Unit price seen</dt><dd>The price last shown for a line, kept only to flag a later change; never charged.</dd>
+        <dt>Checkout fingerprint</dt><dd>SHA-256 over currency, lines, subtotal, coupon, discount, delivery, tax charges, total and both address snapshots. A confirmation stands only while the freshly priced checkout has the same fingerprint.</dd>
+        <dt>Confirmation</dt><dd>Fields on the cart: <code>payment_method</code>, <code>confirmed_at</code>, <code>confirmed_fingerprint</code>, <code>confirmed_total</code>.</dd>
+        <dt>Facility</dt><dd>The package feature <code>wholesale_enabled</code>; without it the account has no wholesale.</dd>
+    </dl>
+
+    <h2>Data model</h2>
+    <table>
+        <thead><tr><th>Table / model</th><th>Columns</th><th>Constraints</th></tr></thead>
+        <tbody>
+        <tr><td><code>carts</code> / <code>Cart</code></td><td><code>public_id</code>, <code>user_id</code>, <code>business_account_id</code>, <code>coupon_code</code>, <code>currency_code</code>, <code>payment_method</code>, <code>confirmed_at</code>, <code>confirmed_fingerprint</code>, <code>confirmed_total</code> (Money)</td><td><code>user_id</code> unique (cascade); account restrict; CHECK confirmation fields complete together; CHECK <code>confirmed_total &gt;= 0</code>.</td></tr>
+        <tr><td><code>cart_items</code> / <code>CartItem</code></td><td><code>cart_id</code>, <code>product_id</code>, <code>product_variant_id</code>, <code>quantity</code>, <code>unit_price_seen</code>, <code>resale_amount</code> (legacy; cleared on each set), <code>currency_code</code></td><td>CHECK <code>quantity &gt; 0</code>; partial unique indexes: one line per product (no variant) and one per variant per cart; products and variants restrict deletion (a cart holding a product blocks permanent delete).</td></tr>
+        </tbody>
+    </table>
+    <p>No status enum. The cart is a working document; the order it produces has its own states (<a href="order.html">Order</a>).</p>
+
+    <h2>States &amp; lifecycle</h2>
+    <p>Cart phases: empty, building, <em>ready for checkout</em> (<code>CartQuote::isReadyForCheckout()</code>: not empty, no line problems, no unaccepted price changes), <em>confirmed</em> (fingerprint stored), then ordered. After an order: paid (or paid and held for review) clears the lines, coupon and confirmation (<code>CloseOrderedCart::afterPayment</code>); cancelled unpaid keeps the lines and clears the confirmation (<code>afterCancellation</code>). Both act only if the cart still holds the confirmation the order was placed from.</p>
+    <p>Line problems (<code>CartLineQuote</code> constants): <code>unavailable</code>, <code>choose_variation</code>, <code>variation_unavailable</code>, <code>below_minimum</code>, <code>above_maximum</code>, <code>insufficient_stock</code>. A line with a problem is excluded from the subtotal.</p>
+
+    <h2>Actions &amp; workflows</h2>
+    <h3>Cart</h3>
+    <ol>
+        <li><code>OpenCart::forUser()</code> finds or creates the person's cart; a cart for a different account is deleted rather than repriced; a creation race is settled by the unique index.</li>
+        <li><code>SetCartLine</code> <strong>sets</strong> (not adds) a quantity, so retries cannot double an order. Refused in this order: not eligible on the wholesale channel (<code>ProductEligibility::isEligible(..., SalesChannel::Wholesale)</code>), variation required or inactive, below minimum / above maximum order quantity, and, when <code>StockEnforcement::enforced()</code>, not enough stock (<code>StockAvailability</code> for this account, including its own allocation). It remembers the tier price at that quantity as <code>unit_price_seen</code>. The cart is locked; the cap is <code>PriceCart::MAXIMUM_LINES = 100</code>. The cart does not reserve stock.</li>
+        <li><code>AcceptCartPrices</code> copies each changed current price into <code>unit_price_seen</code>, clearing the "price changed" notice.</li>
+    </ol>
+    <h3>Pricing (every read)</h3>
+    <ol>
+        <li><code>PriceCart::quote()</code> re-checks each line: eligibility, variation, quantity bounds, stock, and <code>WholesalePriceResolver::unitPrice()</code> at the line quantity. Line total = unit price times quantity; <code>priceChanged</code> when it differs from the seen price.</li>
+        <li><code>PriceCheckout::quote()</code> adds: coupon (<code>CouponValidator::validateForWholesale</code>, rechecked, a bad code simply stops discounting); delivery from <code>FeeRuleResolver::wholesaleDelivery()</code> for the account's package (zero if nothing is sold); discount shared across lines proportionally with <code>Money::allocate()</code>; tax per line on the post-discount net and on the delivery charge via <code>TaxEngine</code>; total = subtotal - discount + delivery + tax added (tax-inclusive amounts are shown, never added twice). Billing and shipping come from the user's current addresses.</li>
+    </ol>
+    <h3>Checkout and order</h3>
+    <ol>
+        <li>Addresses: <code>SaveCheckoutAddress</code> (billing or shipping, edited in place, user row locked) or <code>UseSavedAddressForCheckout</code> (one of the account's own active shared addresses becomes both; the order takes its own snapshot).</li>
+        <li><code>ApplyCheckoutCoupon</code> stores only the coupon's code on the cart when accepted; nothing is redeemed.</li>
+        <li><code>ConfirmCheckout::handle($user, $account, $method, $fingerprintSeen)</code>, under a cart lock: reprice; require ready cart and both addresses; the method must be the wallet (covered by balance) or an available gateway for the currency; <code>hash_equals</code> on the fingerprint else <code>CheckoutRefused::changed()</code>; then store the confirmation. Same fingerprint and method again is a no-op. <code>withdraw()</code> clears it. It takes no payment, creates no order, reserves nothing.</li>
+        <li><code>PlaceWholesaleOrder::handle()</code> (Order module): refuses if KYC re-verification blocks new orders; in one transaction under a cart lock verifies the confirmation and fingerprint again, records one payment (<code>PaymentPurpose::WholesaleOrder</code>, key <code>wholesale-payment:...</code>), creates the order (<code>source = erp_wholesale</code>, <code>payment_pending</code>, full payment model, snapshot of lines), reserves every line's stock in product order through <code>StockReservations</code> (supplier-backed lines allocate from a supplier offer), sets the payment deadline <code>SETTLEMENT_MARGIN_SECONDS = 60</code> before the reservations expire, and holds the coupon. Idempotent per confirmation (key <code>wholesale-order:&lt;hash of cart, fingerprint, confirmed_at&gt;</code>); a stock shortfall is <code>OrderRefused::stockUnavailable()</code> when enforcement is on.</li>
+    </ol>
+
+    <h2>Entry points</h2>
+    <p>Web routes (<code>auth</code>, <code>business.activated</code>); each action also needs the wholesale facility (<code>ProductEligibility::allowsChannel</code>, 403 otherwise).</p>
+    <table>
+        <thead><tr><th>Route name</th><th>Method and URL</th><th>Controller@method</th></tr></thead>
+        <tbody>
+        <tr><td><code>wholesale.cart.show</code></td><td>GET <code>/wholesale/cart</code></td><td><code>WholesaleCartController@show</code></td></tr>
+        <tr><td><code>wholesale.cart.items.store|update|destroy</code></td><td>POST <code>/wholesale/cart/items</code>; PATCH/DELETE <code>.../items/{item}</code></td><td><code>store</code>, <code>update</code>, <code>destroy</code></td></tr>
+        <tr><td><code>wholesale.cart.prices.accept</code></td><td>POST <code>/wholesale/cart/prices</code></td><td><code>acceptPrices</code></td></tr>
+        <tr><td><code>wholesale.checkout.show</code></td><td>GET <code>/wholesale/checkout</code></td><td><code>WholesaleCheckoutController@show</code></td></tr>
+        <tr><td><code>wholesale.checkout.coupon.apply|remove</code></td><td>PUT/DELETE <code>/wholesale/checkout/coupon</code></td><td><code>applyCoupon</code>, <code>removeCoupon</code></td></tr>
+        <tr><td><code>wholesale.checkout.address.use</code>, <code>.addresses.update</code></td><td>PUT <code>.../checkout/address</code>, <code>.../checkout/addresses/{type}</code></td><td><code>useAddress</code>, <code>updateAddress</code></td></tr>
+        <tr><td><code>wholesale.checkout.confirmation.store|destroy</code></td><td>POST/DELETE <code>.../checkout/confirmation</code></td><td><code>confirm</code>, <code>withdrawConfirmation</code></td></tr>
+        <tr><td><code>wholesale.orders.index|store|show</code></td><td>GET/POST <code>/wholesale/orders</code>; GET <code>.../{order}</code></td><td><code>WholesaleOrderController</code></td></tr>
+        <tr><td><code>wholesale.orders.payment.store</code>, <code>.cancellation.store</code></td><td>POST <code>.../{order}/payment</code>, <code>.../{order}/cancellation</code></td><td><code>pay</code>, <code>cancel</code> (<code>Gate</code> <code>cancel</code>)</td></tr>
+        <tr><td><code>wholesale.orders.payment.return|cancelled|failed</code></td><td>GET <code>.../{order}/payment/return|cancelled|failed</code></td><td><code>WholesaleOrderPaymentReturnController</code></td></tr>
+        <tr><td><code>wholesale.orders.payment.*.receive</code></td><td>POST gateway callbacks (section near the end of <code>routes/web.php</code>)</td><td><code>GatewayReturnController@orderReturn|orderCancelled|orderFailed</code></td></tr>
+        </tbody>
+    </table>
+    <p>Mobile (<code>routes/mobile/wholesale.php</code>, names <code>mobile.v1.wholesale.*</code>, middleware <code>mobile.activated</code>): cart <code>show</code>, <code>items.store|update|destroy</code>, <code>prices.accept</code>; checkout (<code>show</code>, <code>coupon.apply|remove</code>, <code>address.use</code>, <code>addresses.update</code>, <code>confirmation.store|destroy</code>); orders (<code>index</code>, <code>store</code>, <code>show</code>, <code>cancellation.store</code>, <code>payment.store</code>, <code>payment.return|failed|cancelled</code>). The exact URL prefixes for the cart and checkout groups are in that file.</p>
+    <p>Scheduled: <code>wholesale-order-payment-sweep</code> (<code>ExpireUnpaidOrders</code>, every minute, <code>onOneServer</code>, <code>withoutOverlapping</code>) confirms orders whose payment settled and cancels failed/expired ones, giving the stock back.</p>
+    <h3>Console: <code>catalog:verify-wholesale-pricing</code></h3>
+    <p>Read-only deployment guard (<code>VerifyWholesalePricingCommand</code>). Run with <code>--snapshot=&lt;file&gt;</code> before a pricing migration and <code>--against=&lt;file&gt;</code> after. The snapshot stores the exact Postgres decimal text of <code>base_cost</code>, <code>wholesale_price</code> and the three selling-price bounds for products, and <code>base_cost</code>, <code>wholesale_price</code> for variants, plus SKUs/ids, counts, nulls, zeros, scales and a checksum. The comparison exits non-zero on any changed, nulled, zeroed or re-scaled value, missing or duplicated row. Snapshots are refused inside the repository, <code>public/</code> or <code>storage/</code>, written mode 0600, and values are printed only with <code>--show-values</code>. <code>--allow-explicit-percentage</code> (development only) tolerates a deliberate switch to percentage pricing.</p>
+
+    <h2>Permissions &amp; scoping</h2>
+    <p>Access is by account, not by staff permission: the facility gate above plus <code>business.activated</code>; the cart is reached only through the signed-in user and their account (<code>OpenCart</code>), so another user's cart cannot be named (§31.3). Orders are looked up through the account (404 otherwise). The permission matrix has a <code>wholesale</code> module (<code>view</code>, <code>create</code>, <code>edit</code>, <code>export</code>); I found no code that checks it. Staff wholesale-order administration is under the Order module.</p>
+
+    <h2>Money, ledger &amp; audit effects</h2>
+    <ul>
+        <li>All figures are <code>Money</code> (flat Taka decimal strings, bcmath). Discount is allocated with <code>Money::allocate()</code> so shares sum exactly; weights use the currency's smallest unit via <code>Currency::smallestUnit()</code>, not a bare multiplication by 100.</li>
+        <li>The cart/checkout write no ledger entries. The payment (and a wallet debit if the wallet is the method) and invoice are created and settled in the Order/Billing/Wallet modules. A paid order credits Partner stock through <code>ReceivePartnerPurchase</code> (<a href="inventory.html">Inventory</a>).</li>
+        <li>Idempotency: order key per confirmation, payment key derived from it, reservation references <code>&lt;order reference&gt;-L&lt;n&gt;</code>.</li>
+    </ul>
+
+    <h2>Configuration</h2>
+    <p>Settings row <code>inventory.stock_blocks_orders</code> (does stock refuse cart lines and orders); reservation windows <code>inventory.reservation_online_minutes</code> (payment deadline); fee rules and tax rules and coupons come from their own modules; gateway availability from <code>PaymentGatewayManager</code>.</p>
+
+    <h2>Rules, invariants &amp; gotchas</h2>
+    <div class="callout callout-rule"><p><strong>Rule.</strong> The browser never sends a price. Send a fingerprint; the server reprices and refuses a mismatch. Keep <code>CheckoutQuote::fingerprint()</code> in step with anything that changes what is charged, or a confirmation may survive a change it should not.</p></div>
+    <ul>
+        <li>Cart stock checks are advisory; the binding check is the reservation at order placement.</li>
+        <li>With stock enforcement off, placement tolerates a failed reservation (the line gets no reservation).</li>
+        <li>Prices on a line with an unaccepted change block checkout until <code>AcceptCartPrices</code>.</li>
+        <li>Every account pays the whole total (D34); the old delivery-only payment for Non-Conditional accounts is no longer created.</li>
+        <li>Reservations are taken in product/variation order across checkouts to avoid lock-order deadlocks.</li>
+        <li>A line whose product has since gone ineligible shows no price (<code>unitPrice = null</code>).</li>
+    </ul>
+
+    <h2>How to&hellip;</h2>
+    <ol>
+        <li><strong>Add a charge to checkout:</strong> compute it in <code>PriceCheckout::quote()</code>, add it to <code>CheckoutQuote</code> and its <code>fingerprint()</code>, add a <code>QuoteLine</code> in <code>WholesalePaymentQuote::fromCheckout()</code>, snapshot it in <code>PlaceWholesaleOrder::createOrder()</code>, and update the screens and mobile resources.</li>
+        <li><strong>Add a cart line rule:</strong> add a constant to <code>CartLineQuote</code>, check it in both <code>PriceCart::line()</code> and <code>SetCartLine</code> (and a <code>CartRefused</code> factory plus lang strings).</li>
+        <li><strong>Check prices survive a migration:</strong> run the verify command before and after (above).</li>
+    </ol>
+
+    <h2>Testing</h2>
+    <p><code>vendor/bin/pest tests/Feature/Wholesale</code> (group <code>wholesale</code>): <code>WholesaleCartTest</code>, <code>WholesaleCartPricingTest</code>, <code>WholesaleCheckoutChargesTest</code>, <code>WholesaleCheckoutConfirmationTest</code>, <code>WholesaleCouponTest</code>, <code>UseSavedAddressForCheckoutTest</code>, <code>WholesaleOrderPaymentTest</code>, <code>WholesaleOrderTrackingTest</code>, <code>WholesaleBrowsingTest</code>, <code>WholesaleProductDetailTest</code>, <code>CartSchemaTest</code>, <code>CartCurrencyMigrationTest</code>. Races: <code>tests/Feature/Concurrency/WholesaleCartConcurrencyTest.php</code>, <code>WholesaleOrderConcurrencyTest.php</code>. Mobile: <code>tests/Feature/Mobile/MobileWholesaleOrderTest.php</code>. Verify command: <code>tests/Feature/Catalog/WholesalePricingPreservationTest.php</code>. No cart factories; use file-local helpers and <code>testAccountWithPackageFeatures()</code>.</p>
+
+    <h2>Related modules</h2>
+    <ul><li><a href="catalog.html">Catalog</a>, <a href="inventory.html">Inventory</a>, <a href="order.html">Order</a>, <a href="billing.html">Billing</a>, <a href="wallet.html">Wallet</a>, <a href="tax.html">Tax</a>, <a href="address.html">Address</a>, <a href="package.html">Package</a></li></ul>
+</main>
+</body>
+</html>

@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Audit module</title>
+    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+    <script src="../assets/docs.js"></script>
+</head>
+<body>
+<main id="doc">
+    <h1>Audit module</h1>
+    <p class="lead">The append-only record of who did what, why, and what changed. Every sensitive Action writes one entry through <code>RecordAuditLog</code>. Rows cannot be updated; the only deletion is the guarded purge, which the Super Admin alone may run and which always leaves a permanent record.</p>
+
+    <h2>Purpose</h2>
+    <p>Implements §36.2 (audit logging) and §42 (no secrets in logs), amended by <strong>D33</strong> (the activity log can be cleared through one guarded path; recorded originally as D29 and still cited as "D29" in several code comments and route comments). Users: staff read it at <strong>Admin &rarr; Activity log</strong>; the Super Admin purges and sets retention; every module writes to it.</p>
+    <div class="callout callout-rule"><p><strong>Rule.</strong> Audit logs are immutable: no update, ever, and no delete except <code>PurgeAuditLogs</code> (D33). Ledger entries have no exception at all. A correction is a new entry.</p></div>
+
+    <h2>Where it lives</h2>
+    <table>
+        <thead><tr><th>Path</th><th>Role</th></tr></thead>
+        <tbody>
+        <tr><td><code>app/Domain/Audit/Models/AuditLog.php</code></td><td>The model; Eloquent update/delete guards</td></tr>
+        <tr><td><code>app/Domain/Audit/Data/AuditEntry.php</code></td><td>Immutable value object describing one action to record</td></tr>
+        <tr><td><code>app/Domain/Audit/Actions/RecordAuditLog.php</code></td><td>The single writer; redaction</td></tr>
+        <tr><td><code>app/Domain/Audit/Actions/PurgeAuditLogs.php</code></td><td>The one guarded delete path</td></tr>
+        <tr><td><code>app/Domain/Audit/Actions/ConfigureAuditRetention.php</code></td><td>Sets retention (audits <code>audit.retention_changed</code>)</td></tr>
+        <tr><td><code>app/Domain/Audit/AuditLogAuthority.php</code>, <code>AuditRetention.php</code></td><td>Who may purge; retention days</td></tr>
+        <tr><td><code>app/Domain/Audit/Exceptions/AuditLogIsImmutable.php</code></td><td>Thrown by the model guards</td></tr>
+        <tr><td><code>app/Http/Controllers/Admin/ActivityLogController.php</code>, <code>AuditRetentionSettingsController.php</code></td><td>Screens</td></tr>
+        <tr><td><code>resources/js/pages/admin/activity-log/</code></td><td><code>index.tsx</code>, <code>purge-logs-dialog.tsx</code></td></tr>
+        <tr><td><code>lang/{en,bn}/audit.php</code></td><td>Labels</td></tr>
+        <tr><td><code>database/migrations/2026_09_01_110000_create_audit_logs_table.php</code>, <code>2026_10_13_170000_allow_guarded_audit_log_purge.php</code></td><td>Table, triggers, purge exception</td></tr>
+        <tr><td><code>tests/Feature/Audit/</code></td><td><code>PurgeAuditLogsTest</code>, <code>ActivityLogScreenTest</code></td></tr>
+        </tbody>
+    </table>
+
+    <h2>Key terms</h2>
+    <dl>
+        <dt>Entry</dt><dd><code>AuditEntry</code>: built where the action happens, because only there are the reason and the before/after state known.</dd>
+        <dt>Actor type</dt><dd><code>user</code> by default, or <code>system</code> for scheduled jobs and gateway callbacks. A system action records no actor id: naming a person who did not act would be a lie an investigation could act on.</dd>
+        <dt>Sensitive flag</dt><dd><code>is_sensitive</code>: marks decisions an investigation will want to find (suspensions, role changes, manual settlements, erasure). Filterable in the screen and counted on the dashboard.</dd>
+        <dt>Module</dt><dd>A short string (&le; 32 chars) such as <code>account</code>, <code>access</code>, <code>kyc</code>, <code>system</code>, <code>audit</code>; the screen's module filter accepts only <code>[a-z_]{1,32}</code>.</dd>
+        <dt>Purge</dt><dd>The guarded deletion of entries, recorded permanently as <code>audit.logs_purged</code>.</dd>
+    </dl>
+
+    <h2>Data model</h2>
+    <table>
+        <thead><tr><th>Column (<code>audit_logs</code>)</th><th>Notes</th></tr></thead>
+        <tbody>
+        <tr><td><code>id</code>, <code>public_id</code> (ULID, unique)</td><td><code>HasPublicId</code></td></tr>
+        <tr><td><code>actor_id</code></td><td>Nullable FK to <code>users</code>, <code>nullOnDelete</code></td></tr>
+        <tr><td><code>actor_type</code> (32, default <code>user</code>), <code>actor_label</code></td><td><code>actor_label</code> e.g. "Retention policy"</td></tr>
+        <tr><td><code>action</code> (64)</td><td>Dotted, e.g. <code>account.suspended</code></td></tr>
+        <tr><td><code>auditable_type</code>, <code>auditable_id</code></td><td>Class name and numeric id; morph relation <code>auditable()</code></td></tr>
+        <tr><td><code>before</code>, <code>after</code></td><td>jsonb, cast to array, redacted on write</td></tr>
+        <tr><td><code>reason</code>, <code>note</code></td><td>text</td></tr>
+        <tr><td><code>ip_address</code>, <code>user_agent</code> (512)</td><td>Filled by <code>AuditEntry::withContext($request)</code>; most Actions leave them null</td></tr>
+        <tr><td><code>account_id</code></td><td>Plain nullable column (no FK), for finding entries by business</td></tr>
+        <tr><td><code>module</code>, <code>is_sensitive</code></td><td>Indexed</td></tr>
+        <tr><td><code>created_at</code></td><td>Immutable datetime; no <code>updated_at</code></td></tr>
+        </tbody>
+    </table>
+    <p>Indexes: (<code>auditable_type</code>, <code>auditable_id</code>), (<code>actor_id</code>, <code>created_at</code>), (<code>module</code>, <code>created_at</code>), (<code>action</code>, <code>created_at</code>), <code>created_at</code>, <code>is_sensitive</code>. Scopes: <code>sensitive()</code>, <code>forModule()</code>.</p>
+
+    <h2>States &amp; lifecycle</h2>
+    <p>No statuses. A row is written once and lives until a purge removes it (never a row whose action is <code>audit.logs_purged</code>).</p>
+
+    <h2>Actions &amp; workflows</h2>
+    <table>
+        <thead><tr><th>Class</th><th>Purpose</th></tr></thead>
+        <tbody>
+        <tr><td><code>RecordAuditLog::handle(AuditEntry)</code></td><td>Creates the row. <code>redact()</code> replaces, at any depth, the value of any key containing (case-insensitive, dashes treated as underscores) <code>password</code>, <code>secret</code>, <code>token</code>, <code>api_key</code>, <code>apikey</code>, <code>private_key</code>, <code>credential</code>, <code>authorization</code>, <code>signature</code>, <code>cvv</code>, <code>card_number</code>, <code>pin</code>, <code>otp</code>, <code>remember_token</code> with <code>[redacted]</code>. The key stays so a reader can see a password changed.</td></tr>
+        <tr><td><code>PurgeAuditLogs::handle($actor, $person, $olderThan, $reason)</code></td><td>Manual clear. Requires <code>AuditLogAuthority::mayPurge</code>; reason of at least 10 characters (<code>MINIMUM_REASON</code>); scope everyone, one user by public id, or <code>system</code> (<code>PurgeAuditLogs::SYSTEM</code>); optionally only entries older than a date.</td></tr>
+        <tr><td><code>PurgeAuditLogs::purgeExpired()</code></td><td>The nightly retention sweep; does nothing while retention is off.</td></tr>
+        <tr><td><code>ConfigureAuditRetention</code></td><td>Sets <code>audit.log_retention_days</code>; requires <code>AuditLogAuthority::mayManageRetention</code>; audited.</td></tr>
+        </tbody>
+    </table>
+    <h3>Flow: guarded purge (D33)</h3>
+    <ol>
+        <li>Controller: <code>activity-log.purge</code> aborts 403 unless <code>AuditLogAuthority::mayPurge</code>; validates a <code>current_password</code> and the reason.</li>
+        <li><code>PurgeAuditLogs::purge</code> opens a transaction and runs <code>SELECT set_config('feriwala.purge_audit_logs','on',true)</code> (transaction-local). The database trigger permits DELETE only while that is <code>on</code>.</li>
+        <li>Deletes matching rows, always excluding <code>audit.logs_purged</code>; sets the flag back to <code>off</code>.</li>
+        <li>Writes the permanent <code>audit.logs_purged</code> entry: actor, reason, <code>before = {deleted: N}</code>, <code>after = {scope, person, older_than}</code>, sensitive. The trigger refuses to delete such a record under any circumstance.</li>
+    </ol>
+    <p>UPDATE and TRUNCATE remain refused by the database (<code>feriwala_audit_logs_immutable()</code> with triggers <code>audit_logs_no_update</code>, and the delete trigger as amended by the purge migration).</p>
+    <h3>How it is immutable (three layers)</h3>
+    <ol>
+        <li>The model throws <code>AuditLogIsImmutable</code> on <code>updating</code> and <code>deleting</code>.</li>
+        <li>The permission catalogue offers no <code>audit.edit</code>; <code>audit.delete</code> means the right to run the purge, not to delete a row.</li>
+        <li>Database triggers refuse raw SQL.</li>
+    </ol>
+
+    <h2>Entry points</h2>
+    <table>
+        <thead><tr><th>Name</th><th>Method and URL</th><th>Controller</th><th>Notes</th></tr></thead>
+        <tbody>
+        <tr><td><code>admin.activity-log.index</code></td><td>GET <code>/admin/activity-log</code></td><td><code>ActivityLogController@index</code></td><td><code>audit.view_audit_logs</code>. Filters: search (action, actor name, ...), person, module, sensitive-only, from/to dates. Paginated in the database.</td></tr>
+        <tr><td><code>admin.activity-log.purge</code></td><td>POST <code>/admin/activity-log/purge</code></td><td><code>ActivityLogController@purge</code></td><td>Super Admin, password, reason, <code>older_than_days</code> up to 3650</td></tr>
+        <tr><td><code>admin.activity-log-retention.index|update</code></td><td>GET/PUT <code>/admin/activity-log-retention</code></td><td><code>AuditRetentionSettingsController</code></td><td>View: <code>audit.view_audit_logs</code>; change: Super Admin with <code>audit.manage_settings</code>. <code>days</code> 0 to 3650.</td></tr>
+        </tbody>
+    </table>
+    <p>Scheduled: <code>audit-log-retention</code>, daily 03:30 in <code>app.timezone</code> (<code>routes/console.php</code>), calling <code>PurgeAuditLogs::purgeExpired()</code>. No mobile route for audit was found.</p>
+
+    <h2>Permissions &amp; scoping</h2>
+    <ul>
+        <li>Catalogue: <code>audit.view_audit_logs</code>, <code>audit.export</code>, <code>audit.delete</code>, <code>audit.manage_settings</code>.</li>
+        <li><code>admin</code> holds <code>view_audit_logs</code> only. <code>system_administrator</code> holds <code>view_audit_logs</code> and <code>export</code>. Super Admin holds all.</li>
+        <li><code>AuditLogAuthority</code>: purge and retention need the <strong>Super Admin role</strong> and the corresponding permission, and the user must not be a business identity. A custom role given <code>audit.delete</code> is still refused. Controllers and Actions both ask it, so the rule cannot be met at the screen and missed in the Action.</li>
+    </ul>
+
+    <h2>Money, ledger &amp; audit effects</h2>
+    <p>Amounts never appear as floats in <code>before</code>/<code>after</code>; record decimal strings or <code>Money::jsonSerialize()</code> output like everywhere else. Audit is not a ledger and cannot stand in for one.</p>
+
+    <h2>Configuration</h2>
+    <table>
+        <thead><tr><th>Key</th><th>Meaning</th></tr></thead>
+        <tbody>
+        <tr><td><code>audit.log_retention_days</code> (setting)</td><td>Days to keep entries; 0/unset keeps everything (the default); capped at <code>AuditRetention::MAXIMUM_DAYS</code> = 3650.</td></tr>
+        <tr><td>DB setting <code>feriwala.purge_audit_logs</code></td><td>Transaction-local flag. Never set it elsewhere.</td></tr>
+        </tbody>
+    </table>
+
+    <h2>Rules, invariants &amp; gotchas</h2>
+    <ul>
+        <li><strong>Numbering:</strong> D33 is "D29" in code comments (<code>ActivityLogController</code>, routes). The decision text notes a pending cleanup.</li>
+        <li><strong>Cost accepted by the owner:</strong> once cleared, wallet, withdrawal, payment and permission history cannot be recovered (D33).</li>
+        <li>The purge deletes <code>audit.logs_purged</code> neither by scope nor by retention; those records are permanent.</li>
+        <li><strong>Never put secrets in <code>before</code>/<code>after</code>.</strong> Redaction is key-name based and defensive; a secret under an innocuous key name is written as is.</li>
+        <li>Audit from inside the Action, in the same transaction as the change, so a rolled-back change leaves no entry and a committed one cannot lack one. Send notifications after commit.</li>
+        <li><code>actor_id</code> is a FK with <code>nullOnDelete</code>; an erased user's entries keep their rows with no actor. Account erasure does not touch the audit log.</li>
+        <li>Idempotent system callbacks should write once (see the "held back" check in <code>ActivateAccountAutomatically</code>) so the log is not flooded.</li>
+        <li><code>AuditEntry</code> is a plain constructor with named arguments; roughly 225 files already use it.</li>
+    </ul>
+
+    <h2>How to&hellip;</h2>
+    <h3>Add an audit action</h3>
+    <ol>
+        <li>Inside your Action's transaction, inject <code>RecordAuditLog</code> and call <code>handle(new AuditEntry(action: 'module.thing_done', actorId: $actor->id, auditableType: Model::class, auditableId: $m->id, before: [...], after: [...], reason: $reason, accountId: $account->id, module: 'module', isSensitive: true))</code>.</li>
+        <li>Name the action <code>&lt;module&gt;.&lt;past_tense_event&gt;</code>; the module string is free text but keep it lowercase snake.</li>
+        <li>Mark <code>isSensitive</code> for decisions about access, money, identity or trading ability. For a system actor use <code>actorType: 'system'</code> and no actor id.</li>
+        <li>For a model change, <code>AuditEntry::forModel($model, PermissionModule::X, PermissionAction::Y, $reason)</code> builds before/after from the dirty attributes and sets the sensitive flag from the verb.</li>
+        <li>Add a test that the row exists with the right action and fields.</li>
+    </ol>
+    <h3>Add request context</h3>
+    <ol><li>In a controller path, <code>$entry-&gt;withContext($request)</code> returns a copy with actor, IP and user agent (truncated to 512).</li></ol>
+    <h3>Add a module filter value</h3>
+    <ol><li>Nothing to register: the screen lists distinct non-null <code>module</code> values from the table.</li></ol>
+
+    <h2>Testing</h2>
+    <p><code>vendor/bin/pest tests/Feature/Audit</code> (own schema, one suite at a time). <code>PurgeAuditLogsTest</code> covers the authority, scopes, retention and the permanent record; <code>ActivityLogScreenTest</code> the filters. No dedicated Pest group is declared for audit.</p>
+
+    <h2>Related modules</h2>
+    <div class="cards">
+        <a class="card" href="access.html"><h3>Access</h3><p><code>audit.*</code> permissions.</p></a>
+        <a class="card" href="account.html"><h3>Account</h3><p>Largest writer of audit entries.</p></a>
+        <a class="card" href="settings.html"><h3>Settings</h3><p>Retention is a setting.</p></a>
+        <a class="card" href="../guide/decisions.html"><h3>Decisions</h3><p>D33.</p></a>
+    </div>
+</main>
+</body>
+</html>

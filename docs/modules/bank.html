@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Bank module</title>
+    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+    <script src="../assets/docs.js"></script>
+</head>
+<body>
+<main id="doc">
+    <h1>Bank module</h1>
+    <p class="lead">The Bangladesh bank and branch directory: banks keyed by BEFTN bank code, branches keyed by nine-digit routing number and linked to the location directory by district. It feeds the bank-account payout-method form; withdrawals read the chosen bank by name.</p>
+
+    <h2>Purpose</h2>
+    <p>Payout methods (<a href="payout.html">Payout</a>) for a bank account must name a real bank and branch, not free text. This module holds that reference data, bundled in the repo (<code>database/data/bangladesh-bank/NOTICE.md</code>), imports it with validation, and serves cached lookups. Users: partners and Suppliers choosing where money is sent; the system (import).</p>
+
+    <h2>Where it lives</h2>
+    <table>
+        <thead><tr><th>Path</th><th>Role</th></tr></thead>
+        <tbody>
+        <tr><td><code>app/Domain/Bank/Models/</code></td><td><code>BdBank</code>, <code>BdBankBranch</code>, <code>BdBankImport</code></td></tr>
+        <tr><td><code>app/Domain/Bank/Actions/ImportBdBanks.php</code></td><td>Validate, dry-run, import</td></tr>
+        <tr><td><code>app/Domain/Bank/Queries/BdBankLookups.php</code></td><td>Cached lookups</td></tr>
+        <tr><td><code>app/Domain/Bank/DistrictAliases.php</code>, <code>Data/</code></td><td>Reviewed district name map; report objects</td></tr>
+        <tr><td><code>app/Console/Commands/ImportBdBanksCommand.php</code></td><td><code>bd-banks:import</code></td></tr>
+        <tr><td><code>app/Http/Controllers/BankLookupController.php</code></td><td>Web and Supplier JSON lookups</td></tr>
+        <tr><td><code>app/Http/Controllers/Api/Mobile/V1/Banks/BankController.php</code>, <code>.../Supplier/Banks/BankLookupController.php</code></td><td>Mobile lookups</td></tr>
+        <tr><td><code>database/migrations/2026_10_11_100000_take_bd_banks.php</code>, <code>2026_10_11_110000_take_bd_bank_imports.php</code></td><td>Schema</td></tr>
+        <tr><td><code>tests/Feature/Bank/ImportBdBanksTest.php</code></td><td>Import tests</td></tr>
+        </tbody>
+    </table>
+
+    <h2>Key terms</h2>
+    <dl>
+        <dt>Bank code</dt><dd>Three-digit BEFTN code, unique; the public identifier for a bank.</dd>
+        <dt>Routing number</dt><dd>Nine digits, globally unique, its first three digits equal the parent bank's code; the public identifier for a branch.</dd>
+        <dt>Payable</dt><dd>Nullable boolean on a bank. <code>null</code> means the source could not identify the institution (e.g. code 050), which is distinct from <code>false</code>.</dd>
+        <dt>Selectable</dt><dd>Active, <code>payable === true</code> and <code>available_in_selector</code> (<code>BdBank::isSelectable()</code>).</dd>
+    </dl>
+
+    <h2>Data model</h2>
+    <table>
+        <thead><tr><th>Table / model</th><th>Columns</th><th>Constraints</th></tr></thead>
+        <tbody>
+        <tr><td><code>bd_banks</code> <code>BdBank</code></td><td><code>bank_code</code> (3), <code>name</code>, <code>slug</code>, <code>aliases</code> (JSON array), <code>payable</code>, <code>available_in_selector</code> (default false), <code>branch_count</code>, <code>is_active</code></td><td>Unique <code>bank_code</code>; <code>bank_code</code> locked after insert (trigger <code>bd_banks_locked_columns</code>, per the model docblock)</td></tr>
+        <tr><td><code>bd_bank_branches</code> <code>BdBankBranch</code></td><td><code>bank_id</code>, <code>routing_number</code> (9), <code>name</code>, <code>slug</code>, <code>district_location_id</code> (nullable FK to <code>bd_locations</code>), <code>district_source_name</code>, <code>branch_code</code>, <code>original_branch_code</code>, <code>swift_code</code>, <code>address</code>, <code>telephone</code>, <code>email</code>, <code>fax</code>, <code>source</code>, <code>source_status</code>, <code>is_active</code></td><td>Unique <code>routing_number</code>; check <code>^[0-9]{9}$</code>; trigger <code>feriwala_bd_bank_branch_routing_matches_bank</code> requires the routing prefix to equal the bank's code; <code>bank_id</code> and <code>routing_number</code> locked after insert. Indexes on (<code>bank_id</code>, <code>is_active</code>) and <code>district_location_id</code>.</td></tr>
+        <tr><td><code>bd_bank_imports</code> <code>BdBankImport</code></td><td>Three file checksums, <code>source_generated_utc</code>, <code>coverage</code>, <code>mode</code>, banks/branches counts, deactivated counts, <code>unmatched_district_count</code>, <code>excluded_by_source_count</code>, <code>imported_at</code></td><td>One row per import; <code>currentVersion()</code> is the cache version</td></tr>
+        </tbody>
+    </table>
+    <p>Reference data like <code>bd_locations</code>: never deleted, deactivated when absent from a later import. No public ULIDs; the bank code and routing number are the public identifiers.</p>
+
+    <h2>States &amp; lifecycle</h2>
+    <p>Active or inactive only. A branch's district stays nullable: a branch that cannot be matched is imported anyway and reported as unmatched, not dropped.</p>
+
+    <h2>Actions &amp; workflows</h2>
+    <h3><code>ImportBdBanks::handle($mode)</code></h3>
+    <ol>
+        <li>Reads three bundled files: <code>bangladesh_bank_branches_website.json</code> (bank-level fields: <code>payable</code>, <code>aliases</code>, <code>available_in_selector</code>, <code>branch_count</code>, and banks with zero branches), <code>bangladesh_bank_branches_flat.json</code> (canonical branch rows) and <code>bangladesh_bank_branches_audit.json</code> (only its issue count is reported).</li>
+        <li>Refuses to import if <code>meta.generated_utc</code> disagrees across the three files.</li>
+        <li>Parses banks and branches; resolves each branch's district to <code>bd_locations</code> by normalized name (uppercase letters only) with the reviewed <code>DistrictAliases</code> (<code>BARISHAL&rarr;BARISAL</code>, <code>CUMILLA&rarr;COMILLA</code>, <code>JHALOKATI&rarr;JHALAKATHI</code>). A name in neither is reported as unmatched, never assigned to the closest-looking district.</li>
+        <li><code>validate</code> stops there; <code>dry-run</code> runs the same upsert in a transaction that is always rolled back; <code>import</code> commits the upsert and appends a <code>bd_bank_imports</code> row.</li>
+    </ol>
+    <p>Run the location import first, since branches resolve against it. <code>BdBankLookups</code> (cached 1 day, key <code>bd_banks.v{importId}.{scope}.{key}</code>):</p>
+    <ul>
+        <li><code>selectableBanks()</code>: active, <code>payable = true</code>, <code>available_in_selector = true</code>, ordered by name; returns <code>bank_code</code>, <code>name</code>, <code>slug</code>.</li>
+        <li><code>branchesFor($bankCode, $districtLocationId)</code>: active branches of an active bank in one district, ordered by name; returns <code>routing_number</code>, <code>name</code>, <code>branch_code</code>. Empty if the bank or district does not resolve.</li>
+    </ul>
+
+    <h2>Entry points</h2>
+    <table>
+        <thead><tr><th>Surface</th><th>Routes</th></tr></thead>
+        <tbody>
+        <tr><td>Partner web (inside <code>business.activated</code>)</td><td><code>banks.index</code> GET <code>/banks</code>; <code>banks.branches</code> GET <code>/banks/{bankCode}/branches?district_id=</code> (<code>district_id</code> required integer, a <code>bd_locations.id</code>)</td></tr>
+        <tr><td>Supplier web</td><td>The same controller, <code>routes/supplier.php</code></td></tr>
+        <tr><td>Mobile</td><td><code>mobile.v1.banks.index</code>, <code>mobile.v1.banks.branches</code> under <code>/api/mobile/v1/banks</code> (<code>mobile.activated</code>); <code>GET /supplier/banks</code> and <code>/supplier/banks/{bank_code}/branches</code> for Suppliers</td></tr>
+        <tr><td>Console</td><td><code>php artisan bd-banks:import --mode=validate|dry-run|import</code> (default <code>import</code>); warns with the list of unmatched districts. <code>SafeSeeder</code> also imports.</td></tr>
+        </tbody>
+    </table>
+    <p>The district id for branches comes from the <a href="location.html">Location</a> cascade. No scheduled tasks.</p>
+
+    <h2>Permissions &amp; scoping</h2>
+    <p>Reference data with no owner; the lookups need only authentication. No admin screen or permission edits banks.</p>
+
+    <h2>Money, ledger &amp; audit effects</h2>
+    <p>None. The directory holds no balances. Its use in money flows: <code>PayoutMethod</code> carries <code>bd_bank_id</code> and <code>bd_bank_branch_id</code> as real foreign keys (only for <code>PayoutMethodType::BankAccount</code>; <code>SavePayoutMethod</code> nulls them for bKash and Nagad). The account holder, account number and account type stay in the encrypted <code>details</code> blob, since which bank a method uses is not itself sensitive. When a withdrawal is requested (<code>RequestAccountWithdrawal</code>, <code>RequestSupplierWithdrawal</code>), the payout method is frozen into <code>payout_snapshot</code> via <code>PayoutMethod::toSnapshot()</code>, which includes <code>bankName</code>; a later change to the bank row does not rewrite that withdrawal. On erasure the snapshot is blanked. See <a href="payout.html">Payout</a> and <a href="withdrawal.html">Withdrawal</a>.</p>
+
+    <h2>Configuration</h2>
+    <p>None. Source files and notice are in <code>database/data/bangladesh-bank/</code>.</p>
+
+    <h2>Rules, invariants &amp; gotchas</h2>
+    <ul>
+        <li>Mobile payout requests send <code>bank_code</code> and branch <code>routing_number</code>; the request resolves both to active rows and rejects a branch that does not belong to the bank (<code>payout.form.invalid_bank_branch</code>).</li>
+        <li>A bank with <code>payable = null</code> or <code>available_in_selector = false</code> is invisible to the selector even though it exists.</li>
+        <li>Never extend <code>DistrictAliases</code> by guessing; only reviewed differences belong there.</li>
+        <li>Import order: locations, then banks. A re-import changes the cache version, so lookups refresh by themselves.</li>
+        <li>Mismatched generation timestamps across the three files abort the import deliberately.</li>
+    </ul>
+
+    <h2>How to&hellip;</h2>
+    <h3>Refresh the bank directory</h3>
+    <ol>
+        <li>Replace the three JSON files in <code>database/data/bangladesh-bank/</code> and update <code>NOTICE.md</code>.</li>
+        <li><code>php artisan bd-banks:import --mode=validate</code>, then <code>--mode=dry-run</code>, then default. Read the unmatched districts warning.</li>
+        <li>If a district legitimately renamed, add a reviewed alias to <code>DistrictAliases::MAP</code> (normalized keys).</li>
+    </ol>
+    <h3>Offer a bank in the selector</h3>
+    <ol><li>It needs <code>payable = true</code> and <code>available_in_selector = true</code> in the source data; there is no admin switch.</li></ol>
+
+    <h2>Testing</h2>
+    <p>Pest group <code>bank</code>: <code>vendor/bin/pest tests/Feature/Bank</code> in its own schema, one suite at a time. <code>ImportBdBanksTest</code> feeds decoded arrays to <code>handleDecoded()</code> instead of the 8,000-plus real rows.</p>
+
+    <h2>Related modules</h2>
+    <div class="cards">
+        <a class="card" href="payout.html"><h3>Payout</h3><p>Payout methods using bank and branch.</p></a>
+        <a class="card" href="withdrawal.html"><h3>Withdrawal</h3><p>Snapshots the payout method.</p></a>
+        <a class="card" href="location.html"><h3>Location</h3><p>Districts for branches.</p></a>
+        <a class="card" href="supplier.html"><h3>Supplier</h3><p>Supplier payout methods.</p></a>
+    </div>
+</main>
+</body>
+</html>

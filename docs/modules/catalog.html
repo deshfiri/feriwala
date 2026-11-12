@@ -1,0 +1,398 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Catalog module</title>
+    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+    <script src="../assets/docs.js"></script>
+</head>
+<body>
+<main id="doc">
+    <h1>Catalog module</h1>
+    <p class="lead">The central product catalogue: products, variations, categories, brands, media, quantity price tiers, who may see each product, and the lifecycle that decides whether a partner can sell it. Feriwala staff author it; partners (business accounts) only read it through eligibility-scoped queries. This page is for developers touching <code>app/Domain/Catalog</code>.</p>
+
+    <h2>Purpose</h2>
+    <p>One central catalogue is shared by every wholesale buyer and every dropshipping/storefront partner. A product row is Feriwala's own record: its base cost, wholesale price, quantity tiers, lifecycle status, per-channel switches and eligibility rules live here, and stock lives in <a href="inventory.html">Inventory</a>, never on the product (a copy would be a second answer to "how many are there").</p>
+    <ul>
+        <li><strong>Admin / catalogue staff</strong> create and edit products, variations, categories, brands, attributes, media, pricing, eligibility and publishing (spec §11, §12).</li>
+        <li><strong>Business accounts</strong> (wholesale buyers and dropshipping partners) browse and buy from it, read-only, on the web (<code>catalog.*</code> routes) and on the mobile API (<code>mobile.v1.catalog.*</code>). They never see <code>base_cost</code>.</li>
+        <li><strong>Partner storefronts</strong> read the catalogue through the frozen Storefront API; see <a href="../api/storefront-api.html">Storefront API</a> and <a href="../storefront-app.html">Storefront app</a>.</li>
+    </ul>
+    <p>Implements §11 (catalogue, statuses, categories/brands), §12 (admin-only creation), §13 (partner browsing), §14 (order quantities, quantity pricing), §34.3 (SEO/schema fields); touches D4/D26 (flat Taka money) and D34 (what a partner has bought is what it may put on a website).</p>
+
+    <div class="callout callout-rule"><p><strong>Rule (§12).</strong> Only platform staff create products, variations, categories, brands and attributes. A regular user is anybody who belongs to a business account: they are refused every write regardless of any permission or role (even Super Admin) they were given. This is enforced at the UI, controllers, form requests, actions, model policies, the Gate <code>before</code> hook and database triggers, with tests that assert rejection. Never add a catalogue write path that skips <code>CatalogPolicy</code>.</p></div>
+
+    <h2>Where it lives</h2>
+    <table>
+        <thead><tr><th>Path</th><th>Role</th></tr></thead>
+        <tbody>
+        <tr><td><code>app/Domain/Catalog/Models/</code></td><td><code>Product</code>, <code>ProductVariant</code>, <code>Category</code>, <code>Brand</code>, <code>ProductMedia</code>, <code>ProductAttribute</code>, <code>ProductAttributeValue</code>, <code>ProductPriceTier</code>, <code>ProductStatusChange</code>, <code>ProductContent</code></td></tr>
+        <tr><td><code>app/Domain/Catalog/Enums/</code></td><td><code>ProductStatus</code>, <code>SalesChannel</code>, <code>PackageScope</code>, <code>AccountScope</code>, <code>WholesalePricingMethod</code>, <code>ItemCondition</code></td></tr>
+        <tr><td><code>app/Domain/Catalog/Actions/</code></td><td>All writes (see Actions &amp; workflows)</td></tr>
+        <tr><td><code>app/Domain/Catalog/ProductEligibility.php</code></td><td>The one answer to "may this account see this product" (single product and SQL list forms)</td></tr>
+        <tr><td><code>app/Domain/Catalog/WholesalePriceResolver.php</code>, <code>WholesalePriceCalculator.php</code></td><td>Tier-aware unit price at a quantity; the percentage-markup formula</td></tr>
+        <tr><td><code>app/Domain/Catalog/CentralProductFields.php</code></td><td>Lists the fields each endpoint owns; every other endpoint rejects them (§12)</td></tr>
+        <tr><td><code>app/Domain/Catalog/ProductMediaStore.php</code>, <code>CatalogImageStore.php</code></td><td>Product media (images/video) and brand logo/category tile storage</td></tr>
+        <tr><td><code>app/Domain/Catalog/ProductDeletionRule.php</code>, <code>ProductForceDeletion.php</code>, <code>PurchasedProducts.php</code>, <code>ProductBarcode.php</code>, <code>ProductSeo.php</code></td><td>Trash setting; force-delete impact report; "products this account bought"; EAN-13 renderer; SEO/schema payload</td></tr>
+        <tr><td><code>app/Domain/Catalog/Policies/CatalogPolicy.php</code>, <code>CatalogModelPolicy.php</code></td><td>Permission logic and its Laravel model-policy wrapper</td></tr>
+        <tr><td><code>app/Domain/Catalog/Exceptions/CatalogRefused.php</code>, <code>Data/ProductLogistics.php</code>, <code>Rules/MarkupPercentageRule.php</code></td><td>Named refusals; weight/dimension resolution; markup validation rule</td></tr>
+        <tr><td><code>app/Http/Controllers/Admin/</code></td><td><code>ProductController</code>, <code>CategoryController</code>, <code>BrandController</code>, <code>ProductAttributeController</code>, <code>ProductVariantController</code>, <code>ProductMediaController</code>, <code>ProductStatusController</code>, <code>ProductChannelController</code>, <code>ProductEligibilityController</code>, <code>ProductPriceTierController</code>, <code>ProductMerchandisingController</code>, <code>ProductContentController</code>, <code>ProductBulkController</code>, <code>ProductTrashController</code>, <code>ProductBrowseController</code>, <code>ProductDeletionSettingsController</code></td></tr>
+        <tr><td><code>app/Http/Controllers/Erp/CatalogController.php</code>, <code>MyProductWebsiteController.php</code></td><td>Partner web catalogue (read-only) and "put a bought product on my storefront"</td></tr>
+        <tr><td><code>app/Http/Controllers/Api/Mobile/V1/Catalog/</code></td><td>Mobile catalogue (<code>CatalogController</code>, <code>MyProductWebsiteController</code>, <code>AllocatedStockController</code>)</td></tr>
+        <tr><td><code>app/Http/Requests/</code></td><td><code>SaveProductRequest</code>, <code>SaveVariantRequest</code>, <code>SaveCategoryRequest</code>, <code>SaveBrandRequest</code>, <code>BulkProductRequest</code>, <code>Mobile/Catalog/CatalogBrowseRequest</code></td></tr>
+        <tr><td><code>resources/js/pages/admin/catalog/</code></td><td>Admin screens: <code>products/index.tsx</code>, <code>products/form.tsx</code>, sections (<code>variants-section</code>, <code>media-section</code>, <code>price-tiers-section</code>, <code>eligibility-section</code>, <code>status-panel</code>, <code>merchandising-section</code>, <code>suppliers-section</code>), <code>trash.tsx</code>, <code>categories.tsx</code>, <code>brands.tsx</code>, <code>attributes.tsx</code></td></tr>
+        <tr><td><code>resources/js/pages/catalog/</code></td><td>Partner screens: <code>products.tsx</code>, <code>browse.tsx</code>, <code>show.tsx</code>, <code>forbidden.tsx</code></td></tr>
+        <tr><td><code>lang/en/catalog.php</code>, <code>lang/bn/catalog.php</code></td><td>Strings (status labels are <code>catalog.products.status.*</code>)</td></tr>
+        <tr><td><code>database/migrations/2026_09_24_*</code> and later</td><td>Tables, CHECKs and triggers (see Data model)</td></tr>
+        <tr><td><code>tests/Feature/Catalog/</code>, <code>tests/Feature/ProductRestrictions/</code></td><td>Behaviour and §12 enforcement tests</td></tr>
+        </tbody>
+    </table>
+
+    <h2>Key terms</h2>
+    <dl>
+        <dt>BPC / SKU</dt>
+        <dd>The central product code. The column is <code>products.sku</code>; code and UI call it "BPC" interchangeably. Unique, stored upper-case (CHECK), nine upper-case letters and digits when auto-generated.</dd>
+        <dt>Central product</dt>
+        <dd>The single catalogue record a product has. A partner's website listing, a supplier offer and a stock item all point at it; none own it.</dd>
+        <dt>Variation / variant</dt>
+        <dd>A combination of attribute values (Size M + Colour Navy) with its own SKU, optional price overrides and logistics overrides. Code says <code>ProductVariant</code>; UI says variation.</dd>
+        <dt>Attribute / attribute value</dt>
+        <dd>Catalogue-wide shared vocabulary (Size, Colour; M, Navy). Variants are built from them.</dd>
+        <dt>Lifecycle status</dt>
+        <dd>The seven-state <code>products.status</code> (draft, pending_review, active, inactive, out_of_stock, discontinued, archived).</dd>
+        <dt>Sales channel</dt>
+        <dd>Dropshipping or wholesale (<code>SalesChannel</code>). Each has its own on/off column, its own package facility and its own browse screen. Called "Partner Selling" in some UI copy for dropshipping.</dd>
+        <dt>Eligibility</dt>
+        <dd>The rule set (active, category/brand on, account can transact, entitling package, package scope, account scope, channel) that decides if an account may see a product.</dd>
+        <dt>Price tier</dt>
+        <dd>A quantity band: from <code>min_quantity</code> units, this unit price. Belongs to a product or to one variant.</dd>
+        <dt>Wholesale pricing method</dt>
+        <dd><code>fixed</code> (staff type the price) or <code>percentage</code> (price = base cost + markup %, calculated on the server).</dd>
+        <dt>Trash / force delete</dt>
+        <dd>Soft-delete of a product (reversible); permanent delete for an unused draft; Super Admin "force delete" for one with history.</dd>
+        <dt>Product content</dt>
+        <dd>A per-product update feed (title, body, at most one attachment) that admins publish; different from the <a href="content-library.html">Content Library</a>, which releases one item to many products.</dd>
+    </dl>
+
+    <h2>Data model</h2>
+    <p>All money columns are <code>NUMERIC(19,2)</code> flat Taka, cast with <code>MoneyCast</code> to <code>App\Support\Money\Money</code>, with a <code>currency_code</code> (always <code>BDT</code> today). Early migrations still say <code>*_minor</code>; <code>2026_10_05_100000_convert_monetary_storage_to_flat_taka.php</code> converted the columns, and the models read the flat names below.</p>
+    <table>
+        <thead><tr><th>Table / model</th><th>Purpose and key columns</th><th>Constraints and notes</th></tr></thead>
+        <tbody>
+        <tr>
+            <td><code>products</code><br><code>Product</code></td>
+            <td>Identity (<code>public_id</code>, <code>slug</code>, <code>sku</code>, <code>barcode</code>, <code>name</code>, descriptions); placement (<code>category_id</code>, <code>brand_id</code>); money (<code>base_cost</code>, <code>wholesale_price</code>, <code>suggested_selling_price</code>, <code>minimum_selling_price</code>, <code>maximum_selling_price</code>); <code>wholesale_pricing_method</code> + <code>wholesale_markup_percentage</code>; order bounds <code>min_order_quantity</code>/<code>max_order_quantity</code>; status columns <code>status</code>, <code>dropshipping_status</code>, <code>wholesale_status</code>; <code>package_scope</code>, <code>account_scope</code>; <code>is_featured</code>/<code>featured_at</code>; SEO (<code>meta_*</code>, <code>mpn</code>, <code>item_condition</code>, <code>social_media_id</code>); logistics (weights in grams, dimensions in cm, <code>ships_by_box</code>, <code>pieces_per_box</code>, box weight/dimensions, <code>is_fragile</code>); <code>published_at</code>; trash (<code>deleted_at</code>, <code>deleted_by</code>, <code>deletion_reason</code>).</td>
+            <td>Uses <code>HasPublicId</code> + <code>HasSlug</code> (public id wins route binding), <code>HasStateMachine</code>, <code>SoftDeletes</code>. CHECKs: sku upper-case, prices and bounds non-negative, <code>min_order_quantity &gt;= 1</code>, max &gt;= min, selling-price range, <code>status</code> only the 7 lifecycle values, channel columns only their own two values, scopes <code>all|selected</code> / <code>any|selected</code>, markup 0..1000 and set only when method is <code>percentage</code>. Triggers: <code>public_id</code>/<code>currency_code</code> immutable; <code>published_at</code> set once; hard delete only when status is <code>draft</code>. Model defaults are the least permissive (<code>package_scope=selected</code>, channels disabled, status draft). Logistics via <code>$product-&gt;logistics()</code>.</td>
+        </tr>
+        <tr>
+            <td><code>product_variants</code><br><code>ProductVariant</code></td>
+            <td><code>product_id</code>, <code>sku</code>, <code>barcode</code>, <code>combination_key</code>, nullable <code>wholesale_price</code>/<code>base_cost</code> overrides, own pricing method/markup, nullable logistics overrides, <code>is_active</code>, <code>sort_order</code>.</td>
+            <td>Unique <code>(product_id, combination_key)</code>; <code>combination_key</code> is the sorted attribute-value ids joined by <code>-</code>, and is immutable (trigger) - a different combination is a new variant. SKU upper-case. Percentage variants need their own cost and price (CHECK). <code>$touches = ['product']</code> so storefronts see the product's <code>updated_at</code> move. <code>effectiveWholesalePrice()</code> = own else product's.</td>
+        </tr>
+        <tr>
+            <td><code>product_variant_values</code></td>
+            <td>Pivot: variant to attribute and value.</td>
+            <td>Primary key <code>(product_variant_id, product_attribute_id)</code> gives one value per attribute per variant. Cascade with the variant; restrict on attribute/value.</td>
+        </tr>
+        <tr>
+            <td><code>product_attributes</code>, <code>product_attribute_values</code></td>
+            <td>Shared vocabulary; both have <code>public_id</code>, <code>sort_order</code>; attribute also <code>slug</code>.</td>
+            <td>Attribute name and value unique case-insensitively (functional unique indexes). A value in use by any variant cannot be removed (<code>ProductAttributeValue::isInUse()</code> plus FK).</td>
+        </tr>
+        <tr>
+            <td><code>categories</code><br><code>Category</code></td>
+            <td><code>parent_id</code>, <code>name</code>, <code>slug</code>, image, SEO fields, <code>sort_order</code>, <code>is_active</code>.</td>
+            <td>Depth capped at <code>Category::MAX_DEPTH = 2</code> (category + subcategory). A product points at one (the most specific) category. <code>isAvailable()</code> is false if the category or its parent is off. Delete is restricted while products exist.</td>
+        </tr>
+        <tr>
+            <td><code>brands</code><br><code>Brand</code></td>
+            <td><code>name</code>, <code>slug</code>, logo, <code>sort_order</code>, <code>is_active</code>.</td>
+            <td>Flat. Name unique case-insensitively. Restrict on delete while products use it.</td>
+        </tr>
+        <tr>
+            <td><code>product_media</code><br><code>ProductMedia</code></td>
+            <td><code>product_id</code>, optional <code>product_variant_id</code>, <code>type</code> (<code>image|video</code>), <code>disk</code>, <code>path</code>, <code>mime_type</code>, <code>size_bytes</code>, dimensions, <code>alt_text</code>, <code>position</code>.</td>
+            <td>The row records its own disk, so moving new uploads to R2 does not break old rows. <code>position &gt;= 1</code>. Touches the product. Cap <code>ManageProductMedia::MAX_PER_PRODUCT = 30</code>. Images jpeg/png/webp up to 5 MB, video mp4/webm up to 50 MB (<code>ProductMediaStore</code>).</td>
+        </tr>
+        <tr>
+            <td><code>product_price_tiers</code><br><code>ProductPriceTier</code></td>
+            <td><code>product_id</code>, nullable <code>product_variant_id</code>, <code>min_quantity</code>, <code>unit_price</code>.</td>
+            <td><code>min_quantity &gt;= 2</code>; unique per scope (two partial unique indexes: product-level and variant-level). Locked columns by trigger.</td>
+        </tr>
+        <tr>
+            <td><code>product_package_eligibility</code>, <code>product_user_eligibility</code></td>
+            <td>Which packages / business accounts a product is offered to when the scope is <code>selected</code>.</td>
+            <td>Unique per pair; "user" means business account (D1). The lists are kept even when the scope does not use them.</td>
+        </tr>
+        <tr>
+            <td><code>product_status_history</code><br><code>ProductStatusChange</code></td>
+            <td><code>product_id</code>, <code>axis</code> (<code>lifecycle|dropshipping|wholesale</code>), <code>from_status</code>, <code>to_status</code>, <code>actor_id</code>, <code>reason</code>; tombstone columns <code>product_public_id</code>, <code>product_sku</code>, <code>product_name</code>, <code>product_status</code>.</td>
+            <td>Append-only (update/delete triggers). The only updates allowed stamp the tombstone columns and let the FK detach on product purge.</td>
+        </tr>
+        <tr>
+            <td><code>product_related</code></td>
+            <td>Recommended products with <code>position</code> (max <code>SetRelatedProducts::MAX_RELATED = 12</code>).</td>
+            <td>Related products may be in any status; partners only ever see eligible ones.</td>
+        </tr>
+        <tr>
+            <td><code>product_contents</code><br><code>ProductContent</code></td>
+            <td>Per-product update (<code>title</code>, <code>body</code>, <code>published_at</code>, <code>created_by</code>) with one optional <code>StoredFile</code> attachment (morph <code>fileable</code>).</td>
+            <td>Published immediately; no draft. Images jpeg/png/webp up to 5 MB; documents pdf/doc(x)/xls(x) up to 10 MB.</td>
+        </tr>
+        </tbody>
+    </table>
+    <p>SKUs and barcodes share one namespace across <code>products</code> and <code>product_variants</code>; the triggers <code>products_identifier_namespace</code> and <code>product_variants_identifier_namespace</code> refuse a SKU or barcode already used in the other table.</p>
+
+    <h2>States &amp; lifecycle</h2>
+    <p><code>ProductStatus</code> (implements <code>TransitionableState</code>) holds eleven cases on three independent axes, each in its own column. A state only moves to another state on its own axis; <code>$product-&gt;transitionTo()</code> is the only way to change one.</p>
+    <table>
+        <thead><tr><th>Axis (column)</th><th>Cases</th></tr></thead>
+        <tbody>
+        <tr><td>lifecycle (<code>status</code>)</td><td><code>draft</code>, <code>pending_review</code>, <code>active</code>, <code>inactive</code>, <code>out_of_stock</code>, <code>discontinued</code>, <code>archived</code></td></tr>
+        <tr><td>dropshipping (<code>dropshipping_status</code>)</td><td><code>dropshipping_enabled</code>, <code>dropshipping_disabled</code></td></tr>
+        <tr><td>wholesale (<code>wholesale_status</code>)</td><td><code>wholesale_enabled</code>, <code>wholesale_disabled</code></td></tr>
+        </tbody>
+    </table>
+    <h3>Lifecycle transitions</h3>
+    <table>
+        <thead><tr><th>From</th><th>May move to</th><th>Notes</th></tr></thead>
+        <tbody>
+        <tr><td>draft</td><td>pending_review, active, archived</td><td>Someone holding <code>catalog.publish</code> goes straight to active; pending_review is for authors who cannot publish.</td></tr>
+        <tr><td>pending_review</td><td>draft, active, archived</td><td>Approval or return to author.</td></tr>
+        <tr><td>active</td><td>inactive, out_of_stock, discontinued, archived</td><td>The only status for which <code>isSellable()</code> is true.</td></tr>
+        <tr><td>inactive</td><td>active, discontinued, archived</td><td></td></tr>
+        <tr><td>out_of_stock</td><td>active, inactive, discontinued, archived</td><td>Also driven automatically by inventory (see below).</td></tr>
+        <tr><td>discontinued</td><td>archived</td><td>Cannot be revived directly.</td></tr>
+        <tr><td>archived</td><td>draft</td><td>Returns only through draft, so it is reviewed again.</td></tr>
+        </tbody>
+    </table>
+    <p>Channel axes toggle between their own two cases only. <code>requiresReason()</code> is true for discontinued and archived, so a written reason is mandatory for those moves.</p>
+    <h3>Who may make which move (<code>CatalogPolicy::canMoveProduct()</code>)</h3>
+    <ul>
+        <li>to <code>active</code> needs <code>catalog.publish</code>;</li>
+        <li>to <code>archived</code> needs <code>catalog.archive</code>;</li>
+        <li>away from <code>active</code> or <code>out_of_stock</code> needs <code>catalog.unpublish</code>;</li>
+        <li>everything else (submit for review, send back, discontinue an inactive product) needs <code>catalog.edit</code>.</li>
+    </ul>
+    <p>Switching a channel on needs <code>catalog.publish</code>; off needs <code>catalog.unpublish</code>. Featuring a product needs <code>catalog.publish</code>.</p>
+    <h3>Readiness to activate</h3>
+    <p><code>TransitionProduct::assertReadyToActivate()</code> refuses activation while the category (or its parent) is off, the brand is off, the wholesale price is not positive, or the product has variants and every one of them is inactive. <code>published_at</code> is stamped on the first activation and never changes (database trigger).</p>
+    <h3>Stock-driven moves</h3>
+    <p>After a product is activated, and after every stock change that touches sellable buckets, <code>Inventory\Actions\RespondToStockChange</code> runs <code>SyncProductStockStatus</code>: a tracked product with no sellable stock moves active to out_of_stock; it returns to active only if the system moved it there (a status someone set by hand stays). Those rows are written with no actor and an audit entry with <code>actor_type = system</code>. See <a href="inventory.html">Inventory</a>.</p>
+
+    <h2>Actions &amp; workflows</h2>
+    <table>
+        <thead><tr><th>Class (<code>app/Domain/Catalog/Actions</code>)</th><th>Purpose</th></tr></thead>
+        <tbody>
+        <tr><td><code>ManageProducts</code></td><td><code>create</code>, <code>update</code>, <code>trash</code>, <code>restore</code>, <code>permanentlyDelete</code>. Only write path for product master data.</td></tr>
+        <tr><td><code>TransitionProduct</code></td><td>Lifecycle moves with permission, reason, readiness checks and history.</td></tr>
+        <tr><td><code>SetSalesChannel</code></td><td>Switch dropshipping or wholesale on/off.</td></tr>
+        <tr><td><code>SetProductEligibility</code></td><td>Package scope + packages + account scope + accounts, in one locked write.</td></tr>
+        <tr><td><code>SetPriceTiers</code></td><td>Replace a product's (or a variant's) whole tier set.</td></tr>
+        <tr><td><code>ResolveWholesalePricing</code></td><td>Shared step that turns method + base cost + markup into the stored price (server-calculated for percentage).</td></tr>
+        <tr><td><code>ManageVariants</code>, <code>GenerateVariants</code></td><td>Create/update/delete variants; build all combinations of chosen values (max <code>GenerateVariants::MAX_COMBINATIONS = 100</code>).</td></tr>
+        <tr><td><code>ManageAttributes</code></td><td>Attributes and values (rename allowed, removal refused while used).</td></tr>
+        <tr><td><code>ManageCategories</code>, <code>ManageBrands</code></td><td>Tree rules, enable/disable, reorder, delete; <code>purge</code> removes a whole empty branch (Super Admin).</td></tr>
+        <tr><td><code>ManageProductMedia</code></td><td>Add, describe, reorder, remove media; positions kept 1..n under the product lock.</td></tr>
+        <tr><td><code>AssignProducts</code>, <code>BulkUpdateProducts</code></td><td>Assign category/brand; bulk category, brand, status, channel, featured. Each product is its own decision (max <code>BulkUpdateProducts::MAX_PRODUCTS = 100</code>) and is reported as changed / unchanged / refused.</td></tr>
+        <tr><td><code>SetFeatured</code>, <code>SetRelatedProducts</code></td><td>Merchandising.</td></tr>
+        <tr><td><code>PublishProductContent</code>, <code>DeleteProductContent</code></td><td>Per-product update feed.</td></tr>
+        <tr><td><code>GenerateProductIdentifiers</code></td><td>Invents a 9-character BPC and a valid EAN-13 barcode when left blank, checked against both tables.</td></tr>
+        <tr><td><code>ConfigureProductDeletion</code></td><td>Setting <code>catalog.product_deletion_scope</code> (<code>any_status</code> or <code>drafts_only</code>); sensitive audit.</td></tr>
+        <tr><td><code>ForceDeleteProduct</code></td><td>Super Admin erase of a trashed product with history.</td></tr>
+        </tbody>
+    </table>
+
+    <h3>Create and publish a product</h3>
+    <ol>
+        <li><code>ProductController@store</code> checks <code>CatalogPolicy::canCreate()</code> and validates through <code>SaveProductRequest</code> (which rejects any protected field via <code>CentralProductFields</code>).</li>
+        <li><code>ManageProducts::create()</code> authorises again, then in a transaction creates the product as <code>draft</code> with <code>package_scope = all</code>. Money is parsed with <code>Money::fromDecimal()</code> in the base currency. A blank SKU/barcode is generated.</li>
+        <li>An audit row <code>catalog.product_created</code> is written. If the actor holds <code>catalog.publish</code>, both channels are switched on through <code>SetSalesChannel</code> (history and audit as for later toggles). The product is still a draft, so nothing reaches a partner.</li>
+        <li>Staff add variants, media, tiers and eligibility, then call <code>TransitionProduct</code> (draft to active, or draft to pending_review for review).</li>
+    </ol>
+    <h3>Wholesale price resolution</h3>
+    <ol>
+        <li>If the method is <code>percentage</code>, <code>ResolveWholesalePricing</code> ignores any <code>wholesale_price</code> in the request and computes <code>base + base x pct / 100</code> with <code>WholesalePriceCalculator</code> (markup rounded half away from zero to the currency scale, bcmath, markup 0..1000 with at most two decimals). An update that omits a field keeps the stored one, so a percentage product recalculates whenever base cost changes.</li>
+        <li>At purchase time <code>WholesalePriceResolver::unitPrice($product, $variant, $qty)</code> takes the variant's own tiers if it has any, else the product's tiers; picks the highest band whose <code>min_quantity</code> is reached; and never returns more than the base price (a tier above a later-cut base is ignored). Base = variant's effective wholesale price else the product's.</li>
+        <li><code>SetPriceTiers</code> enforces: at most <code>MAX_TIERS = 10</code>, <code>min_quantity &gt;= 2</code>, no repeats, no band above <code>max_order_quantity</code>, and each unit price no higher than the band before (the first no higher than the base).</li>
+    </ol>
+    <h3>Trash and deletion ladder</h3>
+    <ol>
+        <li><strong>Trash</strong> (<code>ManageProducts::trash</code>, <code>catalog.delete</code>): allowed statuses depend on <code>ProductDeletionRule</code>; a reason is required; only the product row is soft-deleted, so it vanishes from every catalogue, cart, storefront and allocation lookup (they all read through <code>Product::query()</code>). Stock, offers, orders and history are untouched.</li>
+        <li><strong>Restore</strong>: clears <code>deleted_by</code>/<code>deletion_reason</code>.</li>
+        <li><strong>Permanent delete</strong>: only a trashed <em>draft</em> that nothing used (no movements, stock items, supplier listings/offers, sourcing, order lines, carts, website selections, source links, published updates). History rows become tombstones. Otherwise <code>CatalogRefused::productHasBusinessHistory()</code>.</li>
+        <li><strong>Force delete</strong> (<code>ForceDeleteProduct</code>, <code>CatalogPolicy::canForceDelete()</code> = Super Admin role only, cannot be granted): reason of at least 10 characters plus typing the SKU or exact name; refused while an unfinished order, committed stock or active allocation exists. Unpublishes storefront selections, archives supplier listings, suspends offers, zeroes stock through <code>AdjustStock</code>, writes a sensitive audit entry, and releases the draft-only delete trigger for that product via the transaction setting <code>feriwala.force_delete_product_id</code>.</li>
+    </ol>
+
+    <h2>Entry points</h2>
+    <p>Admin routes sit in the <code>auth</code>, <code>noindex</code>, <code>two-factor</code> group with prefix <code>/admin</code> and name prefix <code>admin.</code> (<code>routes/web.php</code>). There is no per-route permission middleware: each controller action calls <code>CatalogPolicy</code> (<code>abort_unless(..., 403)</code>), and the action classes check again.</p>
+    <table>
+        <thead><tr><th>Route name (admin.)</th><th>Method and URL</th><th>Controller@method</th><th>Gate</th></tr></thead>
+        <tbody>
+        <tr><td><code>catalog.products.index</code></td><td>GET <code>/admin/catalog/products</code></td><td><code>ProductController@index</code></td><td>view</td></tr>
+        <tr><td><code>catalog.products.create</code> / <code>.store</code></td><td>GET / POST <code>/admin/catalog/products[/create]</code></td><td><code>ProductController@create</code>, <code>@store</code></td><td>create</td></tr>
+        <tr><td><code>catalog.products.edit</code> / <code>.update</code></td><td>GET / PATCH <code>/admin/catalog/products/{product}[/edit]</code></td><td><code>ProductController@edit</code>, <code>@update</code></td><td>view / edit</td></tr>
+        <tr><td><code>catalog.products.destroy</code></td><td>DELETE <code>/admin/catalog/products/{product}</code></td><td><code>ProductController@destroy</code> (trash)</td><td>delete</td></tr>
+        <tr><td><code>catalog.products.price-preview</code></td><td>POST <code>.../products/price-preview</code></td><td><code>ProductController@pricePreview</code></td><td>create or edit</td></tr>
+        <tr><td><code>catalog.products.barcode</code></td><td>GET <code>.../products/{product}/barcode</code></td><td><code>ProductController@barcode</code></td><td>view</td></tr>
+        <tr><td><code>catalog.products.bulk</code></td><td>POST <code>.../products/bulk</code></td><td><code>ProductBulkController</code></td><td>per product/move</td></tr>
+        <tr><td><code>catalog.products.status.update</code></td><td>PATCH <code>.../products/{product}/status</code></td><td><code>ProductStatusController@update</code></td><td>per move</td></tr>
+        <tr><td><code>catalog.products.channels.update</code></td><td>PATCH <code>.../products/{product}/channels/{channel}</code> (dropshipping|wholesale)</td><td><code>ProductChannelController@update</code></td><td>publish / unpublish</td></tr>
+        <tr><td><code>catalog.products.eligibility.update</code></td><td>PUT <code>.../products/{product}/eligibility</code></td><td><code>ProductEligibilityController@update</code></td><td>edit</td></tr>
+        <tr><td><code>catalog.products.price-tiers.update</code></td><td>PUT <code>.../products/{product}/price-tiers</code></td><td><code>ProductPriceTierController@update</code></td><td>edit</td></tr>
+        <tr><td><code>catalog.products.variants.store|generate|update|destroy</code></td><td>POST/PATCH/DELETE <code>.../products/{product}/variants[/generate|/{variant}]</code></td><td><code>ProductVariantController</code></td><td>create / edit / delete</td></tr>
+        <tr><td><code>catalog.products.media.store|reorder|update|destroy</code></td><td><code>.../products/{product}/media...</code></td><td><code>ProductMediaController</code></td><td>edit</td></tr>
+        <tr><td><code>catalog.products.related.update</code>, <code>.featured.update</code></td><td>PUT/PATCH <code>.../related</code>, <code>.../featured</code></td><td><code>ProductMerchandisingController</code></td><td>edit / publish</td></tr>
+        <tr><td><code>catalog.products.content.store|destroy</code></td><td><code>.../products/{product}/content[/{content}]</code></td><td><code>ProductContentController</code></td><td>edit</td></tr>
+        <tr><td><code>catalog.products.trash.index|restore|destroy</code></td><td><code>.../products/trash...</code></td><td><code>ProductTrashController</code></td><td>view / delete</td></tr>
+        <tr><td><code>catalog.products.trash.force-delete[.impact]</code></td><td>GET/DELETE <code>.../trash/{product}/force-delete</code></td><td><code>ProductTrashController@forceDeleteImpact</code>, <code>@forceDestroy</code></td><td>Super Admin</td></tr>
+        <tr><td><code>catalog.categories.*</code> (index, store, reorder, update, active, destroy, purge)</td><td><code>/admin/catalog/categories...</code></td><td><code>CategoryController</code></td><td>view / create / edit / delete; purge Super Admin</td></tr>
+        <tr><td><code>catalog.brands.*</code> (index, store, update, active, position, destroy)</td><td><code>/admin/catalog/brands...</code></td><td><code>BrandController</code></td><td>as above</td></tr>
+        <tr><td><code>catalog.attributes.*</code>, <code>catalog.attribute-values.*</code></td><td><code>/admin/catalog/attributes...</code>, <code>/admin/catalog/attribute-values/{value}</code></td><td><code>ProductAttributeController</code></td><td>create / edit / delete</td></tr>
+        <tr><td><code>catalog.product-browse</code></td><td>GET <code>/admin/catalog/product-browse</code></td><td><code>ProductBrowseController@index</code></td><td>product picker for other screens (gate not verified)</td></tr>
+        <tr><td>(deletion settings screen)</td><td>see <code>routes/web.php</code> near "Which product statuses may be deleted"</td><td><code>ProductDeletionSettingsController</code></td><td>view / <code>manage_settings</code></td></tr>
+        </tbody>
+    </table>
+    <h3>Partner web catalogue (<code>Erp\CatalogController</code>)</h3>
+    <p>Business-account routes, in the <code>auth</code> + <code>business.activated</code> groups; no URL prefix, read-only.</p>
+    <table>
+        <thead><tr><th>Route name</th><th>Method and URL</th><th>Notes</th></tr></thead>
+        <tbody>
+        <tr><td><code>catalog.index</code></td><td>GET <code>/catalog</code></td><td>One workspace: every product this account may use, once, with its modes (wholesale, partner selling).</td></tr>
+        <tr><td><code>catalog.mine</code></td><td>GET <code>/my-products</code></td><td>Only products the account has bought (<code>PurchasedProducts</code>), with owned quantities (D34).</td></tr>
+        <tr><td><code>catalog.show</code></td><td>GET <code>/catalog/{product}</code></td><td>Constrained so <code>wholesale</code>/<code>dropshipping</code> do not match as a product.</td></tr>
+        <tr><td><code>catalog.wholesale.index|show</code>, <code>catalog.dropshipping.index|show</code></td><td>GET <code>/catalog/wholesale[/{product}]</code>, <code>/catalog/dropshipping[/{product}]</code></td><td>One screen per channel through the channel-filtered eligibility query.</td></tr>
+        <tr><td><code>catalog.mine.websites.update</code></td><td><code>/my-products/{product}/websites/{website}</code></td><td>Put an already bought product on one of the account's storefronts.</td></tr>
+        <tr><td><code>allocated-stock.index</code></td><td>GET <code>/allocated-stock</code></td><td>Stock set aside for this account (see Inventory).</td></tr>
+        </tbody>
+    </table>
+    <h3>Mobile API (<code>/api/mobile/v1</code>, <code>routes/mobile/catalog.php</code>, <code>mobile.activated</code>)</h3>
+    <table>
+        <thead><tr><th>Route name</th><th>Method and URL</th><th>Controller@method</th></tr></thead>
+        <tbody>
+        <tr><td><code>mobile.v1.catalog.index</code></td><td>GET <code>/catalog</code> (<code>?scope=mine</code> for bought only)</td><td><code>CatalogController@index</code></td></tr>
+        <tr><td><code>mobile.v1.catalog.wholesale.index|show</code></td><td>GET <code>/catalog/wholesale[/{product}]</code></td><td><code>showWholesale</code></td></tr>
+        <tr><td><code>mobile.v1.catalog.dropshipping.index|show</code></td><td>GET <code>/catalog/dropshipping[/{product}]</code></td><td><code>showDropshipping</code></td></tr>
+        <tr><td><code>mobile.v1.catalog.show</code></td><td>GET <code>/catalog/{product}</code></td><td><code>show</code></td></tr>
+        <tr><td><code>mobile.v1.catalog.mine.index</code></td><td>GET <code>/my-products</code></td><td><code>mine</code></td></tr>
+        <tr><td><code>mobile.v1.catalog.mine.websites.update</code></td><td>PUT <code>/my-products/{product}/websites/{website}</code></td><td><code>MyProductWebsiteController@update</code></td></tr>
+        <tr><td><code>mobile.v1.catalog.allocated-stock.index</code></td><td>GET <code>/allocated-stock</code></td><td><code>AllocatedStockController@index</code></td></tr>
+        </tbody>
+    </table>
+    <p>There is no mobile route that creates, updates or deletes a product (§12). Both partner controllers return a <code>404</code>, not <code>403</code>, for a product the account may not see, so existence is not leaked. Response resources: <code>CatalogProductCardResource</code>, <code>CatalogProductDetailResource</code>. Storefront reads are in <a href="../api/storefront-api.html">Storefront API</a>.</p>
+    <p>Scheduled/console: <code>php artisan catalog:verify-wholesale-pricing</code> is documented under <a href="wholesale.html">Wholesale</a> (<code>--snapshot=&lt;file&gt;</code> before a migration, <code>--against=&lt;file&gt;</code> after).</p>
+
+    <h2>Permissions &amp; scoping</h2>
+    <p>Permissions are <code>catalog.&lt;action&gt;</code>, built by <code>PermissionCatalogue::name(PermissionModule::Catalog, PermissionAction::X)</code>; asking for a name not in the matrix throws.</p>
+    <table>
+        <thead><tr><th>Permission</th><th>Allows</th></tr></thead>
+        <tbody>
+        <tr><td><code>catalog.view</code></td><td>Open the admin catalogue screens (they show base cost). Also the trash list and deletion setting screens.</td></tr>
+        <tr><td><code>catalog.create</code></td><td>Create products, variants, categories, brands, attributes.</td></tr>
+        <tr><td><code>catalog.edit</code></td><td>Edit anything, pricing, tiers, media, eligibility, merchandising, content, placement; "authoring" lifecycle moves.</td></tr>
+        <tr><td><code>catalog.delete</code></td><td>Trash, restore, permanently delete, delete variants/categories/brands.</td></tr>
+        <tr><td><code>catalog.archive</code> / <code>.publish</code> / <code>.unpublish</code></td><td>Lifecycle moves to archived / to active (and channel on, featuring) / off sale (and channel off).</td></tr>
+        <tr><td><code>catalog.export</code></td><td>Export.</td></tr>
+        <tr><td><code>catalog.manage_settings</code></td><td>Which statuses may be trashed.</td></tr>
+        <tr><td>Super Admin role (not a permission)</td><td>Force delete a product; purge a category branch.</td></tr>
+        </tbody>
+    </table>
+    <p>Role grants are in <code>PlatformRole</code>: for example Product Manager holds catalog view/create/edit/delete/export plus archive/publish/unpublish; Admin holds the same view/create/edit/delete/export plus <code>manage_settings</code>; Inventory Manager and Content Manager hold <code>catalog.view</code> only (the exact sets are in <code>app/Domain/Access/Enums/PlatformRole.php</code>).</p>
+    <p><strong>Business identities are refused first.</strong> <code>CatalogPolicy::allows()</code> returns false for anyone with an account membership (<code>isBusinessIdentity()</code>). The ordered <code>Gate::before</code> in <code>AuthorizationServiceProvider</code> does the same for every <code>catalog.*</code> ability and every model in <code>CatalogPolicy::MODELS</code> (and for <code>inventory.*</code>), before any permission or Super Admin check, so a partner handed a role by mistake still cannot author or read the catalogue admin. <code>CatalogModelPolicy</code> is registered for each catalogue model and only maps Laravel ability names to <code>CatalogPolicy</code>; the record never widens an answer.</p>
+    <p><strong>Self-scoping for partners</strong> is the query, not the UI: every partner list goes through <code>ProductEligibility::query($account, $channel)</code>; an account that cannot transact or has no entitling package gets <code>whereRaw('1 = 0')</code> (an empty catalogue, not an exception). <code>ProductEligibility::refusals()</code> (single product) and <code>query()</code> (SQL) state the same rules and are held to the same answers by tests. A product is visible when: status is active; category (and parent) available; brand, if any, on; account can transact; the account's package is entitling and, if <code>package_scope = selected</code>, listed; if <code>account_scope = selected</code>, the account is listed; and for a channel: the product's channel column is enabled and the package has that facility (<code>PackageFeature::DropshippingEnabled</code> / <code>WholesaleEnabled</code>). Reasons are string constants such as <code>not_active</code>, <code>package_not_eligible</code>, <code>channel_disabled</code>.</p>
+
+    <h2>Money, ledger &amp; audit effects</h2>
+    <ul>
+        <li>Money fields: <code>base_cost</code>, <code>wholesale_price</code>, the three selling-price bounds (partner guidance, §15.1), <code>product_price_tiers.unit_price</code>, variant <code>wholesale_price</code>/<code>base_cost</code>. All flat Taka decimal strings via <code>Money</code>; the percentage calculator uses bcmath and rounds half away from zero; the browser's <code>wholesale-pricing-fields</code> only previews through the server endpoint <code>catalog.products.price-preview</code>.</li>
+        <li>The catalogue itself writes no ledger entries; it is not a financial mutation. Orders snapshot prices at placement.</li>
+        <li><code>base_cost</code> is never sent to a partner, storefront or mobile client (contract §5.1).</li>
+        <li>Audit actions (all <code>module = catalog</code>): <code>catalog.product_created</code>, <code>.product_updated</code>, <code>.product_status_changed</code>, <code>.product_channel_changed</code>, <code>.product_eligibility_set</code>, <code>.price_tiers_set</code>, <code>.product_trashed</code>, <code>.product_restored</code>, <code>.product_permanently_deleted</code>, <code>.product_force_deleted</code>, <code>.product_featured</code>, <code>.product_unfeatured</code>, <code>.related_products_set</code>, <code>.product_category_assigned</code>, <code>.product_brand_assigned</code>, <code>.variant_created|updated|deleted</code>, <code>.media_added|updated|reordered|removed</code>, <code>.attribute_created|updated|deleted</code>, <code>.attribute_value_created|updated|deleted</code>, <code>.category_created|updated|enabled|disabled|deleted</code>, <code>.categories_reordered</code>, <code>.brand_created|updated|enabled|disabled|deleted|moved</code>, <code>.product_content_published|removed</code>, <code>.product_deletion_scope_changed</code> (sensitive). Stock-driven status moves are audited as <code>catalog.product_status_changed</code> with <code>module = inventory</code>.</li>
+    </ul>
+
+    <h2>Configuration</h2>
+    <table>
+        <thead><tr><th>Key</th><th>Meaning</th></tr></thead>
+        <tbody>
+        <tr><td>Settings row <code>catalog.product_deletion_scope</code></td><td><code>any_status</code> (default) or <code>drafts_only</code>; read by <code>ProductDeletionRule</code>.</td></tr>
+        <tr><td>Settings row <code>inventory.stock_blocks_orders</code></td><td>Read by the partner catalogue to decide whether stock gates ordering (see Inventory).</td></tr>
+        <tr><td>Managed storage / R2 configuration</td><td>Product media goes to the public disk through <code>ManagedStorage</code>; each row records its disk. For local development see <code>CLAUDE.md</code> "Product media in local development" (<code>storage:link</code>, <code>APP_URL</code> with port).</td></tr>
+        </tbody>
+    </table>
+
+    <h2>Rules, invariants &amp; gotchas</h2>
+    <div class="callout callout-warn"><p><strong>Never assign <code>status</code>.</strong> Use <code>TransitionProduct</code> (lifecycle) or <code>SetSalesChannel</code> (channels). Both write <code>product_status_history</code> and an audit row; assigning the attribute skips the transition map, permission check and history.</p></div>
+    <ul>
+        <li><strong>Two statuses at once is normal.</strong> A product is Active and Dropshipping Enabled and Wholesale Disabled simultaneously. Only active products are ever offered, and a channel is also needed for that channel's screens.</li>
+        <li><strong>Protected fields have exactly one owning endpoint</strong> (<code>CentralProductFields</code>): <code>status</code>, channel statuses, featured, scopes, <code>currency_code</code>, ids are rejected by the general edit; stock keys (anything matching <code>/stock/i</code>) are rejected everywhere; a list of <code>products</code> is only accepted by bulk actions. The rule is "missing", not "prohibited", so <code>status: null</code> is also refused.</li>
+        <li><strong>Percentage pricing:</strong> a posted <code>wholesale_price</code> is ignored for percentage products. A variant that uses a percentage needs its own base cost.</li>
+        <li><strong>Variant combinations are immutable.</strong> Add a new variant and switch the old one off. Variants can be deleted only while the product is a draft; their tiers go with them.</li>
+        <li><strong>All variants of a product use the same attributes</strong> (a product offering Size and Colour cannot also have a Material-chosen variant), and one value per attribute.</li>
+        <li><strong>Eligibility lists are retained</strong> when the scope no longer uses them, so toggling "all packages" and back loses nothing. <code>package_scope</code> is explicit rather than "no rows means everybody".</li>
+        <li><strong>Trashed products still exist for stock.</strong> <code>StockItem::product()</code> uses <code>withTrashed()</code>; raw SQL reads (storefront inventory) must add <code>deleted_at IS NULL</code> themselves.</li>
+        <li><strong>Hard delete is database-guarded.</strong> A non-draft product cannot be deleted by any code path (trigger); force delete releases the guard for one product inside one transaction.</li>
+        <li><strong>A partner product the account may not see is a 404.</strong> Do not change it to 403.</li>
+        <li>Category depth 2 and the single-category-per-product design mean the "subcategory" of spec §11.1 is read from the tree, not stored on the product.</li>
+        <li>Brand and category <code>is_active</code> off removes their products from every partner without touching the products; switching back restores them.</li>
+        <li>Related products, SEO and logistics (<code>ProductLogistics</code>) are optional; a blank logistics figure clears the value instead of failing.</li>
+    </ul>
+
+    <h2>How to&hellip;</h2>
+    <h3>Add a field to a product</h3>
+    <ol>
+        <li>Create a migration under <code>database/migrations</code> (money as <code>NUMERIC(19,2)</code>, add CHECKs for bounds).</li>
+        <li>Add the cast/<code>@property</code> in <code>Product</code>; add a snapshot key in <code>ManageProducts::snapshot()</code> if it should appear in the audit trail.</li>
+        <li>Handle it in <code>ManageProducts::fields()</code> (parse money with <code>Money::fromDecimal</code>).</li>
+        <li>Validate it in <code>SaveProductRequest</code>; if it is protected, add it to <code>CentralProductFields</code> and give it its own endpoint.</li>
+        <li>Add form UI under <code>resources/js/pages/admin/catalog/products/</code> and strings in <code>lang/en/catalog.php</code> and <code>lang/bn/catalog.php</code>.</li>
+        <li>If storefronts need it, add it additively to the storefront payload (contract v1 is frozen; see <code>requirements/05-storefront-api-contract.md</code>).</li>
+    </ol>
+    <h3>Add a lifecycle status</h3>
+    <ol>
+        <li>Add the case to <code>ProductStatus</code> with its axis, its <code>transitionsTo()</code> entry, tone and translation (<code>catalog.products.status.*</code>); say which axis it belongs to.</li>
+        <li>Update the <code>products_status_is_lifecycle</code> CHECK in a new migration.</li>
+        <li>Decide its permission in <code>CatalogPolicy::canMoveProduct()</code> and whether it <code>requiresReason()</code>.</li>
+        <li>Update <code>isSellable()</code> only if it should be offered to partners (today only active), and review <code>SyncProductStockStatus</code>.</li>
+    </ol>
+    <h3>Add a new eligibility rule</h3>
+    <ol>
+        <li>Add a refusal constant and condition to <code>ProductEligibility::refusals()</code> and the matching SQL to <code>query()</code>. Both must give the same answer.</li>
+        <li>Extend <code>tests/Feature/Catalog/ProductEligibilityTest.php</code> to hold the two forms equal.</li>
+        <li>If an editor sets it, add it to <code>SetProductEligibility</code> (one locked write) and its audit snapshot.</li>
+    </ol>
+    <h3>Add a sales channel or change tier rules</h3>
+    <ol>
+        <li>Tier rules live in <code>SetPriceTiers</code> (writes) and <code>WholesalePriceResolver</code> (reads); change both together and update <code>WholesalePricingMethodTest</code>/<code>VariantTest</code>-style coverage.</li>
+        <li>A new channel needs a <code>SalesChannel</code> case, its enabled/disabled <code>ProductStatus</code> cases, a column and CHECK, a <code>PackageFeature</code>, and a browse route. This is architecture-sensitive; raise it for approval first.</li>
+    </ol>
+
+    <h2>Testing</h2>
+    <p>Run a slice in its own schema (see the Testing guide; only one Pest run at a time per schema): <code>vendor/bin/pest tests/Feature/Catalog</code> and <code>vendor/bin/pest tests/Feature/ProductRestrictions</code>, or <code>vendor/bin/pest --group=catalog</code> / <code>--group=product-restrictions</code>.</p>
+    <table>
+        <thead><tr><th>File</th><th>Covers</th></tr></thead>
+        <tbody>
+        <tr><td><code>tests/Feature/Catalog/ProductTest.php</code>, <code>ProductStatusTest.php</code></td><td>Create/edit, lifecycle, channels, bulk, history.</td></tr>
+        <tr><td><code>ProductEligibilityTest.php</code>, <code>BusinessCatalogTest.php</code>, <code>PartnerProductsTest.php</code></td><td>Eligibility query vs single-product answers; partner browsing, 404 behaviour.</td></tr>
+        <tr><td><code>VariantTest.php</code>, <code>CategoryTest.php</code>, <code>BrandTest.php</code>, <code>ProductMediaTest.php</code>, <code>ProductContentTest.php</code>, <code>CatalogArrangementTest.php</code></td><td>Variants and tiers, tree rules, logos, media, updates, related/featured.</td></tr>
+        <tr><td><code>WholesalePricingMethodTest.php</code>, <code>WholesalePricingPreservationTest.php</code></td><td>Percentage pricing and the verify-pricing command.</td></tr>
+        <tr><td><code>ProductPurgeTest.php</code>, <code>ProductForceDeleteTest.php</code>, <code>ProductDeletionSettingTest.php</code></td><td>Trash ladder.</td></tr>
+        <tr><td><code>ProductSeoTest.php</code>, <code>ProductLogisticsTest.php</code>, <code>AdminCatalogUiTest.php</code>, <code>CategorySeederTest.php</code></td><td>SEO payload, logistics, Inertia props.</td></tr>
+        <tr><td><code>tests/Feature/ProductRestrictions/</code> (<code>CatalogPolicyTest</code>, <code>CatalogueApiAuthorizationTest</code>, <code>CatalogueAffordancesTest</code>, <code>CatalogueDatabaseGuardsTest</code>)</td><td>§12: partners refused at policy, API and database layers.</td></tr>
+        <tr><td><code>tests/Unit/Domain/Catalog/ProductBarcodeTest.php</code></td><td>EAN-13.</td></tr>
+        </tbody>
+    </table>
+    <p>There are no model factories for catalogue models; tests build records with file-local helpers (for example <code>catalogProduct()</code>, <code>catalogCategory()</code>, <code>wholesalePricingProduct()</code>, <code>catalogBrowseAccount()</code>) and shared helpers in <code>tests/Pest.php</code> (<code>websiteTestProduct()</code>, <code>testBusinessAccount()</code>, <code>testPlatformStaff()</code>, <code>testAccountWithPackageFeatures()</code>). Prefix any new helper with its area (Pest shares one global function namespace). Seed <code>RolesAndPermissionsSeeder</code> and <code>CategorySeeder</code> where permissions or categories are needed.</p>
+
+    <h2>Related modules</h2>
+    <ul>
+        <li><a href="inventory.html">Inventory</a> - stock per warehouse, reservations, availability; drives out_of_stock.</li>
+        <li><a href="wholesale.html">Wholesale</a> - cart, checkout and price resolution that consume the catalogue.</li>
+        <li><a href="sourcing.html">Sourcing</a>, <a href="supplier.html">Supplier</a> - supplier offers per product.</li>
+        <li><a href="content-library.html">Content Library</a> - content released to products.</li>
+        <li><a href="package.html">Package</a> - entitlements and the facility checks behind eligibility.</li>
+        <li><a href="website.html">Website</a>, <a href="external-store.html">External store</a> - what partners put on storefronts.</li>
+        <li><a href="access.html">Access</a>, <a href="audit.html">Audit</a>; guides: <a href="../guide/conventions.html">Conventions</a>, <a href="../guide/database.html">Database</a>, <a href="../guide/testing.html">Testing</a>.</li>
+    </ul>
+</main>
+</body>
+</html>

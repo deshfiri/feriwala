@@ -47,9 +47,9 @@ it('issues a credential with the chosen scopes and answers with the secret once'
         ->and($response->json('key_id'))->toBe($credential->key_id)
         ->and($response->json('secret'))->toBe($credential->secret)
         ->and($response->json('env'))
-        ->toContain('BANIJ_CREDENTIAL_KEY_ID='.$credential->key_id)
-        ->toContain('BANIJ_CREDENTIAL_SECRET='.$credential->secret)
-        ->toContain('BANIJ_ERP_BASE_URL=');
+        ->toContain('STORE_ID='.$credential->key_id)
+        ->toContain('STORE_TOKEN='.$credential->secret)
+        ->toContain('ERP_BASE_URL=');
 
     // The secret is encrypted at rest: the raw column is not the secret.
     $raw = DB::table('website_credentials')->where('id', $credential->id)->value('secret');

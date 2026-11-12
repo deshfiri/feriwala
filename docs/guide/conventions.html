@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Conventions</title>
+    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+    <script src="../assets/docs.js"></script>
+</head>
+<body>
+<main id="doc">
+    <h1>Conventions</h1>
+    <p class="lead">The non-negotiables explained: why each exists, which class enforces it, and what a correct change looks like. Followed by the everyday coding conventions, where files go, and the lang rules. If a rule here seems wrong for your task, raise it; do not route around it.</p>
+
+    <h2>1. Money is flat Taka, never a float</h2>
+    <p><strong>Why.</strong> A ledger that must reconcile to the last paisa cannot tolerate float drift (0.10 has no exact binary form). Feriwala previously used a minor-unit (poisha) convention; D26 withdrew it. <code>100</code> now means BDT 100 at every layer and nothing multiplies or divides by 100 to cross a boundary.</p>
+    <table>
+        <thead><tr><th>Piece</th><th>Class / file</th><th>Role</th></tr></thead>
+        <tbody>
+            <tr><td>Value object</td><td><code>App\Support\Money\Money</code></td><td>Immutable. Holds an exact decimal Taka <strong>string</strong> plus a <code>Currency</code>; all arithmetic through bcmath. API: <code>fromDecimal()</code>, <code>zero()</code>, <code>plus()</code>, <code>minus()</code>, <code>multipliedBy()</code>, <code>percentage()</code>, <code>allocate()</code>, <code>negated()</code>, <code>absolute()</code>, comparisons (<code>equals</code>, <code>greaterThan</code>, <code>lessThan</code>...), <code>toDecimal()</code>, <code>format()</code>, <code>jsonSerialize()</code>. Currency mismatches are rejected; every percentage and multiplication takes an explicit <code>RoundingMode</code> (default <code>HalfAwayFromZero</code>).</td></tr>
+            <tr><td>Currency</td><td><code>App\Support\Money\Currency</code></td><td>Enum: BDT, USD, EUR, GBP. <code>Currency::base()</code> is BDT; <code>scale()</code> and <code>symbol()</code>.</td></tr>
+            <tr><td>Column cast</td><td><code>App\Casts\MoneyCast</code></td><td><code>NUMERIC(19,2)</code> column plus a sibling <code>currency_code</code> column (or <code>MoneyCast::class.':fee_currency_code'</code>). <code>set()</code> refuses anything that is not a <code>Money</code> (a bare number could be an old-convention value) and refuses to silently change an existing currency.</td></tr>
+            <tr><td>Human input</td><td><code>App\Support\Money\DecimalAmount::parse()</code>, <code>parseOrNull()</code></td><td>The one boundary a typed amount crosses. Accepts <code>^-?\d+(\.\d+)?$</code> only; <strong>refuses</strong> a third decimal place instead of rounding it; ceiling <code>MAX_AMOUNT</code> (10,000,000,000); negatives only with <code>allowNegative</code>. Throws <code>InvalidDecimalAmount</code>.</td></tr>
+            <tr><td>Validation rule</td><td><code>App\Support\Money\Rules\DecimalAmountRule</code></td><td>Use on the raw string field, then re-parse with <code>DecimalAmount::parse()</code> after validation.</td></tr>
+            <tr><td>Front end</td><td><code>resources/js/components/money-input.tsx</code>, <code>money-amount.tsx</code>, <code>resources/js/lib/money.ts</code></td><td>The input submits the decimal string exactly as typed; <code>MoneyAmount</code> renders the server's <code>Money::jsonSerialize()</code> (<code>{amount, currency, formatted}</code>). Nothing in React parses, multiplies or divides an amount.</td></tr>
+        </tbody>
+    </table>
+<pre><code>// Controller: parse once at the HTTP boundary
+$validated = $request-&gt;validate(['amount' =&gt; ['required', new DecimalAmountRule]]);
+$amount = DecimalAmount::parse($validated['amount']);   // Money, or InvalidDecimalAmount
+
+// Action: receives a Money, never a string or float
+$total = $line-&gt;unit_price-&gt;multipliedBy($quantity)-&gt;minus($discount);
+[$shareA, $shareB] = $total-&gt;allocate([60, 40]);        // reconciles to the exact total
+
+// Inertia: the server's own rendering
+'balance' =&gt; $wallet-&gt;total-&gt;jsonSerialize(),</code></pre>
+    <div class="callout callout-rule"><p><strong>Rule.</strong> Prohibited for financial values: <code>float</code>, <code>double</code>, <code>round()</code>, <code>number_format()</code>, <code>_minor</code> names, <code>minor_units</code>, poisha conversion helpers, a &times;100 or &divide;100 on money, float/double money columns. Allocating tax, discount, commission or a refund across lines uses <code>allocate()</code> so parts sum to the whole.</p></div>
+
+    <h3>How the repository guard tests enforce it</h3>
+    <p>Two Pest files fail the build when the rules are broken:</p>
+    <ul>
+        <li><code>tests/Unit/Support/Money/MoneySourceGuardTest.php</code> scans production source (<code>app</code>, <code>database/factories</code>, <code>database/seeders</code>, <code>lang</code>, and <code>resources/js</code> excluding <code>.test.</code> files) line by line. It fails on: a call to the removed <code>Money::of(</code>; a <code>-&gt;minorUnits</code> read; any identifier ending <code>_minor</code>; the key <code>minor_units</code> outside an allow-list; a <code>.decimal</code> read in React; a <code>(float)</code>/<code>(double)</code> cast near an amount-like word, and <code>floatval()</code>/<code>doubleval()</code>. It also contains a self-test proving each pattern can fail, and asserts it scanned a real body of files so an empty scan cannot pass.</li>
+        <li><code>tests/Feature/Payment/MoneyColumnConventionTest.php</code> guards the schema: every inventoried money column is exactly <code>NUMERIC(19,2)</code>, has a currency relationship (documented exemptions aside), every money-shaped column in the schema is classified, no column keeps the minor-unit name, and defaults are zero.</li>
+    </ul>
+    <div class="callout callout-warn"><p><strong>Allow-list.</strong> <code>minor_units</code> is allowed only in the frozen Storefront API compatibility adapter (<code>Api/Storefront/V1/OrderController.php</code>, <code>StorefrontController.php</code>, <code>Website/Api/StorefrontProductPayload.php</code>, plus a docblock in <code>Money.php</code>), per <code>requirements/05-storefront-api-contract.md</code> &sect;4.1. Each allow-list entry must name its reason. New internal code may not read or write it. Note the guard is a text scan: it does not catch every possible &times;100, so review money arithmetic by eye as well.</p></div>
+
+    <h2>2. Ledger entries are immutable</h2>
+    <p><strong>Why.</strong> A record that can be edited afterwards is not evidence. The wrong figure and its correction must both be visible (&sect;23.2).</p>
+    <ul>
+        <li><strong>Model guard.</strong> <code>App\Domain\Wallet\Models\LedgerEntry::booted()</code> throws a <code>RuntimeException</code> on <code>updating</code> and <code>deleting</code>.</li>
+        <li><strong>Database guard.</strong> Migration <code>2026_09_16_120000_protect_ledger_entries.php</code> creates the trigger function <code>feriwala_ledger_is_append_only()</code>, so a raw SQL update from anywhere fails too. Supplier ledger: <code>feriwala_supplier_ledger_entries_immutable()</code> (<code>2026_10_04_100000_take_supplier_wallets.php</code>). Status history: <code>feriwala_status_history_is_append_only()</code>.</li>
+        <li><strong>Corrections are new rows.</strong> <code>Wallet\Actions\CorrectLedgerEntry</code> offers <code>reverse()</code> (mirror entry pointing at the original) and adjustments, each idempotent, each audited. <code>corrects_ledger_entry_id</code> links the correction.</li>
+        <li><strong>Detection.</strong> <code>Wallet\Actions\VerifyLedgerIntegrity</code> re-derives every wallet from its ledger and checks each entry's <code>balance_before</code> + movement = <code>balance_after</code> and the chain between entries.</li>
+        <li><strong>Debit and credit are both stored positive</strong> in separate columns; a misplaced minus can never become a credit. <code>internal_note</code> is staff-only and is <code>$hidden</code>; member statements select <code>LedgerEntry::MEMBER_VISIBLE</code>.</li>
+        <li><strong>Audit logs</strong> follow the same rule (<code>AuditLog</code>, <code>AuditLogIsImmutable</code>), with exactly one exception: the guarded purge in D33 (<code>PurgeAuditLogs</code>), Super Admin only, which always leaves a permanent <code>audit.logs_purged</code> record. Ledger entries have no exception.</li>
+        <li>Status history rows use <code>App\Concerns\AppendOnlyStatusHistory</code>: <code>updating</code> and <code>deleting</code> throw a <code>LogicException</code>.</li>
+    </ul>
+
+    <h2>3. The financial mutation recipe</h2>
+    <p>Every financial mutation (a) runs inside a database transaction, (b) takes a row lock, (c) is idempotent when externally triggered, and (d) writes a ledger entry in the same transaction. <code>App\Domain\Wallet\WalletService</code> is "the only thing that moves money in a wallet"; Actions call it rather than writing wallet columns.</p>
+    <ol>
+        <li><strong>Build a posting context.</strong> <code>Wallet\Data\PostingContext</code> carries <code>source</code>, <code>description</code>, an <code>idempotencyKey</code> derived from something stable (<code>'payment:'.$payment-&gt;reference</code>), and links (<code>paymentId</code>...).</li>
+        <li><strong>Fast path.</strong> <code>findByKey()</code>: if the command already ran, return what it produced. A retry costs nothing.</li>
+        <li><strong>Transaction + lock.</strong> <code>$this-&gt;database-&gt;transaction(...)</code> then <code>Wallet::query()-&gt;lockForUpdate()-&gt;findOrFail(...)</code>. Insufficient-balance checks happen <em>inside</em> the lock, because only the re-check under the lock knows whether another debit got there first.</li>
+        <li><strong>Write balance and entry together.</strong> Update the wallet, write the <code>LedgerEntry</code> rows (with <code>balance_before</code>/<code>balance_after</code>), append a <code>WalletTransactionEvent</code>. Two kinds of money (platform credit and withdrawable) each get their own entry when a posting spans both.</li>
+        <li><strong>Unique index as the final guard.</strong> The idempotency key is unique; a racing duplicate raises <code>UniqueConstraintViolationException</code>, the whole transaction rolls back, and the winner's transaction is returned to both callers.</li>
+        <li><strong>Announce after commit.</strong> Events such as <code>WalletCredited</code> fire after the posting is durable, so a listener sees the new balance and cannot hold the posting open.</li>
+        <li><strong>Audit.</strong> Sensitive actions record through <code>Audit\Actions\RecordAuditLog</code> (see below).</li>
+    </ol>
+    <h3>Primitives for externally triggered work</h3>
+    <table>
+        <thead><tr><th>Class</th><th>Purpose</th></tr></thead>
+        <tbody>
+            <tr><td><code>App\Support\Idempotency\IdempotencyService::execute($key, $payload, $callback, $ttl)</code></td><td>Cache-backed 24-hour replay window (<code>DEFAULT_TTL = 86400</code>). First use runs and stores the result; same key + same body returns the stored result with <code>replayed: true</code>; same key + different body throws <code>IdempotencyKeyReused</code>. The body is fingerprinted with sorted keys so JSON key order does not matter (list order does). Durable records for reconciliation are written by the owning modules in their own tables.</td></tr>
+            <tr><td><code>App\Support\Concurrency\DistributedLock</code></td><td>Named Redis locks shared across servers: <code>run()</code> (wait, throws <code>LockTimeout</code>), <code>attempt()</code> (skip if busy), <code>isHeld()</code>. Asserts the cache store is a <code>LockProvider</code>. Keys are prefixed <code>lock:</code>. A lock is coordination, <strong>not</strong> correctness: the database transaction and row lock keep the invariant true.</td></tr>
+        </tbody>
+    </table>
+    <div class="callout callout-warn"><p><strong>Gotcha.</strong> Concurrency tests live in <code>tests/Feature/Concurrency/**</code> and have their own rules in <code>.ai/rules/concurrency.md</code>. Run only one Pest suite at a time against a schema; <code>RefreshDatabase</code> drops every table and two runs deadlock. See <a href="testing.html">Testing</a>.</p></div>
+
+    <h2>4. Statuses move through <code>transitionTo()</code></h2>
+    <p><strong>Why.</strong> Feriwala has very large status sets (22 account, 28+ order, 14 website...). Declaring legal moves beside the states stops a Refunded order being dragged back to Processing.</p>
+    <ul>
+        <li><code>App\Support\StateMachine\TransitionableState</code> is the interface status enums implement: <code>transitionsTo(): array</code>, <code>label(): string</code>, <code>isTerminal(): bool</code>.</li>
+        <li><code>App\Concerns\HasStateMachine</code> gives the model <code>currentState()</code>, <code>canTransitionTo()</code>, <code>transitionTo()</code> and <code>availableTransitions()</code>. An illegal move throws <code>IllegalStateTransition</code>. <code>transitionTo()</code> does <strong>not</strong> persist; the caller saves it inside the same transaction as the ledger entries and history. A model with several independent lifecycles (an order's status and its fulfilment status) passes the <code>$attribute</code> explicitly.</li>
+        <li><code>App\Concerns\RecordsStatusHistory</code> adds <code>transitionWithHistory()</code>: move + history row in one transaction (previous, new, <code>changed_by</code>, <code>changed_at</code>, reason, <code>internal_note</code>, <code>public_note</code>), using <code>Support\StatusHistory\StatusChange</code>. Locking the subject row first is the caller's job. <code>recordStatusChange()</code> writes the first status of a new row.</li>
+        <li><code>App\Support\Status\HasTranslatedLabel</code> gives <code>label()</code> by looking up <code>status.&lt;group&gt;.&lt;value&gt;</code> in <code>lang/{en,bn}/status.php</code>; the enum supplies <code>statusLabelGroup()</code>. Never hard-code English in <code>label()</code>.</li>
+    </ul>
+<pre><code>enum WalletTransactionStatus: string implements TransitionableState
+{
+    public function transitionsTo(): array
+    {
+        return match ($this) {
+            self::Initiated =&gt; [self::Pending, self::OnHold, /* ... */ self::Cancelled],
+            self::Pending   =&gt; [self::OnHold, /* ... */ self::Settled, self::Failed, self::Cancelled],
+            // terminal states return []
+        };
+    }
+}
+
+// In an Action, inside DB::transaction(), after lockForUpdate():
+$order-&gt;transitionWithHistory(OrderStatus::Confirmed, new StatusChange(actorId: $user-&gt;id, reason: $reason));
+// or StatusChange::bySystem($reason) when no person made the move</code></pre>
+    <div class="callout callout-rule"><p><strong>Rule.</strong> Never write <code>$model-&gt;status = ...</code>. The specification also allows admin-defined order statuses (&sect;18.2); check the <a href="../modules/order.html">Order</a> module page before adding a status.</p></div>
+
+    <h2>5. Self-scoping is a query concern</h2>
+    <p><strong>Why.</strong> Hiding a row in a template still ships it to the browser and returns it from an export. &sect;31.3 forbids reaching another user's data through a URL, an API call, an export or a modified parameter.</p>
+    <ul>
+        <li><strong>Resolver.</strong> <code>App\Domain\Access\DataScopeResolver::for($user, PermissionModule)</code> returns <code>DataScope::All</code> only if the viewer holds <code>&lt;module&gt;.view</code>; otherwise <code>Own</code> for a user, <code>None</code> for a guest. <code>canExport()</code> and <code>canSeeSensitive()</code> check <code>&lt;module&gt;.export</code> and <code>.view_sensitive_data</code> separately.</li>
+        <li><strong>Trait.</strong> <code>App\Concerns\ScopedToViewer</code> adds <code>scopeVisibleTo($viewer)</code> (<code>Order::visibleTo($user)-&gt;paginate()</code>); a viewer without entitlement gets <code>whereRaw('1 = 0')</code>, an empty list rather than a leaked error. A model declares <code>scopeModule()</code> and optionally <code>ownerColumn()</code> (default <code>user_id</code>).</li>
+        <li><strong>In practice</strong> (verified by grep): at the time of writing no model in <code>app/</code> uses the <code>ScopedToViewer</code> trait. Self-scoping is done by resolving the account from the membership (<code>ResolvesBusinessAccount::businessAccountFor()</code>) and constraining queries by <code>business_account_id</code>, with <code>Queries/</code> classes owning the read models. Either way the rule is the same: scope in the query, resolve public ids <em>inside</em> the caller's scope (see <code>WalletController::transaction()</code>, which filters <code>wallet_id</code> before using the public id, so a borrowed id answers <code>404</code>).</li>
+        <li>No account identifier appears in ERP URLs; there is nothing to swap for someone else's.</li>
+        <li>Every model has a Policy. They are registered in <code>AuthorizationServiceProvider</code>. A <code>Gate::before</code> grants the Super Admin override and refuses a non-<code>User</code> authenticatable outright.</li>
+    </ul>
+    <div class="callout callout-warn"><p><strong>Gotcha (account-access rule).</strong> <code>BusinessAccountPolicy::view</code> is true for a <em>member</em>; it must never guard an admin screen. Administrative screens about an account authorize <code>viewDossier</code>, which treats membership as a refusal and requires the platform <code>account.view</code> permission. See <code>.ai/rules/account-access.md</code>.</p></div>
+
+    <h2>6. Only admins create products</h2>
+    <p><strong>Why.</strong> The catalog is the platform's (&sect;11, &sect;12, product ownership is architecture-locked). Regular users select from it; suppliers submit listings and offers but never own catalog products (D25).</p>
+    <p>&sect;12 requires enforcement at six layers, each with tests (group <code>product-restrictions</code>, <code>tests/Feature/ProductRestrictions</code>):</p>
+    <table>
+        <thead><tr><th>Layer</th><th>Where</th></tr></thead>
+        <tbody>
+            <tr><td>UI</td><td>The Catalog nav entry needs the <code>catalog.view</code> ability shipped in <code>HandleInertiaRequests::NAVIGATION_ABILITIES</code>; a partner holds none.</td></tr>
+            <tr><td>Controller / policy</td><td><code>App\Domain\Catalog\Policies\CatalogPolicy</code> (<code>canCreate</code>, <code>canEdit</code>, <code>canWrite</code>, <code>canPublish</code>, <code>isBusinessIdentity</code>...); <code>CatalogModelPolicy</code>. Admin product routes are under <code>admin.*</code>.</td></tr>
+            <tr><td>Refusal rendering</td><td><code>bootstrap/app.php</code> turns a 403 on <code>admin.catalog.*</code> into the <code>catalog/forbidden</code> Inertia page (JSON callers keep JSON).</td></tr>
+            <tr><td>API</td><td>The mobile catalog is read-only; the only write is putting an already-bought product on a partner's own storefront (<code>routes/mobile/catalog.php</code>). The Storefront API has no product-write route.</td></tr>
+            <tr><td>Validation</td><td>Form requests under <code>app/Http/Requests/Catalog</code>; central-field rules are covered by <code>CentralFieldValidationTest</code>.</td></tr>
+            <tr><td>Database</td><td>Guards covered by <code>CatalogueDatabaseGuardsTest</code>.</td></tr>
+            <tr><td>Tests</td><td><code>RestrictionLayersTest</code>, <code>CatalogPolicyTest</code>, <code>CatalogueApiAuthorizationTest</code>, <code>CentralFieldValidationTest</code>, <code>CatalogueAffordancesTest</code>, <code>ExternalImportPathsTest</code>.</td></tr>
+        </tbody>
+    </table>
+
+    <h2>7. Merchant of record and payment direction</h2>
+    <ul>
+        <li>For dropshipping, Feriwala verifies payment, controls inventory, fulfilment, courier and COD reconciliation, and credits the partner's earning to the wallet (D12). Retail margin is a commission calculation base, not a separate money path.</li>
+        <li><strong>Webhooks never decide money.</strong> <code>PaymentWebhookController</code> records the message, queues <code>SettleGatewayNotification</code>, acknowledges identically for every non-signature outcome, and the job asks the gateway directly. <code>Billing\Actions\SettlePayment</code> is the only thing that decides a payment was made.</li>
+        <li><strong>D36 caveat.</strong> Where Admin allows it, a partner-owned gateway (Model B) may receive the customer's payment; the partner's credentials are a separate, versioned, encrypted store, and a payment points at the exact version it started with. This is a recorded amendment, not a loophole: do not add partner-gateway paths outside the D36 design. Credentials of any gateway never appear in logs (<code>RecordAuditLog::REDACTED</code> and per-driver redaction).</li>
+    </ul>
+
+    <h2>8. No database ids in public URLs</h2>
+    <table>
+        <thead><tr><th>Trait</th><th>Behaviour</th><th>Use</th></tr></thead>
+        <tbody>
+            <tr><td><code>App\Concerns\HasPublicId</code></td><td>On <code>creating</code>, fills <code>public_id</code> with a ULID (<code>Str::ulid()</code>). <code>getRouteKeyName()</code> returns it, so route model binding resolves on it. <code>scopeWherePublicId()</code>. Override <code>publicIdColumn()</code> to rename.</td><td>Anything addressed in a URL or payload: <code>Order</code>, <code>Supplier</code>, <code>LedgerEntry</code>, <code>BusinessAccount</code> (with <code>HasSlug</code>) ...</td></tr>
+            <tr><td><code>App\Concerns\HasSlug</code></td><td>Unique human-readable slug generated <em>once</em> on creation from <code>slugSource()</code> (default <code>name</code>); collisions get <code>-2</code>, <code>-3</code>; soft-deleted rows keep their slugs. Not regenerated on rename (it would break links); call <code>regenerateSlug()</code> explicitly and add a 301 in the same transaction.</td><td>Public pages, storefront products and categories.</td></tr>
+            <tr><td><code>App\Concerns\HasReference</code></td><td>Human reference with a typed prefix from <code>Support\References\ReferencePrefix</code> (ORD, PAY, TXN, WDR, INV, STL, RFD, CMS, FFL, SHP, RET, DMG, SUP, SPL, SLL, SPO, SPY, SPE, SFC). Random not sequential, so volume cannot be inferred; five retries and a unique index. Model supplies <code>referencePrefix()</code>.</td><td>Support-facing identifiers such as <code>ORD-...</code>.</td></tr>
+        </tbody>
+    </table>
+    <p>Internal keys remain bigint auto-increment for fast joins. Two traits that both define <code>getRouteKeyName()</code> (<code>HasPublicId</code> and <code>HasSlug</code> on one model) must be reconciled explicitly with <code>use HasPublicId, HasSlug { ... }</code>, as <code>BusinessAccount</code> does. Mobile device tokens are addressed by a <code>reference</code> derived from the token and app key, not by id.</p>
+
+    <h2>9. Audit</h2>
+    <p>Sensitive actions write through <code>App\Domain\Audit\Actions\RecordAuditLog::handle(AuditEntry)</code>, the single way audit rows are created. It redacts at any nesting depth any key containing <code>password</code>, <code>secret</code>, <code>token</code>, <code>api_key</code>, <code>private_key</code>, <code>credential</code>, <code>authorization</code>, <code>signature</code>, <code>cvv</code>, <code>card_number</code>, <code>pin</code>, <code>otp</code>, <code>remember_token</code> (&sect;42). Rows carry actor, action, before/after, reason, IP, account and module. Viewing needs <code>audit.view_audit_logs</code>.</p>
+
+    <h2>Coding conventions</h2>
+    <h3>PHP</h3>
+    <ul>
+        <li>Always use curly braces for control structures, even one-line bodies.</li>
+        <li>PHP 8 constructor property promotion (<code>public function __construct(protected WalletService $wallet) {}</code>); no empty zero-parameter constructors unless private.</li>
+        <li>Explicit return types and parameter types on every method.</li>
+        <li>PHPDoc over inline comments; inline comments only for exceptionally complex logic. Use array-shape types in PHPDoc (<code>@return array{token: string, expires_at: CarbonInterface|null}</code>).</li>
+        <li>Descriptive names: <code>isRegisteredForDiscounts</code>, not <code>discount()</code>. Follow the naming of sibling files, including Enum naming.</li>
+        <li>Create files with <code>php artisan make:&hellip; --no-interaction</code>; a new model comes with a factory and seeder. Prefer named routes and <code>route()</code>.</li>
+        <li>Do not change dependencies without approval; do not create new base folders.</li>
+        <li><strong>Pint</strong> (preset <code>laravel</code> in <code>pint.json</code>): run <code>vendor/bin/pint --parallel</code>. Another session may share your tree and <code>--dirty</code> formats every uncommitted file, so prefer explicit file arguments when unsure.</li>
+        <li><strong>PHPStan</strong> level 8 with Larastan; run it through <code>composer types:check</code> (it calls <code>scripts/phpstan.sh</code>), never <code>vendor/bin/phpstan</code> directly. The baseline <code>phpstan-baseline.neon</code> holds starter-kit debt only and must never grow.</li>
+    </ul>
+    <h3>Tests</h3>
+    <ul>
+        <li>Pest. Every code change adds or updates a test; run the narrowest slice. Groups are declared in <code>tests/Pest.php</code> (<code>pest --group=wallet</code>).</li>
+        <li>Pest loads all test files into one global function namespace, so <strong>prefix every helper</strong> with what it belongs to (<code>moneyGuardHits()</code>, <code>dataScopeResolver()</code>) or define it inside the test closure. A bare <code>function session()</code> redeclares a Laravel helper and takes the whole suite down.</li>
+        <li>Use model factories and their states. Full guidance on the <a href="testing.html">Testing</a> page.</li>
+    </ul>
+    <h3>Checks that must all pass</h3>
+<pre><code>vendor/bin/pint --parallel        # PHP formatting
+composer types:check              # PHPStan level 8
+vendor/bin/pest                   # tests (one suite at a time per schema)
+npm run check                     # vp: format + lint + types</code></pre>
+
+    <h2>Where files go</h2>
+<pre><code>app/Domain/&lt;Module&gt;/     Models, Actions, Data, Enums, Events, Jobs, Policies, Queries, Rules
+app/Integrations/        Payment, Sms, Courier (and Store, Storage, Dns) behind one contract each
+app/Support/             Money, Concurrency, Idempotency, Rules, References, Localization, ...
+app/Concerns/            Model traits (HasPublicId, HasSlug, HasReference, HasStateMachine)
+app/Http/Controllers/    {Public,Erp,Admin,Supplier,Api,Webhook,Settings}
+app/Http/Requests, app/Http/Resources, app/Http/Middleware
+resources/js/components/ App components; ui/ is vendored shadcn - do not hand-edit
+resources/js/pages/      Inertia pages
+lang/{en,bn}/*.php       User-facing strings and status labels</code></pre>
+
+    <h3>Actions vs controllers vs models</h3>
+    <table>
+        <thead><tr><th></th><th>Does</th><th>Does not</th></tr></thead>
+        <tbody>
+            <tr><td>Controller</td><td>Resolve the account, validate input (parse money with <code>DecimalAmount</code>), authorize, call an Action, return an Inertia page, redirect or API Resource.</td><td>Decide statuses, move money, hold business rules.</td></tr>
+            <tr><td>Action</td><td>One operation with a <code>handle()</code>; owns the transaction, locks, idempotency, ledger writes, events, audit.</td><td>Read the HTTP request.</td></tr>
+            <tr><td>Model</td><td>Relationships, casts, scopes, enum casts, boot guards (<code>LedgerEntry</code>).</td><td>Workflow or cross-domain writes.</td></tr>
+            <tr><td>Query</td><td>Read models, reports, self-scoped lists, exports.</td><td>Mutate.</td></tr>
+        </tbody>
+    </table>
+
+    <h2>Language files (en / bn)</h2>
+    <ul>
+        <li>User-facing strings in PHP go through <code>__()</code>; in React through <code>useTranslation().t('group.key')</code>. Lines live in <code>lang/en/*.php</code> and <code>lang/bn/*.php</code> (about 50 files, e.g. <code>common.php</code>, <code>nav.php</code>, <code>status.php</code>, <code>wallet.php</code>).</li>
+        <li>Status enum labels use <code>HasTranslatedLabel</code> and <code>status.&lt;group&gt;.&lt;value&gt;</code>; a missing Bangla line falls back to a humanized value, not a raw key.</li>
+        <li>Case workflow refusal codes need <code>cases.errors.&lt;code&gt;</code> in both <code>en</code> and <code>bn</code>; <code>tests/Feature/Cases/CaseTranslationsTest.php</code> fails on a missing Bangla line (<code>.ai/rules/lang.md</code>).</li>
+        <li>The front end receives the active locale's tree as the shared <code>translations</code> prop, with English as fallback (<code>HandleInertiaRequests::translations()</code>). See <a href="frontend.html">Frontend</a>.</li>
+        <li>Known debt: page breadcrumb titles are hard-coded English (<code>.ai/rules/ui-surfaces.md</code>); do not patch piecemeal.</li>
+    </ul>
+
+    <h2>Working rules worth remembering</h2>
+    <ul>
+        <li>Read <code>.ai/rules/index.md</code> and every rule file whose globs cover the path before editing; record new durable rules with the Boost <code>record-rule</code> tool rather than a personal note.</li>
+        <li>Markdown files have their own rule: a bare <code>vp check --fix</code> reformats <code>.md</code> files repo-wide; pass explicit paths.</li>
+        <li>Never document or commit secrets; name environment variables only.</li>
+    </ul>
+    <p>Next: <a href="http-layers.html">HTTP layers</a>, <a href="architecture.html">Architecture</a>, <a href="decisions.html">Decisions</a>.</p>
+</main>
+</body>
+</html>

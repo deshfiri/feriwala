@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Storefront API</title>
+    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+    <script src="../assets/docs.js"></script>
+</head>
+<body>
+<main id="doc">
+    <h1>Storefront API (v1)</h1>
+    <p class="lead">The signed HTTP API a partner's storefront uses to read its catalogue, quote carts, place orders and register customers and returns, plus the signed webhooks the ERP sends back. It is frozen at v1: fields and endpoints may be added, nothing is removed or renamed without an approved v2. Read this before touching <code>routes/api.php</code>, the <code>storefront.*</code> middleware or any payload.</p>
+
+    <p>Authoritative sources: <code>requirements/05-storefront-api-contract.md</code> (the frozen contract), <code>docs/api/storefront.md</code> (the text that becomes the OpenAPI description), and the code named below. Live OpenAPI generated from the routes is served at <code>/docs/storefront</code> (Swagger UI) and <code>/docs/storefront.json</code> (raw document). Access to those pages is gated: public only when <code>scramble.public</code> is set, otherwise Super Admin and System Administrator (<code>ApiServiceProvider</code>, gate <code>viewApiDocs</code>; the <code>RestrictedDocsAccess</code> middleware also applies).</p>
+
+    <div class="callout callout-rule"><p><strong>Rule.</strong> The storefront never computes a price and never holds a gateway credential. Feriwala is merchant of record (D12; Partner gateways under D36 change no field of this contract). There is no wallet, ledger, KYC, commission or user endpoint, scope or parameter: the surface does not exist. No route names a website; the credential does.</p></div>
+
+    <h2>Base URL and versioning</h2>
+    <p><code>https://&lt;erp-host&gt;/api/storefront/v1</code>. Route names are prefixed <code>storefront.v1.</code>. Breaking changes (removing or renaming a field, narrowing a type, adding a required request field, changing an error code's meaning) need <code>v2</code> and approval; the storefront boundary is architecture-locked (<a href="../guide/decisions.html">Decisions</a>).</p>
+
+    <h2>Authentication and signing</h2>
+    <p>There are no bearer tokens. Each request is signed with the website's credential (a <code>WebsiteCredential</code>, issued by staff when the store is connected; see <a href="../modules/website.html">Website</a>). Implemented in <code>App\Domain\Website\Api\RequestSignature</code> and verified by <code>App\Http\Middleware\Storefront\AuthenticateStorefrontRequest</code>.</p>
+    <pre><code>Authorization: Feriwala-HMAC-SHA256 Credential=&lt;key_id&gt;, Signature=&lt;hex&gt;
+X-Feriwala-Timestamp: &lt;unix seconds&gt;
+X-Feriwala-Nonce: &lt;uuid v4&gt;
+
+canonical_request =
+    METHOD                       \n
+    path + sorted query string   \n
+    X-Feriwala-Timestamp         \n
+    X-Feriwala-Nonce             \n
+    hex sha256 of the raw body   (empty string hashed when there is none)
+
+signature = hex(HMAC-SHA256(secret, canonical_request))</code></pre>
+    <ul>
+        <li><code>key_id</code> is <code>wsk_</code> plus 26 uppercase alphanumerics (the "store id"). The header must match <code>Credential=(wsk_[0-9A-Z]{26}), Signature=([0-9a-fA-F]{64})</code> exactly.</li>
+        <li>"Sorted query string": the raw query split on <code>&amp;</code>, pairs sorted byte-wise, rejoined with a leading <code>?</code>, exactly as encoded on the wire. Never decode and re-encode (that is where <code>%20</code> and <code>+</code> implementations disagree). The path is <code>getPathInfo()</code>, so a storefront whose ERP URL has a path prefix must sign the full path.</li>
+        <li>The nonce must be a version-4 UUID.</li>
+        <li>Checks, in order: HTTPS; credential exists; not revoked; timestamp within 300 s (<code>website.api.clock_skew_seconds</code>); nonce well-formed; signature matches the current secret or a rotated one still inside its grace window (constant-time, every secret tried); nonce not seen for this credential in 600 s (<code>nonce_ttl_seconds</code>, held as a cache lock, checked after the signature so garbage cannot burn nonces); website is being served.</li>
+        <li>Every failure is the same <code>401 unauthenticated</code> to the caller; the precise reason (<code>missing_or_malformed_authorization</code>, <code>unknown_credential</code>, <code>credential_revoked</code>, <code>stale_timestamp</code>, <code>malformed_nonce</code>, <code>invalid_signature</code>, <code>replayed_nonce</code>) goes to <code>api_logs.error_code</code> only.</li>
+        <li><strong>HTTPS only.</strong> Plain HTTP is refused with <code>400 https_required</code>, never redirected (a redirect would leak the signed request), unless <code>website.allow_local_addresses</code> is on (development only).</li>
+        <li>Website not served: <code>403 website_unavailable</code>. Allowed statuses: live ones plus <code>development</code>, <code>api_connection_pending</code> and <code>maintenance</code>.</li>
+        <li>Each retry must be a fresh request with a fresh nonce and timestamp.</li>
+    </ul>
+    <h3>Scopes</h3>
+    <table>
+        <thead><tr><th>Scope</th><th>Grants</th></tr></thead>
+        <tbody>
+        <tr><td><code>catalog:read</code></td><td>site, products, facets, categories, delivery areas</td></tr>
+        <tr><td><code>inventory:read</code></td><td>stock availability</td></tr>
+        <tr><td><code>orders:write</code></td><td>checkout quote, submit, payment session, cancel, COD confirmation</td></tr>
+        <tr><td><code>orders:read</code></td><td>read the website's own orders</td></tr>
+        <tr><td><code>customers:write</code></td><td>create and update the website's customers</td></tr>
+        <tr><td><code>returns:write</code></td><td>submit return requests</td></tr>
+        </tbody>
+    </table>
+    <p>A call outside the credential's scopes is <code>403 insufficient_scope</code> with <code>details.required_scope</code>. Tenancy: every query is scoped to the credential's website before any caller filter; a resource of another website is <code>404 not_found</code>, so the API cannot be used to probe other partners.</p>
+
+    <h2>Host binding</h2>
+    <p>Optional header <code>X-Feriwala-Storefront-Host: shop.example.com</code>. When present, <code>VerifyStorefrontHost</code> resolves the host itself through <code>ResolveWebsiteHost</code> (the website's subdomain, or a verified and active custom domain on a website that is not closed) and answers <code>403 host_mismatch</code> unless it belongs to the credential's website. It can only narrow a request, never select a website. The storefront app sends it when <code>ERP_STOREFRONT_HOST</code> is set.</p>
+
+    <h2>Rate limits</h2>
+    <p><code>LimitStorefrontRate</code>, counted per credential <em>and</em> per website (a second credential does not double the allowance), per minute, three classes from <code>website.api.rate_limits</code>:</p>
+    <table>
+        <thead><tr><th>Class</th><th>Limit</th><th>Applied to</th></tr></thead>
+        <tbody>
+        <tr><td><code>read</code></td><td>600</td><td>catalogue, inventory, order read, checkout quote, delivery areas</td></tr>
+        <tr><td><code>write</code></td><td>120</td><td>order, customer and return writes</td></tr>
+        <tr><td><code>other</code></td><td>300</td><td><code>connection</code></td></tr>
+        </tbody>
+    </table>
+    <p>Responses carry <code>X-RateLimit-Limit</code>, <code>X-RateLimit-Remaining</code>, <code>X-RateLimit-Reset</code> (whichever budget has less left). Over the limit: <code>429 rate_limited</code> with <code>Retry-After</code> and <code>details.retry_after</code>. The limiter store must be shared (Redis in production). <code>/health</code> is not limited.</p>
+
+    <h2>Idempotency</h2>
+    <p>Every write route (everything under <code>storefront.idempotent</code>) needs <code>Idempotency-Key</code>, at most 64 characters (else <code>400 idempotency_key_required</code>). The key is scoped to the website. First use runs the request and stores the answer; the same key with the same method, path and body replays the stored response byte for byte with <code>Idempotent-Replay: true</code>; the same key with a different request is <code>409 idempotency_key_reused</code>; a concurrent duplicate waits on a lock and replays (or <code>409 request_in_progress</code> if it times out). <code>5xx</code>, <code>401</code>, <code>403</code> and <code>429</code> answers are not stored. The fingerprint is an HMAC keyed with <code>app.key</code>. Records are in <code>storefront_requests</code>, pruned daily at 03:40 well after the contract's 24-hour replay window. <code>storefront_order_reference</code> is a second duplicate guard (<code>409 duplicate_storefront_order</code>). <code>POST /checkout/quote</code> is advisory, writes nothing and takes no key.</p>
+
+    <h2>Endpoints</h2>
+    <p>From <code>routes/api.php</code>. Order of middleware: <code>storefront.log</code>, <code>storefront.auth</code>, <code>storefront.host</code>, then <code>storefront.rate:{class}</code>, <code>storefront.scope:{scope}</code> and, for writes, <code>storefront.idempotent</code>.</p>
+    <table>
+        <thead><tr><th>Method and path</th><th>Name (<code>storefront.v1.</code>)</th><th>Scope</th><th>Class</th><th>Controller</th></tr></thead>
+        <tbody>
+        <tr><td>GET <code>/health</code></td><td><code>health</code></td><td>none, unauthenticated</td><td>none</td><td>closure; logged</td></tr>
+        <tr><td>GET <code>/connection</code></td><td><code>connection</code></td><td>any valid credential</td><td>other</td><td><code>ConnectionController</code></td></tr>
+        <tr><td>GET <code>/site</code></td><td><code>site</code></td><td><code>catalog:read</code></td><td>read</td><td><code>SiteController</code></td></tr>
+        <tr><td>GET <code>/products</code>, <code>/products/facets</code>, <code>/products/{product}</code></td><td><code>products.index|facets|show</code></td><td><code>catalog:read</code></td><td>read</td><td><code>ProductController</code></td></tr>
+        <tr><td>GET <code>/categories</code>, <code>/categories/{category}</code></td><td><code>categories.index|show</code></td><td><code>catalog:read</code></td><td>read</td><td><code>CategoryController</code></td></tr>
+        <tr><td>GET <code>/delivery/areas</code></td><td><code>delivery.areas</code></td><td><code>catalog:read</code></td><td>read</td><td><code>DeliveryAreaController</code></td></tr>
+        <tr><td>POST <code>/checkout/quote</code></td><td><code>checkout.quote</code></td><td><code>orders:write</code></td><td>read</td><td><code>CheckoutController@quote</code></td></tr>
+        <tr><td>GET <code>/inventory</code>, <code>/inventory/{sku}</code></td><td><code>inventory.index|show</code></td><td><code>inventory:read</code></td><td>read</td><td><code>InventoryController</code></td></tr>
+        <tr><td>GET <code>/orders</code>, <code>/orders/{order}</code></td><td><code>orders.index|show</code></td><td><code>orders:read</code></td><td>read</td><td><code>OrderController</code></td></tr>
+        <tr><td>POST <code>/orders</code></td><td><code>orders.store</code></td><td><code>orders:write</code></td><td>write, idempotent</td><td><code>OrderController@store</code></td></tr>
+        <tr><td>POST <code>/orders/{order}/payment-session</code></td><td><code>orders.payment-session</code></td><td><code>orders:write</code></td><td>write, idempotent</td><td><code>@paymentSession</code></td></tr>
+        <tr><td>POST <code>/orders/{order}/cancellation</code></td><td><code>orders.cancel</code></td><td><code>orders:write</code></td><td>write, idempotent</td><td><code>@cancel</code></td></tr>
+        <tr><td>POST <code>/orders/{order}/confirmation/code</code>, <code>/confirmation</code></td><td><code>orders.confirmation.code|store</code></td><td><code>orders:write</code></td><td>write, idempotent</td><td><code>@confirmationCode</code>, <code>@confirm</code></td></tr>
+        <tr><td>POST <code>/orders/{order}/return-requests</code></td><td><code>orders.return-requests.store</code></td><td><code>returns:write</code></td><td>write, idempotent</td><td><code>ReturnController@store</code></td></tr>
+        <tr><td>POST <code>/customers</code>, PATCH <code>/customers/{customer}</code></td><td><code>customers.store|update</code></td><td><code>customers:write</code></td><td>write, idempotent</td><td><code>CustomerController</code></td></tr>
+        </tbody>
+    </table>
+    <p>Contract §6.3 also names <code>POST /orders/{id}/refund-requests</code> (a refund without goods); it is not routed and the contract says it is not served in this release. Route placement matters: <code>products/facets</code> is declared before <code>products/{product}</code>.</p>
+    <h3>Behaviour worth knowing</h3>
+    <ul>
+        <li><strong>Pagination</strong> is cursor-based: <code>{"data":[...],"meta":{"next_cursor":"...","has_more":true}}</code>; <code>?limit=</code> default 50, maximum 200 (<code>website.api.default_page_size</code>, <code>max_page_size</code>). There are no page numbers.</li>
+        <li><strong>Products</strong> (§5.1): <code>?updated_since=&amp;cursor=&amp;limit=&amp;category=&amp;q=&amp;sort=&amp;price_min=&amp;price_max=&amp;brand=&amp;attributes[slug]=&amp;in_stock=&amp;featured=&amp;flash_deal=&amp;status=</code>. <code>sort</code> is one of <code>featured</code>, <code>newest</code>, <code>price_asc</code>, <code>price_desc</code>, <code>name</code>, <code>best_selling</code>. Only products published on the website, eligible for its owner to sell, and bought by the owner are listed (<code>StorefrontSelections</code>). <code>price</code> is the website's own selling price; wholesale price, cost and margin are never present. <code>best_selling</code> is rebuilt every 15 minutes.</li>
+        <li><strong>Orders</strong>: the ERP recalculates every price, discount, tax and total; a difference of <code>0.01</code> is <code>422 price_mismatch</code> carrying only selling-side figures, and the storefront must obtain the customer's reconfirmation and resubmit with a <em>new</em> idempotency key. Acceptance reserves stock in the same transaction (15 minutes online, 24 hours COD by default). <code>payment.return_url</code> must be https, standard port, no credentials, and on a host that belongs to the website now, else <code>422 return_url_not_allowed</code>.</li>
+        <li><strong>COD</strong>: a COD order starts <code>customer_verification_pending</code>; the six-digit code goes only to the customer's SMS and is never in any response. A wrong, spent or never-issued code all answer <code>422 confirmation_refused</code>; a closed window <code>409 confirmation_expired</code>; resends are cooled down (<code>429 confirmation_code_too_soon</code>) and capped at five (<code>429 confirmation_code_limit_reached</code>).</li>
+        <li><strong>Customers</strong>: keyed on <code>(website_id, normalised mobile)</code>; mobile in E.164 (the ERP normalises, converts a leading 0, and rejects the unresolvable with <code>422 invalid_mobile_number</code>). Knowing a number grants no access to history.</li>
+        <li><strong>Returns</strong>: only for delivered or completed orders inside the return window (7 days default). Refusals include <code>order_not_returnable</code>, <code>return_window_closed</code>, <code>quantity_not_returnable</code>, <code>line_not_on_order</code>, <code>nothing_returnable</code> (per contract §6.3).</li>
+        <li><strong>Connection</strong> returns the website's public id, status and host, the credential's key id, scopes, <code>rotated_at</code> and <code>previous_secret_expires_at</code>, the rate limits, <code>last_synced_at</code> and <code>connection_health</code>. The storefront's <code>storefront:doctor</code> uses it.</li>
+    </ul>
+
+    <h2>Errors</h2>
+    <p>One envelope from <code>StorefrontError</code>; messages never contain another partner's data, internal ids, traces or SQL:</p>
+    <pre><code>{ "error": { "code": "insufficient_stock", "message": "...", "details": { }, "request_id": "&lt;ULID, also in api_logs&gt;" } }</code></pre>
+    <table>
+        <thead><tr><th>HTTP</th><th>Meaning, with codes seen in the code</th></tr></thead>
+        <tbody>
+        <tr><td>400</td><td>malformed: <code>https_required</code>, <code>idempotency_key_required</code></td></tr>
+        <tr><td>401</td><td><code>unauthenticated</code> (signature, timestamp, nonce, credential)</td></tr>
+        <tr><td>403</td><td><code>insufficient_scope</code>, <code>host_mismatch</code>, <code>website_unavailable</code></td></tr>
+        <tr><td>404</td><td><code>not_found</code> (also another website's resource)</td></tr>
+        <tr><td>409</td><td><code>idempotency_key_reused</code>, <code>request_in_progress</code>, <code>duplicate_storefront_order</code>, state conflicts</td></tr>
+        <tr><td>422</td><td><code>validation_failed</code>, <code>invalid_mobile_number</code>, <code>price_mismatch</code>, <code>insufficient_stock</code>, <code>product_unavailable</code>, <code>return_url_not_allowed</code> and others from the contract</td></tr>
+        <tr><td>429</td><td><code>rate_limited</code>, <code>Retry-After</code></td></tr>
+        <tr><td>5xx</td><td>ERP fault; safe to retry with backoff</td></tr>
+        </tbody>
+    </table>
+    <p>Only the codes in the first rows plus <code>validation_failed</code>, <code>not_found</code>, <code>invalid_mobile_number</code> were confirmed in the controllers' grep; the rest are taken from the contract and are not individually verified here. Every call, refused ones included, is written to <code>api_logs</code> by <code>LogStorefrontRequest</code> with secrets and personal data redacted.</p>
+
+    <h2>Money: <code>amount</code> and legacy <code>minor_units</code></h2>
+    <p>Money is always an object mirroring <code>Money::jsonSerialize()</code>: <code>{"amount":"1234.56","currency":"BDT","formatted":"৳1,234.56"}</code>. <code>amount</code> is flat Taka as a decimal string; nothing on either side multiplies or divides by 100.</p>
+    <div class="callout callout-warn"><p><strong>Compatibility rule (contract §4.1).</strong> Before 2026-09-23 money was <code>{"minor_units":123456,"currency":"BDT","decimal":"1234.56"}</code> in poisha. For the compatibility period <em>outbound</em> objects carry <code>amount</code> and also the legacy <code>minor_units</code> and <code>decimal</code>; <em>inbound</em>, an object may supply either <code>amount</code> (preferred) or <code>minor_units</code>, but exactly one: both is <code>422</code>, because a payload that disagrees with itself is the one way a 100-times error could enter. The legacy value is converted once at the edge by the documented adapter. In the code the only place that writes <code>minor_units</code> is the API payload layer (for example <code>StorefrontController</code> builds it with <code>bcmul($amount, '100', 0)</code>); this is the repository guard test's one exemption. <strong>No new internal code may read or write <code>minor_units</code></strong>, and new endpoints and fields are <code>amount</code>-only. The legacy keys are removed only in v2.</p></div>
+    <p>Price comparisons are exact decimals at two places. Money in requests goes through the strict parser (<code>DecimalAmount</code>); excess precision is rejected, not rounded.</p>
+
+    <h2>Webhooks to the storefront</h2>
+    <p>The ERP POSTs to the website's one endpoint (<code>website_webhook_endpoints.url</code>; the storefront app expects <code>/webhooks/feriwala</code>). Payload: <code>{"event","occurred_at","website_id" (public id),"data"}</code>. Headers:</p>
+    <pre><code>Content-Type: application/json
+X-Feriwala-Event: product.updated
+X-Feriwala-Delivery: &lt;ULID, stable across retries&gt;
+X-Feriwala-Timestamp: &lt;unix seconds&gt;
+X-Feriwala-Signature: sha256=&lt;hex&gt;
+
+signature = "sha256=" + hex(HMAC-SHA256(webhook_secret, timestamp + "." + raw_body))</code></pre>
+    <ul>
+        <li>Verify in constant time over the <em>raw</em> body, reject a timestamp older (or newer) than 300 s, accept a rotated secret while its window is open, and deduplicate on <code>X-Feriwala-Delivery</code>. The reference implementation is <code>WebhookSignature::verify()</code>.</li>
+        <li>Delivery is asynchronous (queue <code>webhooks</code>), at least once, unordered. Answer 2xx within 10 s and process later. Retries on any non-2xx or timeout: after attempts at +10 s, 30 s, 2 min, 10 min, 30 min, 2 h, 6 h, 12 h; then the delivery is <code>failed</code> (dead letter) for a person to retry with the same delivery id. A redirect is never followed and counts as a failure. Endpoint addresses must be https on port 443 and resolve only to public addresses, checked when saved and before every attempt.</li>
+        <li>Events (<code>WebhookEvent</code>): <code>product.published</code>, <code>product.updated</code>, <code>product.unpublished</code>, <code>product.price_changed</code>, <code>inventory.updated</code>, <code>inventory.out_of_stock</code>, <code>category.updated</code>, <code>order.status_changed</code>, <code>order.cancelled</code>, <code>cod.confirmation_required</code>, <code>cod.confirmed</code>, <code>cod.expired</code>, <code>shipment.updated</code>, <code>return.status_changed</code>, <code>refund.completed</code>, <code>website.suspended</code>, <code>website.restored</code>, <code>website.updated</code> (carries only the website and time; re-read <code>GET /site</code>). Low wallet balance and grace period are not suspension and send no <code>website.suspended</code>.</li>
+        <li>A webhook is a hint, not the source of truth: re-read the API for anything that matters. Full mechanics: <a href="../modules/website.html">Website</a>.</li>
+    </ul>
+
+    <h2>Storefront obligations (contract §8)</h2>
+    <ol>
+        <li>Ignore unknown JSON fields and tolerate unknown enum values and event types.</li>
+        <li>Treat every list as paginated.</li>
+        <li>Retry <code>429</code> and <code>5xx</code> with backoff and jitter; never retry other <code>4xx</code>.</li>
+        <li>Send an <code>Idempotency-Key</code> on every write.</li>
+        <li>Verify webhook signatures and deduplicate on the delivery id.</li>
+        <li>Never cache catalogue data past its <code>updated_at</code> without revalidating at checkout.</li>
+    </ol>
+    <p>The reference client is the <a href="../storefront-app.html">Storefront app</a> (<code>storefront/app/Erp/Client.php</code>).</p>
+
+    <h2>Extending without breaking v1</h2>
+    <ol>
+        <li><strong>Allowed (additive):</strong> a new optional request field, a new response field, a new endpoint, a new enum value or event the client is documented to tolerate. <strong>Not allowed:</strong> removing, renaming or narrowing anything; a new required request field; changing an error code's meaning.</li>
+        <li>New endpoint: add the route inside the <code>storefront/v1</code> group with the right <code>storefront.rate:*</code> class and <code>storefront.scope:*</code>, and <code>storefront.idempotent</code> if it writes. Take the website from the request attribute set by authentication (<code>StorefrontController::website()</code>), never from input. Build errors with <code>StorefrontError::respond()</code>.</li>
+        <li>Name the route <code>storefront.v1.&lt;group&gt;.&lt;action&gt;</code>: <code>ApiServiceProvider::tagFor()</code> files it under a Swagger tag from the name.</li>
+        <li>New fields use <code>amount</code> money only. Never expose cost, margin, wholesale price, wallet or another website's data.</li>
+        <li>New scope: see "Add a credential scope" on the Website page. New webhook event: see "Add a webhook event" there.</li>
+        <li>Update <code>requirements/05-storefront-api-contract.md</code> (note an additive change with its decision reference) and, if consumers must know, <code>docs/api/storefront.md</code>. Add tests in <code>tests/Feature/WebsiteApi/</code> (authentication and isolation tests exist as models: <code>StorefrontAuthenticationTest</code>, <code>StorefrontIsolationTest</code>).</li>
+        <li>Anything breaking: stop and raise it for approval; it needs v2.</li>
+    </ol>
+
+    <h2>Related</h2>
+    <ul>
+        <li><a href="../modules/website.html">Website module</a>: credentials, webhook endpoint, delivery internals.</li>
+        <li><a href="../storefront-app.html">Storefront app</a>: the client implementation.</li>
+        <li><a href="mobile-api.html">Mobile API</a>: the other API, which acts for a signed-in person.</li>
+        <li><a href="../modules/order.html">Order</a>, <a href="../guide/http-layers.html">HTTP layers</a>.</li>
+    </ul>
+</main>
+</body>
+</html>

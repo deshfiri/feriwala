@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Operations</title>
+    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+    <script src="../assets/docs.js"></script>
+</head>
+<body>
+<main id="doc">
+    <h1>Operations</h1>
+    <p class="lead">Running Feriwala in production: the processes that must be alive, what each Redis database is for, queues, the scheduler, inbound webhooks and their throttles, logging, storage, deployment steps and a symptom-to-fix table.</p>
+
+    <div class="callout callout-rule"><p><strong>Rule.</strong> The application is stateless and horizontally scalable (§40, D10). Sessions, cache, queues, rate limiting and locks live in Redis; files live in S3-compatible storage; nothing persistent lives on the app server. Never switch session, cache or queue to <code>file</code>, <code>sync</code> or <code>database</code> drivers, even temporarily to work around a problem.</p></div>
+
+    <h2>Processes</h2>
+    <table>
+        <thead><tr><th>Process</th><th>How it runs</th><th>Why it must be alive</th></tr></thead>
+        <tbody>
+            <tr><td>Web</td><td>Nginx plus PHP-FPM, document root <code>public/</code> (<code>DEPLOY.md</code>). Locally <code>php artisan serve</code>.</td><td>Serves the ERP, the Storefront API (<code>/api/storefront/v1</code>), the mobile API (<code>/api/mobile/v1</code>) and the inbound webhooks.</td></tr>
+            <tr><td>Queue workers</td><td>Supervisor program <code>feriwala-queue</code>, two processes, <code>queue:work redis</code>.</td><td>Settles gateway notifications, sends SMS, delivers website webhooks, syncs external stores, releases referral commissions. See the queue table for the queue names a worker must listen to.</td></tr>
+            <tr><td>Scheduler</td><td>Cron <code>* * * * * php artisan schedule:run</code> as the web user (<code>DEPLOY.md</code>); <code>schedule:work</code> in <code>compose.yaml</code>.</td><td>All 24 sweeps below. Without it nothing expires, reconciles or retries.</td></tr>
+            <tr><td>Inertia SSR</td><td>Supervisor program <code>feriwala-ssr</code>, <code>php artisan inertia:start-ssr</code>; built with <code>npm run build:ssr</code>.</td><td>Server-side rendering of Inertia pages.</td></tr>
+            <tr><td>Reverb</td><td><code>php artisan reverb:start</code>, proxied as <code>wss://</code>; <code>REVERB_HOST</code>, <code>REVERB_PORT</code> and <code>REVERB_SCHEME</code> are the public address because the browser connects there.</td><td>Live notification bell and panel updates (<code>BROADCAST_CONNECTION=reverb</code>). <code>DEPLOY.md</code> does not list a Reverb supervisor program; whether production runs it is not verified.</td></tr>
+            <tr><td>PostgreSQL 18, Redis 8</td><td>Managed or self-hosted.</td><td>Source of truth and the shared state above.</td></tr>
+        </tbody>
+    </table>
+    <p>The storefront application (<code>storefront/</code> in this repository, one independent installation per Owner after D32) is a separate deployable; see <a href="../storefront-app.html">Storefront app</a>. Docker and Caddy are production concerns only (D10); <code>compose.yaml</code> is a parity reference.</p>
+
+    <h2>Redis roles</h2>
+    <table>
+        <thead><tr><th>Role</th><th>Config</th><th>Database</th><th>Notes</th></tr></thead>
+        <tbody>
+            <tr><td>Cache</td><td><code>CACHE_STORE=redis</code>, connection <code>cache</code></td><td><code>REDIS_CACHE_DB</code> (1)</td><td>Includes the settings and permission caches.</td></tr>
+            <tr><td>Rate limiting</td><td><code>CACHE_LIMITER=redis</code></td><td>cache connection</td><td>Named separately in <code>config/cache.php</code> because a limit counted per web node is not a limit.</td></tr>
+            <tr><td>Queues</td><td><code>QUEUE_CONNECTION=redis</code>, <code>REDIS_QUEUE_CONNECTION=queue</code></td><td><code>REDIS_QUEUE_DB</code> (2)</td><td><code>retry_after</code> is 90 seconds (<code>REDIS_QUEUE_RETRY_AFTER</code>). Failed jobs go to the <code>failed_jobs</code> table (<code>database-uuids</code>).</td></tr>
+            <tr><td>Locks and idempotency</td><td><code>REDIS_CACHE_LOCK_CONNECTION=locks</code></td><td><code>REDIS_LOCK_DB</code> (3)</td><td><code>DistributedLock</code>, scheduler <code>onOneServer()</code> and <code>withoutOverlapping()</code>. Isolated so <code>cache:clear</code> cannot drop a lock guarding a financial operation.</td></tr>
+            <tr><td>Sessions</td><td><code>SESSION_DRIVER=redis</code>, <code>SESSION_CONNECTION=session</code></td><td><code>REDIS_SESSION_DB</code> (4)</td><td>Isolated so a cache flush on deploy does not sign everyone out. Lifetime floor <code>SESSION_LIFETIME</code>, overridable by the <code>security.session_lifetime_minutes</code> setting.</td></tr>
+        </tbody>
+    </table>
+    <div class="callout callout-warn"><p><strong>Gotcha.</strong> <code>REDIS_CACHE_LOCK_CONNECTION</code> and <code>REDIS_QUEUE_CONNECTION</code> default to <code>default</code> in code and are set to <code>locks</code> and <code>queue</code> only by <code>.env.example</code>. A production <code>.env</code> written from scratch silently puts locks and the queue on database 0. Verify both with <code>php artisan config:show cache.stores.redis</code> and <code>config:show queue.connections.redis</code>.</p></div>
+
+    <h2>Queues and jobs</h2>
+    <p>Queue names come from config, not from the worker command. A worker started without <code>--queue</code> processes only <code>default</code>.</p>
+    <table>
+        <thead><tr><th>Job</th><th>Queue (config key, default)</th><th>Tries / backoff</th><th>Purpose</th></tr></thead>
+        <tbody>
+            <tr><td><code>Billing\Jobs\SettleGatewayNotification</code></td><td><code>payments</code> (<code>payment.queue</code>, <code>PAYMENT_QUEUE</code>)</td><td>5 tries; 30s, 120s, 600s, 1800s</td><td>Verifies and settles a gateway notification off the request. Its own queue so a backlog elsewhere cannot delay confirming that money arrived.</td></tr>
+            <tr><td><code>Notification\Jobs\DeliverSmsMessage</code></td><td><code>sms</code> (<code>sms.queue</code>, <code>SMS_QUEUE</code>)</td><td>3 tries; 60s, 300s</td><td>Sends one SMS through the configured provider; retries only when the provider says the failure is retryable.</td></tr>
+            <tr><td><code>Website\Jobs\DeliverWebhook</code></td><td><code>webhooks</code> (<code>website.webhooks.queue</code>, <code>WEBSITE_WEBHOOK_QUEUE</code>)</td><td>1 try</td><td>One outbound webhook attempt. Retries are scheduled in the delivery record (10s, 30s, 2m, 10m, 30m, 2h, 6h, 12h) and queued by the <code>website-webhook-retries</code> sweep, so a restarting worker loses nothing.</td></tr>
+            <tr><td><code>Website\Jobs\AnnouncePaymentMethodsChanged</code></td><td><code>webhooks</code></td><td>3 tries</td><td>Tells every served website in a currency that online payment was switched on or off (D31).</td></tr>
+            <tr><td><code>ExternalStore\Jobs\SyncExternalStore</code></td><td><code>default</code> (<code>stores.queue</code>, <code>STORES_QUEUE</code>)</td><td>3 tries; 60s, 300s</td><td>Syncs one connected store's orders; locks per store.</td></tr>
+            <tr><td><code>ExternalStore\Jobs\ProcessExternalStoreWebhook</code></td><td><code>default</code></td><td>3 tries; 30s, 120s</td><td>Processes a verified store webhook event.</td></tr>
+            <tr><td><code>Referral\Jobs\ReleaseReferralCommissions</code></td><td><code>default</code> (no <code>onQueue</code>)</td><td>defaults</td><td>Pays commissions an activation event made payable immediately; the scheduled sweep catches the rest.</td></tr>
+        </tbody>
+    </table>
+    <p>Listeners that react to domain events live in <code>app/Listeners</code> and <code>app/Domain/Notification/Listeners</code> (for example <code>CollectPartnerReceivableOnVerifiedPayment</code>, <code>ReleasePartnerReceivablesOnWalletCredit</code>, <code>BroadcastStoredNotification</code>); whether each is queued was not verified here.</p>
+    <div class="callout callout-warn"><p><strong>Gotcha: a worker must name its queues.</strong> A bare <code>queue:work</code> processes only <code>default</code>, so jobs on <code>payments</code>, <code>sms</code> and <code>webhooks</code> would sit unprocessed. <code>DEPLOY.md</code> and <code>compose.yaml</code> now both pass <code>--queue=payments,webhooks,sms,default</code> (<code>compose.yaml</code> also keeps <code>sync</code>, <code>notifications</code>, <code>reports</code> and <code>maintenance</code>, which match no job found under <code>app/**/Jobs</code>). Keep <code>payments</code> first so it is drained first, and add any new named queue to both files. The queue names come from <code>config/payment.php</code> (<code>PAYMENT_QUEUE</code>), <code>config/sms.php</code> (<code>SMS_QUEUE</code>), <code>config/website.php</code> (<code>WEBSITE_WEBHOOK_QUEUE</code>) and <code>config/stores.php</code> (<code>STORES_QUEUE</code>, default <code>default</code>); if you rename one in <code>.env</code>, rename it in the worker command.</p></div>
+    <p>Horizon was approved (D3, gated behind <code>system.monitoring</code>) but <code>laravel/horizon</code> is not in <code>composer.json</code>; today failed jobs are inspected with <code>queue:failed</code> and the <code>failed_jobs</code> table.</p>
+
+    <h2>The scheduler</h2>
+    <p>Everything is in <code>routes/console.php</code>. Every task uses <code>onOneServer()</code> and <code>withoutOverlapping()</code> (§41), backed by the isolated Redis lock database: a sweep that restricts accounts or sends messages must not run twice concurrently on two application servers. Daily tasks are pinned to <code>app.timezone</code> (<code>Asia/Dhaka</code>) so "overdue today" means the day of the person affected. Each Action is also idempotent on its own: every move is re-read under a row lock and made only from a state that permits it.</p>
+    <table>
+        <thead><tr><th>Task name</th><th>Cadence</th><th>Action</th><th>What and why</th></tr></thead>
+        <tbody>
+            <tr><td><code>subscription-lifecycle-sweep</code></td><td>daily 01:30</td><td><code>SweepSubscriptionLifecycle</code></td><td>Package renewal due, grace, expiry (§8.4). Early and before the KYC sweep so a term that expires today is expired before anything reasons about entitlement.</td></tr>
+            <tr><td><code>kyc-deadline-sweep</code></td><td>daily 02:00</td><td><code>SweepKycDeadlines</code></td><td>Warn and enforce KYC deadlines (§7.4). Does nothing until an administrator sets <code>kyc.deadline_days</code>.</td></tr>
+            <tr><td><code>website-lifecycle-sweep</code></td><td>daily 02:15</td><td><code>SweepWebsiteLifecycle</code></td><td>Website grace, expiry, renewal and low balance (§16.4, §24.3). After the subscription sweep.</td></tr>
+            <tr><td><code>wallet-balance-check</code></td><td>daily 02:30</td><td><code>SweepWalletBalances</code></td><td>Checks every wallet against what its account must hold (§24.3); restricts and notifies. Runs before the reconciliation so an account that paid overnight gets services back first.</td></tr>
+            <tr><td><code>ledger-integrity-check</code></td><td>daily 03:00</td><td><code>VerifyLedgerIntegrity</code></td><td>Re-derives every wallet from its ledger entries and alerts on mismatch (§28.1). Reads only and repairs nothing: silently correcting a balance would destroy the evidence of what caused the drift; corrections are new ledger rows (§23.2).</td></tr>
+            <tr><td><code>audit-log-retention</code></td><td>daily 03:30</td><td><code>PurgeAuditLogs::purgeExpired</code></td><td>Removes audit entries older than <code>audit.log_retention_days</code> (D33). Off by default; every run that deletes anything leaves a permanent <code>audit.logs_purged</code> entry.</td></tr>
+            <tr><td><code>storefront-request-prune</code></td><td>daily 03:40 (no timezone pin)</td><td><code>PruneStorefrontRequests</code></td><td>Forgets stored answers to storefront writes well past the 24-hour replay window (P5-21). The orders they created are untouched.</td></tr>
+            <tr><td><code>payment-deadline-sweep</code></td><td>hourly</td><td><code>ExpireUnpaidPayments</code></td><td>Closes unpaid checkouts past <code>billing.payment_deadline_hours</code> (§9) and gives coupon slots back. Hourly because the deadline is in hours. Does nothing until the setting is configured; a <code>Paid</code> payment has no move to <code>Cancelled</code>.</td></tr>
+            <tr><td><code>supplier-fulfilment-confirmation-sweep</code></td><td>hourly</td><td><code>ExpireOverdueFulfilmentCommitments</code></td><td>Returns supplier fulfilment commitments past their confirmation deadline to staff review.</td></tr>
+            <tr><td><code>courier:steadfast-sync</code></td><td>every 5 minutes</td><td>command</td><td>Backstop for a Steadfast callback that never came; bounded batch, per-parcel wait.</td></tr>
+            <tr><td><code>cod-confirmation-code-retry</code></td><td>every 5 minutes</td><td><code>RetryCodConfirmationCodes</code></td><td>Resends confirmation codes the SMS provider did not take (§6.2); never resends one that reached the provider.</td></tr>
+            <tr><td><code>website-inventory-sync</code></td><td>every 5 minutes</td><td><code>SyncWebsiteInventory</code></td><td>Tells storefronts about stock that changed, sending only the change (§17.2).</td></tr>
+            <tr><td><code>referral-commission-release</code></td><td>every 5 minutes</td><td><code>ReleaseDueReferralCommissions</code></td><td>Pays commissions whose holding period has passed and retries reversals a wallet could not carry (D24).</td></tr>
+            <tr><td><code>external-store-sync</code></td><td>every 10 minutes</td><td><code>DispatchExternalStoreSyncs</code></td><td>Queues an order sync for each live external store connection, the safety net under its webhooks (D29). Calls no store itself.</td></tr>
+            <tr><td><code>refund-settlement-sweep</code></td><td>every 15 minutes</td><td><code>SettleRefund::pending()</code> loop</td><td>Asks gateways what became of refunds they accepted (§26.3). A refund that failed outright is never re-sent from here: sending money is a person's decision.</td></tr>
+            <tr><td><code>website-catalogue-sync</code></td><td>every 15 minutes</td><td><code>SyncWebsiteCatalogue::sweep</code></td><td>Re-announces storefront products that are out of date.</td></tr>
+            <tr><td><code>website-best-sellers</code></td><td>every 15 minutes</td><td><code>RefreshWebsiteBestSellers</code></td><td>Rebuilds the 30-day sales summary in one transaction so <code>sort=best_selling</code> never aggregates orders per request (C3, D31 H5).</td></tr>
+            <tr><td><code>gateway-reconciliation</code></td><td>every 2 minutes</td><td><code>ReconcileGatewayPayments</code></td><td>Asks each provider with a status lookup what happened to payments old enough to have finished (§28.1). Never downgrades a settled payment (a mismatch is reported, not applied); an unreachable provider leaves everything as it was.</td></tr>
+            <tr><td><code>partner-receivable-collection-sweep</code></td><td>every minute</td><td><code>ReleaseCollectableReceivables::sweep</code></td><td>Collects Banij's receivable on Partner-gateway orders a missed event left waiting, and ends holds past their deadline (D36).</td></tr>
+            <tr><td><code>stock-reservation-expiry</code></td><td>every minute</td><td><code>ReleaseExpiredReservations</code></td><td>Gives back stock held by expired reservations. Every minute because the shortest window is fifteen minutes and expiry is the scheduler's job, not lazy.</td></tr>
+            <tr><td><code>wholesale-order-payment-sweep</code></td><td>every minute</td><td><code>ExpireUnpaidOrders</code></td><td>Confirms an ERP wholesale order whose payment settled without it, cancels (releasing stock) one whose payment failed or timed out.</td></tr>
+            <tr><td><code>cod-confirmation-sweep</code></td><td>every minute</td><td><code>ExpireUnconfirmedCodOrders</code></td><td>Closes cash-on-delivery orders nobody confirmed and returns their stock, under the same locks a late confirmation takes.</td></tr>
+            <tr><td><code>website-webhook-retries</code></td><td>every minute</td><td><code>DispatchDueWebhookRetries</code></td><td>Queues webhook deliveries whose next attempt is due (contract §7.3).</td></tr>
+            <tr><td><code>website-promotion-windows</code></td><td>every minute</td><td><code>AnnouncePromotionWindows</code></td><td>Announces storefront promotions that opened or closed; each edge once.</td></tr>
+        </tbody>
+    </table>
+    <p>Check it with <code>php artisan schedule:list</code> and, on the host, <code>crontab -u www-data -l</code>. Two comments in <code>console.php</code> disagree with the code and are worth knowing: the <code>gateway-reconciliation</code> block says "Hourly" but is registered with <code>everyTwoMinutes()</code>, and the referral outbox comment sits above <code>storefront-request-prune</code> instead of the task it describes.</p>
+
+    <h2>Health checks</h2>
+    <table>
+        <thead><tr><th>URL</th><th>Defined in</th><th>Answers</th></tr></thead>
+        <tbody>
+            <tr><td><code>/up</code></td><td><code>bootstrap/app.php</code> (<code>health: '/up'</code>)</td><td>Laravel's built-in liveness check.</td></tr>
+            <tr><td><code>/api/storefront/v1/health</code></td><td><code>routes/api.php</code></td><td><code>{"status":"ok"}</code>, unauthenticated, liveness only.</td></tr>
+            <tr><td><code>/api/mobile/v1/health</code></td><td><code>routes/mobile.php</code></td><td><code>{"status":"ok"}</code>.</td></tr>
+        </tbody>
+    </table>
+    <p>All three are liveness probes: none checks PostgreSQL or Redis. For depth use <code>php artisan about</code>, <code>supervisorctl status</code> and <code>schedule:list</code> (<code>DEPLOY.md</code>), and watch the logs below.</p>
+
+    <h2>Logging</h2>
+    <p><code>LOG_CHANNEL=stack</code> with <code>LOG_STACK</code> (default <code>single</code>). Dedicated channels (<code>config/logging.php</code>, §42) keep an investigation from reading every request and let retention differ. Nothing written to them may contain passwords, tokens, API secrets, gateway secrets or unmasked personal data.</p>
+    <table>
+        <thead><tr><th>Channel</th><th>File</th><th>Retention</th></tr></thead>
+        <tbody>
+            <tr><td><code>payment</code></td><td><code>storage/logs/payment.log</code> (daily)</td><td>90 days</td></tr>
+            <tr><td><code>wallet</code></td><td><code>storage/logs/wallet.log</code></td><td>90 days</td></tr>
+            <tr><td><code>sms</code></td><td><code>storage/logs/sms.log</code></td><td>30 days</td></tr>
+            <tr><td><code>integration</code></td><td><code>storage/logs/integration.log</code></td><td>30 days</td></tr>
+            <tr><td><code>security</code></td><td><code>storage/logs/security.log</code> (level <code>info</code>)</td><td>365 days</td></tr>
+        </tbody>
+    </table>
+    <p>The audit trail is a database table (<code>audit_logs</code>), append-only except for the guarded purge described in D33, not a log file. See <a href="../modules/audit.html">Audit</a>. Provider traffic is recorded in <code>payment_logs</code> and <code>api_logs</code>/<code>webhook_logs</code> with secrets redacted.</p>
+
+    <h2>Backups</h2>
+    <p>The spec requires weekly automatic encrypted database backups with retention and alerts, plus permission-gated manual backups (§35, roadmap phase 11). <code>app/Domain/Backup/</code> contains only a <code>.gitkeep</code> and no scheduled task creates a backup, so no application-level backup exists today. A <code>backup_manager</code> platform role exists. Until the module is built, take PostgreSQL dumps and object-storage snapshots at the infrastructure level, and test a restore. The deployment-time verify commands (<code>catalog:verify-wholesale-pricing</code>, <code>wallets:verify-typed-balances</code>) are snapshots of selected values, not backups.</p>
+
+    <h2>Storage, mail, SMS, gateways</h2>
+    <table>
+        <thead><tr><th>Concern</th><th>How it is configured</th></tr></thead>
+        <tbody>
+            <tr><td>Object storage</td><td>No local persistent files in production (§40). Disks in <code>config/filesystems.php</code>: <code>local</code> (private, served), <code>kyc</code>, <code>supplier-media</code> and <code>private</code> (all private, <code>serve</code> off, <code>throw</code> on, driver switchable by <code>KYC_DISK_DRIVER</code>, <code>SUPPLIER_MEDIA_DISK_DRIVER</code>, <code>PRIVATE_DISK_DRIVER</code>), <code>public</code>, and <code>s3</code> (<code>AWS_*</code>, which is how Cloudflare R2 is reached). R2 is switched on in the admin storage settings; existing local files are moved with <code>storage:migrate-to-r2</code>. KYC files are encrypted by the application before they reach storage. See <a href="../modules/storage.html">Storage</a>.</td></tr>
+            <tr><td>Mail</td><td><code>MAIL_*</code>. <code>MAIL_MAILER=log</code> is the template default, so production must set a real mailer.</td></tr>
+            <tr><td>SMS</td><td><code>SMS_PROVIDER</code> defaults to <code>log</code> (writes to the <code>sms</code> channel, sends nothing). <code>gennet</code> is the implemented real provider; its address, token and sender id are entered in the admin SMS settings and stored encrypted. <code>bulksmsbd</code>, <code>novasms</code>, <code>sslcommerz</code> and <code>twilio</code> are declared with no driver and disabled. <code>SMS_ENABLED</code> is the global switch. See <a href="../modules/notification.html">Notification</a>.</td></tr>
+            <tr><td>Payment gateways</td><td>Credentials are encrypted rows entered in admin screens, never env variables. <code>config/payment.php</code> enables <code>sslcommerz</code> by default (<code>PAYMENT_SSLCOMMERZ_ENABLED</code>); <code>eps</code>, <code>surjopay</code>, <code>amarpay</code>, <code>bkash</code>, <code>nagad</code>, <code>stripe</code>, <code>paypal</code> have drivers but <code>enabled =&gt; false</code> in config. Stripe and PayPal need an administrator-set exchange rate to be offered for a Taka payment (D4 amendment). See <a href="../modules/billing.html">Billing</a>.</td></tr>
+            <tr><td>Courier</td><td>Steadfast credentials and its webhook token are admin settings; calls go only to hosts in <code>courier.steadfast.allowed_hosts</code>. See <a href="../modules/courier.html">Courier</a>.</td></tr>
+        </tbody>
+    </table>
+
+    <h2>Inbound webhooks and throttles</h2>
+    <p>Gateways and couriers cannot carry a CSRF token, so these paths are exempt in <code>bootstrap/app.php</code> (<code>webhooks/payment/*</code>, <code>webhooks/stores/*</code>, <code>webhooks/courier/*</code>) and each authenticates itself before doing any work.</p>
+    <table>
+        <thead><tr><th>Endpoint</th><th>Route name</th><th>Authentication</th><th>Throttle</th></tr></thead>
+        <tbody>
+            <tr><td><code>POST /webhooks/payment/{gateway}</code></td><td><code>webhooks.payment</code></td><td>Provider signature, checked before the payment is looked up.</td><td><code>payment-webhooks</code>: <code>PAYMENT_WEBHOOK_RATE_LIMIT</code> (default 120) per minute per gateway and address.</td></tr>
+            <tr><td><code>POST /webhooks/payment/{gateway}/{payment}</code></td><td><code>webhooks.partner-payment</code></td><td>Signature checked with the Partner's frozen credentials version (D36); the payment public id picks it.</td><td>Same limiter.</td></tr>
+            <tr><td><code>POST /webhooks/stores/{store}</code></td><td><code>webhooks.stores</code></td><td>HMAC over the raw body under that store's own secret; store event id required and recorded once.</td><td><code>store-webhooks</code>: <code>STORES_WEBHOOK_RATE_LIMIT</code> (default 240) per minute per store and address.</td></tr>
+            <tr><td><code>POST /webhooks/courier/steadfast</code></td><td><code>webhooks.courier.steadfast</code></td><td>Bearer token Banij generated, compared whole in constant time before the body is read.</td><td><code>throttle:240,1</code>.</td></tr>
+            <tr><td>Browser returns <code>POST checkout/return</code>, <code>checkout/cancelled</code>, <code>checkout/failed</code>, <code>wholesale/orders/{order}/payment/*</code></td><td><code>*.receive</code></td><td>Run <em>without</em> the web middleware group (no session, no CSRF). They settle nothing; a return is verified with the gateway on a valid signature or an identifier we hold, then sent on with a 303.</td><td><code>payment-returns</code>: <code>payment.return_rate_limit</code> (default 30) per minute per address.</td></tr>
+            <tr><td><code>GET /api/internal/tls/authorize</code></td><td><code>internal.tls.authorize</code></td><td>Token (<code>STOREFRONT_TLS_ASK_TOKEN</code>), optionally restricted to <code>STOREFRONT_TLS_ASK_ALLOWED_IPS</code>. Off until a token is set.</td><td><code>tls-ask</code>: 120 per minute per address.</td></tr>
+        </tbody>
+    </table>
+    <p>Other limits: the Storefront API is limited per credential per minute (read 600, write 120, other 300, <code>config/website.php</code>); the mobile API is <code>MOBILE_API_RATE_LIMIT</code> (default 120) per person or address, with a separate 5-per-minute limiter on second-factor guesses; the contract's clock skew (300 s) and nonce lifetime (600 s) are frozen with it. Webhooks are never processed inline: verify the signature, record, queue, answer fast (<a href="../integrations/overview.html">Integrations</a>).</p>
+
+    <h2>Security posture</h2>
+    <ul>
+        <li>ERP pages are no-indexed with the <code>noindex</code> middleware applied per route group; the public site and partner storefronts stay indexable (§34).</li>
+        <li><code>APP_DEBUG=false</code> and <code>APP_ENV=production</code>; the session cookie's <code>Secure</code> flag derives from the environment in production.</li>
+        <li>Administration requires a second factor for sensitive roles; the Horizon-style queue dashboard, if added, must never be publicly reachable (D3).</li>
+        <li>No global security-headers middleware (HSTS, CSP, frame options) was found in <code>app/</code>; the matches are on file-download responses in the KYC and case-evidence controllers. If you need those headers, set them at the proxy (not verified whether production does).</li>
+        <li>Only <code>.env.example</code> is tracked. A developer's whole environment file once sat in a public repository for two weeks; <code>TrackedEnvironmentFilesTest</code> now guards it. Rotate any secret that has ever appeared in a commit.</li>
+    </ul>
+
+    <h2>Deployment</h2>
+    <p>From <code>DEPLOY.md</code> (a VPS on Ubuntu; note that file is listed in <code>.gitignore</code>, so it may be absent from a fresh clone). Services: PHP (fpm, pgsql, redis, mbstring, bcmath, intl, xml, curl, zip), Nginx, PostgreSQL 18, Redis 8, Node 22, Composer, Supervisor. <code>DEPLOY.md</code> names PHP 8.3 (<code>php8.3-fpm</code>); development and CI use 8.5 and <code>composer.json</code> allows <code>^8.3</code>.</p>
+    <h3>First install</h3>
+    <pre><code>cp .env.example .env     # APP_ENV=production APP_DEBUG=false APP_URL=https://... DB_* REDIS_* (separate DBs)
+composer install --no-dev --optimize-autoloader
+php artisan key:generate
+npm ci &amp;&amp; npm run build:ssr
+php artisan migrate --force
+php artisan db:seed --class=SafeSeeder --force   # never DatabaseSeeder / DemoSeeder
+php artisan storage:link
+chown -R www-data:www-data storage bootstrap/cache</code></pre>
+    <h3>Every release</h3>
+    <pre><code>php artisan down
+git pull --ff-only
+composer install --no-dev --optimize-autoloader
+npm ci &amp;&amp; npm run build:ssr
+php artisan migrate --force
+php artisan optimize:clear &amp;&amp; php artisan optimize
+php artisan queue:restart
+sudo supervisorctl restart feriwala-ssr
+sudo systemctl reload php8.3-fpm
+php artisan up</code></pre>
+    <ul>
+        <li><code>queue:restart</code> makes workers pick up new code; a worker with <code>--max-time=3600</code> also recycles hourly.</li>
+        <li>Before a migration that touches money, take a snapshot with <code>catalog:verify-wholesale-pricing --snapshot=</code> or <code>wallets:verify-typed-balances --snapshot=</code> to a protected directory outside the release, then compare with <code>--against=</code> after. See <a href="commands.html">Commands</a>.</li>
+        <li>Migrations only add or correct; a committed migration is never rewritten. See <a href="database.html">Database</a>.</li>
+        <li><code>optimize:clear</code> flushes the cache database only. Locks and sessions survive by design.</li>
+        <li>After deploy: <code>php artisan about</code>, <code>php artisan schedule:list</code>, <code>sudo supervisorctl status</code>, and hit <code>/up</code>.</li>
+        <li>Supervisor: <code>stopwaitsecs=3600</code> lets a worker finish its job before it is killed; run two <code>feriwala-queue</code> processes at least. Fix the <code>--queue</code> list as described above.</li>
+    </ul>
+
+    <h2>What must never be done</h2>
+    <ul>
+        <li>Switch session, cache or queue drivers to <code>file</code>, <code>sync</code> or <code>database</code>. Not temporarily, not for a "quick" local fix.</li>
+        <li>Run <code>DemoSeeder</code>, <code>FakeDataSeeder</code>, <code>FakeOrderSeeder</code> or <code>DatabaseSeeder</code> against production data. (<code>DemoSeeder</code> and <code>StandardKycBatchSeeder</code> throw in production; <code>FakeDataSeeder</code> has no such guard.)</li>
+        <li>Edit or delete a ledger entry or an audit log by SQL. The database refuses ledger updates and deletes with a trigger; correct with a new adjustment, reversal or corrective row.</li>
+        <li>Let a cached config sit on a machine that runs tests, or run two test suites against one schema.</li>
+        <li>Put a second copy of a scheduled task in cron or Supervisor "to be safe". <code>onOneServer()</code> protects against two servers, not against you re-implementing a sweep.</li>
+        <li>Rotate <code>APP_KEY</code> casually: encrypted columns (gateway credentials, KYC, store secrets) depend on it. Use <code>APP_PREVIOUS_KEYS</code> for rotation.</li>
+        <li>Commit any <code>.env*</code> file other than <code>.env.example</code>.</li>
+    </ul>
+
+    <h2>Troubleshooting</h2>
+    <table>
+        <thead><tr><th>Symptom</th><th>Cause</th><th>Fix</th></tr></thead>
+        <tbody>
+            <tr><td>Payment is "paid" at the gateway but stays unsettled locally</td><td>SSLCommerz cannot reach <code>127.0.0.1</code>, so the server-to-server IPN never arrives (<code>.env.example</code>).</td><td>Expose <code>APP_URL</code> over public HTTPS (a tunnel), or wait for the <code>gateway-reconciliation</code> sweep or a manual retry to ask the gateway directly. In production check <code>payments</code> queue workers and the <code>payment</code> log.</td></tr>
+            <tr><td>Gateway notifications accepted but never settle; SMS, website webhooks pending</td><td>Worker not listening on <code>payments</code>, <code>sms</code>, <code>webhooks</code>.</td><td>Fix the <code>--queue</code> list and restart workers (<code>queue:restart</code>).</td></tr>
+            <tr><td>Nothing expires, reconciles or retries</td><td>Scheduler not running (no cron entry or <code>schedule:work</code>).</td><td>Install the cron line; confirm with <code>schedule:list</code>.</td></tr>
+            <tr><td>A sweep seems to run twice, or never</td><td>Lock database flushed or unreachable; or <code>REDIS_CACHE_LOCK_CONNECTION</code> not set so locks share database 0 with the cache.</td><td>Set the locks connection and database; avoid flushing database 3.</td></tr>
+            <tr><td>Everyone signed out after a deploy</td><td>Sessions share a database that <code>cache:clear</code> flushed, or <code>APP_KEY</code> changed.</td><td>Keep <code>SESSION_CONNECTION=session</code> on its own database; do not regenerate the key.</td></tr>
+            <tr><td>A Partner-gateway store order stays <code>OnHold</code> (<code>partner_wallet_insufficient</code>)</td><td>Partner wallet cannot cover Banij's platform receivable (D36).</td><td>The Partner funds the wallet; collection runs on the credit event, every minute via <code>partner-receivable-collection-sweep</code>, or by an authorised admin's "Retry Wallet collection". After the 24-hour deadline the reservation is released and the order needs a verified external refund or a funded retry.</td></tr>
+            <tr><td><code>ledger-integrity-check</code> reports a mismatch</td><td>Ledger and balance diverged (should be impossible; both are written in one transaction).</td><td>Do not edit anything. Investigate the cause from the entries; correct through a new ledger row (§23.2). The check repairs nothing on purpose.</td></tr>
+            <tr><td>Steadfast statuses stop updating</td><td>Callback not reaching the server, token mismatch, or Steadfast switched off.</td><td>The five-minute poll covers it; run <code>courier:steadfast-sync</code> by hand; verify the callback address and token on Settings, Steadfast Courier.</td></tr>
+            <tr><td>Live bell does not update</td><td>Reverb not running, <code>REVERB_*</code> unset, or <code>wss://</code> not proxied.</td><td>Start Reverb; set the public host, port and scheme.</td></tr>
+            <tr><td>Every Inertia page 500s with <code>Unable to locate file in Vite manifest</code></td><td>Build missing or stale after a deploy.</td><td><code>npm run build:ssr</code>, then restart <code>feriwala-ssr</code>.</td></tr>
+            <tr><td>Concurrency tests hang about 130 seconds</td><td>Forked worker inherited an open Redis socket.</td><td>Purge Redis connections before <code>pcntl_fork</code> (<code>.ai/rules/concurrency.md</code>).</td></tr>
+            <tr><td><code>SQLSTATE[08006] ... database system is starting up</code></td><td>PostgreSQL recovering after an unclean stop.</td><td>Wait for <code>pg_isready</code>; do not debug code.</td></tr>
+            <tr><td>Tests wiped the development schema</td><td>Cached config pinned <code>search_path</code> to <code>public</code>.</td><td><code>php artisan config:clear</code>; verify the override before every run (<a href="testing.html">Testing</a>).</td></tr>
+            <tr><td>The notification bell shows a raw event name such as <code>wallet.topped_up</code></td><td>A notification event has no line in <code>lang/*/notification.php</code>; the raw name is a deliberate fallback.</td><td>Add the line under <code>notification.events</code>; see <code>.ai/rules/notification.md</code>.</td></tr>
+        </tbody>
+    </table>
+
+    <p>Related: <a href="getting-started.html">Getting started</a>, <a href="commands.html">Commands</a>, <a href="testing.html">Testing</a>, <a href="database.html">Database</a>, <a href="../modules/wallet.html">Wallet</a>.</p>
+</main>
+</body>
+</html>

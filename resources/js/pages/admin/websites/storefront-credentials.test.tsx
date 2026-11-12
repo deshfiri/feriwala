@@ -87,7 +87,7 @@ const issued: IssuedCredential = {
     key_id: 'wsk_01J8Z9K3M7QX2P4R6T8V0W1Y3D',
     secret,
     scopes: ['catalog:read'],
-    env: `BANIJ_ERP_BASE_URL=https://erp.test\nBANIJ_CREDENTIAL_KEY_ID=wsk_01J8Z9K3M7QX2P4R6T8V0W1Y3D\nBANIJ_CREDENTIAL_SECRET=${secret}\n`,
+    env: `ERP_BASE_URL=https://erp.test\nSTORE_ID=wsk_01J8Z9K3M7QX2P4R6T8V0W1Y3D\nSTORE_TOKEN=${secret}\n`,
     origin_accepted: true,
     previous_secret_expires_at: null,
 };

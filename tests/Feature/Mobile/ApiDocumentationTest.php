@@ -72,6 +72,8 @@ test('operations are filed under the module their route name gives', function (s
     ['mobile.v1.wallet.transactions.show', ['Wallet']],
     ['mobile.v1.admin.orders.index', ['Admin · Orders']],
     ['mobile.v1.supplier.listings.store', ['Supplier · Listings']],
+    ['mobile.v1.wholesale.cart.items.store', ['Wholesale · Cart']],
+    ['mobile.v1.wholesale.orders.index', ['Wholesale · Orders']],
     ['mobile.v1.health', ['System']],
     ['storefront.v1.products.index', ['Products']],
 ]);

@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Access module</title>
+    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+    <script src="../assets/docs.js"></script>
+</head>
+<body>
+<main id="doc">
+    <h1>Access module</h1>
+    <p class="lead">Who may do what on the platform. The module owns the closed permission catalogue, the 21 fixed platform roles, custom roles and permissions, platform-staff management, and the sensitive-action escalation rules. It is the vocabulary every policy in the codebase speaks.</p>
+
+    <h2>Purpose</h2>
+    <p>Feriwala's own staff (admins, KYC reviewers, finance, and so on) are governed by role-based access control built on <code>spatie/laravel-permission</code> (§32, D2). Permissions are named <code>&lt;module&gt;.&lt;action&gt;</code>, for example <code>withdrawal.approve</code> or <code>kyc.view_kyc_documents</code>. Roles are bundles of permissions held by a <code>User</code> who has <strong>no business account membership</strong>.</p>
+    <p>This module implements §32.1 (the roles), §32.2 (the verbs and the escalation for sensitive actions), §31.3 (one data-scope decision for pages, exports and APIs) and the Role and Permission management and Platform Staff management features. Business-side roles (owner, manager, staff) are a different scope and live in the <a href="account.html">Account module</a>.</p>
+    <p>Users: <strong>Super Admin</strong> and holders of <code>access.*</code> manage roles and staff; every other module's policies read the catalogue.</p>
+
+    <div class="callout callout-rule"><p><strong>Rule.</strong> The catalogue is closed. Nothing generates permissions at runtime. Adding a permission means adding a row to <code>PermissionCatalogue::matrix()</code> and re-running the seeder. A policy that asks for a name outside the catalogue fails loudly through <code>PermissionCatalogue::name()</code> instead of silently never matching.</p></div>
+
+    <h2>Where it lives</h2>
+    <table>
+        <thead><tr><th>Path</th><th>Role</th></tr></thead>
+        <tbody>
+        <tr><td><code>app/Domain/Access/PermissionCatalogue.php</code></td><td>The matrix of module to allowed verbs; <code>all()</code>, <code>name()</code>, <code>exists()</code>, <code>forModule()</code>, <code>describe()</code>, <code>groupedByModule()</code></td></tr>
+        <tr><td><code>app/Domain/Access/Enums/</code></td><td><code>PermissionModule</code>, <code>PermissionAction</code>, <code>PlatformRole</code>, <code>DataScope</code></td></tr>
+        <tr><td><code>app/Domain/Access/Models/</code></td><td><code>Role</code> and <code>Permission</code>: Spatie's models extended with <code>is_system</code>, <code>description</code>, <code>archived_at</code> (registered through <code>config('permission.models.*')</code>)</td></tr>
+        <tr><td><code>app/Domain/Access/Actions/</code></td><td><code>ManageCustomRole</code>, <code>ManageCustomPermission</code>, <code>AssignPlatformRole</code>, <code>InvitePlatformStaff</code></td></tr>
+        <tr><td><code>app/Domain/Access/Queries/PlatformStaffDirectory.php</code></td><td>Users with no account membership, searchable</td></tr>
+        <tr><td><code>app/Domain/Access/SensitiveActionGuard.php</code>, <code>Data/SensitiveActionRequest.php</code>, <code>Exceptions/SensitiveActionRefused.php</code></td><td>The §32.2 escalation check</td></tr>
+        <tr><td><code>app/Domain/Access/DataScopeResolver.php</code></td><td>Own versus all versus none, plus export and sensitive-column checks</td></tr>
+        <tr><td><code>database/seeders/RolesAndPermissionsSeeder.php</code></td><td>Writes the catalogue and the 21 roles into the database</td></tr>
+        <tr><td><code>app/Providers/AuthorizationServiceProvider.php</code></td><td>Policy registration and the single ordered <code>Gate::before</code> hook</td></tr>
+        <tr><td><code>app/Http/Controllers/Admin/</code></td><td><code>RolesController</code>, <code>PermissionsController</code>, <code>PlatformStaffController</code></td></tr>
+        <tr><td><code>app/Http/Middleware/RequireTwoFactorForSensitiveRoles.php</code></td><td>Alias <code>two-factor</code>, on the admin group</td></tr>
+        <tr><td><code>resources/js/pages/admin/roles/</code>, <code>permissions/</code>, <code>staff/</code></td><td>The screens</td></tr>
+        <tr><td><code>lang/{en,bn}/access.php</code></td><td>Labels and messages</td></tr>
+        <tr><td><code>tests/Feature/Access/</code></td><td><code>AssignPlatformRoleTest</code>, <code>InvitePlatformStaffTest</code>, <code>ManageCustomRoleTest</code>, <code>ManageCustomPermissionTest</code>, <code>PlatformGrantIsolationTest</code></td></tr>
+        </tbody>
+    </table>
+
+    <h2>Key terms</h2>
+    <dl>
+        <dt>Permission</dt>
+        <dd>A string <code>module.action</code>. <code>PermissionModule</code> supplies the left part and <code>PermissionAction</code> the right. <code>supplier.kyc</code> is a module value that itself contains a dot, so <code>supplier.kyc.view</code> parses by longest-prefix match (<code>moduleForOrNull()</code>).</dd>
+        <dt>Module</dt>
+        <dd>A case of <code>PermissionModule</code> (<code>account</code>, <code>kyc</code>, <code>kyc_batch</code>, <code>wallet</code>, <code>ledger</code>, <code>audit</code>, <code>return</code>, <code>damage</code>, and so on).</dd>
+        <dt>Action (verb)</dt>
+        <dd>A case of <code>PermissionAction</code>. The list is closed so new modules inherit an understood vocabulary.</dd>
+        <dt>Platform role</dt>
+        <dd>One of the 21 <code>PlatformRole</code> cases, seeded as <code>is_system = true</code>, <code>account_id = null</code>.</dd>
+        <dt>Custom role / custom permission</dt>
+        <dd>A database-only role or permission created by an administrator (<code>is_system = false</code>). A custom permission is <strong>unbound</strong>: it protects nothing until code checks it.</dd>
+        <dt>Super Admin</dt>
+        <dd>The role that passes every check implicitly via <code>Gate::before</code>; it holds no permission rows itself in the enum, but <code>PlatformRole::SuperAdmin-&gt;permissions()</code> returns the whole catalogue.</dd>
+        <dt>Sensitive action</dt>
+        <dd>A verb for which <code>PermissionAction::isSensitive()</code> is true: holding the permission is necessary but not enough (password confirmation, reason, sometimes two-factor or a second approver).</dd>
+        <dt>Business identity</dt>
+        <dd>A <code>User</code> with an account membership (<code>CatalogPolicy::isBusinessIdentity()</code> is <code>hasAccountMembership()</code>). Refused several platform abilities whatever they hold.</dd>
+        <dt>Platform staff</dt>
+        <dd>A <code>User</code> with no membership. <code>PlatformStaffDirectory</code> lists them.</dd>
+    </dl>
+
+    <h2>Data model</h2>
+    <p>The module adds no tables of its own beyond Spatie's. It owns the extra columns on them.</p>
+    <table>
+        <thead><tr><th>Table / model</th><th>Columns that matter</th><th>Behaviour</th></tr></thead>
+        <tbody>
+        <tr><td><code>roles</code><br><code>App\Domain\Access\Models\Role</code></td><td><code>name</code>, <code>guard_name</code> (<code>web</code>), <code>account_id</code> (Spatie team column, <code>config('permission.team_foreign_key')</code>; null for every platform role), <code>is_system</code>, <code>description</code>, <code>archived_at</code></td><td><code>is_system</code> roles cannot be renamed, edited or archived. <code>archived_at</code> is set once and never cleared. A custom role cannot be archived while any staff member still holds it.</td></tr>
+        <tr><td><code>permissions</code><br><code>App\Domain\Access\Models\Permission</code></td><td><code>name</code>, <code>guard_name</code>, <code>is_system</code>, <code>description</code>, <code>archived_at</code></td><td>Catalogue permissions are marked <code>is_system</code> on every seeder run (a backfill). Custom permissions match <code>/^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/</code> (<code>ManageCustomPermission::NAME_PATTERN</code>).</td></tr>
+        <tr><td><code>model_has_roles</code>, <code>model_has_permissions</code>, <code>role_has_permissions</code></td><td>Spatie pivots</td><td>The two <code>model_has_*</code> tables are purged for a user on erasure.</td></tr>
+        </tbody>
+    </table>
+    <p>The Spatie migration for the extra columns was not located while writing this page; the model docblocks and the actions are the source for the column list above.</p>
+    <p>Roles are held against the user (<code>$user-&gt;hasRole()</code>, <code>$user-&gt;syncRoles()</code>). Public ids and slugs are not used: roles are addressed in URLs by their name or id as routed in <code>roles/{role}</code>, and permissions by name (<code>permissions/{permission}</code> is a name, never a database id).</p>
+
+    <h2>States &amp; lifecycle</h2>
+    <p>No status enum. Two implicit lifecycles:</p>
+    <ul>
+        <li><strong>Custom role:</strong> created, updated (full permission sync), cloned, archived. Archived is permanent for that row.</li>
+        <li><strong>Custom permission:</strong> created, description edited, archived. Name and system rows are not editable.</li>
+    </ul>
+    <p>A <em>staff member's</em> ability to act is governed by their identity status (<code>UserStatus</code>, see <a href="account.html">Account</a>), which the Platform Staff screen changes through <code>ChangeIdentityAccess</code> (<code>staff.activate</code>, <code>staff.suspend</code>, <code>staff.deactivate</code>).</p>
+
+    <h3>The 21 platform roles (<code>PlatformRole</code>)</h3>
+    <table>
+        <thead><tr><th>Value</th><th>Label</th><th>Notes</th></tr></thead>
+        <tbody>
+        <tr><td><code>super_admin</code></td><td>Super Admin</td><td>Everything, implicitly. Clears the audit log; holds the whole catalogue.</td></tr>
+        <tr><td><code>admin</code></td><td>Admin</td><td>Broad oversight: accounts (manage, approve, reject, verify, suspend, reactivate, settings), packages, catalogue, orders, returns, websites, reports, <code>audit.view_audit_logs</code>, <code>payment.view</code> and <code>payment.settle_manually</code>, <code>supplier.view</code> and <code>supplier.delete</code>. Deliberately not money movement, KYC documents, backups or permissions.</td></tr>
+        <tr><td><code>content_manager</code></td><td>Content Manager</td><td>CMS, SEO, content library</td></tr>
+        <tr><td><code>kyc_manager</code></td><td>KYC Manager</td><td><code>kyc.*</code> except delete and create, <code>kyc_batch.*</code> in full, <code>account.view</code>, <code>account.export</code></td></tr>
+        <tr><td><code>package_manager</code></td><td>Package Manager</td><td></td></tr>
+        <tr><td><code>product_manager</code></td><td>Product Manager</td><td>Catalogue; never supplier pricing or stock (D25)</td></tr>
+        <tr><td><code>inventory_manager</code></td><td>Inventory Manager</td><td></td></tr>
+        <tr><td><code>order_manager</code></td><td>Order Manager</td><td></td></tr>
+        <tr><td><code>fulfillment_manager</code></td><td>Fulfillment Manager</td><td></td></tr>
+        <tr><td><code>courier_manager</code></td><td>Courier Manager</td><td></td></tr>
+        <tr><td><code>finance_manager</code></td><td>Finance Manager</td><td>Ledger, payments review, refunds and liability on cases; releasing a payout is separate</td></tr>
+        <tr><td><code>wallet_manager</code></td><td>Wallet Manager</td><td>Adjust, reverse</td></tr>
+        <tr><td><code>withdrawal_approver</code></td><td>Withdrawal Approver</td><td>Exists to release payouts and nothing else</td></tr>
+        <tr><td><code>payment_manager</code></td><td>Payment Manager</td><td></td></tr>
+        <tr><td><code>referral_manager</code></td><td>Partner Network Manager</td><td></td></tr>
+        <tr><td><code>sms_manager</code></td><td>SMS Manager</td><td></td></tr>
+        <tr><td><code>seo_manager</code></td><td>SEO Manager</td><td></td></tr>
+        <tr><td><code>report_viewer</code></td><td>Report Viewer</td><td>Stays outside the two-factor requirement</td></tr>
+        <tr><td><code>system_administrator</code></td><td>System Administrator</td><td><code>system.*</code>, <code>integration.*</code>, <code>access.*</code>, audit view and export</td></tr>
+        <tr><td><code>backup_manager</code></td><td>Backup Manager</td><td></td></tr>
+        <tr><td><code>supplier_manager</code></td><td>Supplier Manager</td><td>The Supplier domain (D25); can decide a Supplier withdrawal but never release the payment</td></tr>
+        </tbody>
+    </table>
+    <p>The authoritative grants are in <code>PlatformRole::grants()</code>. A verb listed for a role that its module does not accept is dropped by <code>permissions()</code> rather than inventing a permission.</p>
+
+    <h2>Actions &amp; workflows</h2>
+    <table>
+        <thead><tr><th>Class</th><th>Purpose</th></tr></thead>
+        <tbody>
+        <tr><td><code>ManageCustomRole</code></td><td><code>create</code>, <code>update</code>, <code>clone</code>, <code>archive</code> a custom role. Reason required. The actor's own authority is the ceiling on every permission the role carries, on creation and on every edit (Super Admin exempt). Refuses names of fixed roles and duplicates. Clears Spatie's permission cache. Audits <code>access.role_created</code>, <code>access.role_updated</code>, <code>access.role_archived</code> (all sensitive).</td></tr>
+        <tr><td><code>ManageCustomPermission</code></td><td>Create a custom permission, edit its description, archive it. Reason required; audits <code>access.permission_created</code> and siblings (sensitive).</td></tr>
+        <tr><td><code>AssignPlatformRole</code></td><td>Replaces a platform staff member's whole role set. Refuses an empty set; refuses anyone with a business membership; only a Super Admin may grant Super Admin; a non-Super-Admin may grant a custom role only if they hold every permission it carries; the last active Super Admin can never lose the role (self-change included). Locks the user row. Audits <code>access.role_assigned</code> (sensitive).</td></tr>
+        <tr><td><code>InvitePlatformStaff</code></td><td>Creates the login (random unusable password, <code>email_verified_at</code> set because the authorising admin vouches for the address), delegates role assignment to <code>AssignPlatformRole</code> in the same transaction, audits <code>access.staff_invited</code>, then sends the password-setup link through the <code>users</code> password broker (<code>PlatformStaffInvited</code>). <code>sendInvite()</code> is also used for resends.</td></tr>
+        <tr><td><code>SensitiveActionGuard</code></td><td><code>authorize()</code> throws <code>SensitiveActionRefused</code> unless every applicable control holds; <code>allows()</code> is the non-throwing form for deciding whether to render a control. The UI check is a convenience; the call inside the Action is the enforcement. Order of checks: permission, password confirmed, two-factor (where required), second approver (where required), reason.</td></tr>
+        <tr><td><code>DataScopeResolver</code></td><td><code>for($user, $module)</code> returns <code>DataScope::All</code> when the viewer holds <code>&lt;module&gt;.view</code>, <code>Own</code> otherwise, <code>None</code> for a guest. <code>canExport()</code> needs <code>&lt;module&gt;.export</code>; <code>canSeeSensitive()</code> needs <code>&lt;module&gt;.view_sensitive_data</code>.</td></tr>
+        </tbody>
+    </table>
+
+    <h3>How a permission is decided at runtime</h3>
+    <p>One ordered hook, <code>Gate::before</code> in <code>AuthorizationServiceProvider::boot()</code>. <code>config('permission.register_permission_check_method')</code> is off so Spatie does not register its own check ahead of it. In order:</p>
+    <ol>
+        <li>The authenticatable must be a <code>User</code>. A Supplier session is on another guard and gets <code>false</code> outright.</li>
+        <li>Catalogue and central stock abilities (<code>CatalogPolicy::isCatalogueAbility</code>, <code>InventoryPolicy::isInventoryAbility</code>) are refused to any business identity, even one handed the permission by mistake (§12, §19).</li>
+        <li>Platform order administration (<code>OrderPolicy::isOrderAdministrationAbility</code>), return/exchange/damage administration (<code>ReturnCasePolicy::isCaseAdministrationAbility</code>) and website administration (<code>WebsitePolicy::isWebsiteAdministrationAbility</code>) are refused to a business identity the same way. A partner sees their own through the account-scoped policy.</li>
+        <li>A permission the user holds (<code>checkPermissionTo</code>) returns <code>true</code>.</li>
+        <li>A business identity otherwise gets <code>null</code> (fall through to the policy), never the Super Admin grant.</li>
+        <li>A Super Admin gets <code>true</code> for everything else; anyone else gets <code>null</code> and the policy decides.</li>
+    </ol>
+    <p>Returning <code>null</code> instead of <code>false</code> matters: <code>false</code> would short-circuit every other check and deny everyone.</p>
+    <div class="callout callout-warn"><p><strong>Gotcha.</strong> A Super Admin actor never reaches a policy method, because <code>Gate::before</code> answers first. Rules that must bind a Super Admin (nobody locks themselves, the last Super Admin cannot be demoted, deleting oneself) are therefore enforced inside the <em>Action</em>, not the policy. The policy methods that refuse a Super Admin <em>subject</em> (<code>UserPolicy::lock</code>, <code>assignRole</code>, <code>manageStaffAccess</code>) work because the actor is a non-Super-Admin in that case.</p></div>
+
+    <h3>Sensitive actions</h3>
+    <table>
+        <thead><tr><th>Control</th><th>Applies to</th></tr></thead>
+        <tbody>
+        <tr><td>Sensitive (<code>PermissionAction::isSensitive()</code>)</td><td><code>release_payment</code>, <code>adjust_wallet</code>, <code>reverse_transaction</code>, <code>convert_balance</code>, <code>view_sensitive_data</code>, <code>view_kyc_documents</code>, <code>manage_backups</code>, <code>manage_integrations</code>, <code>suspend</code>, <code>reactivate</code>, <code>settle_manually</code>, <code>delete</code></td></tr>
+        <tr><td>Password confirmation, and a mandatory reason</td><td>Every sensitive action (<code>SensitiveActionRequest::requiresReason()</code> is <code>isSensitive()</code>)</td></tr>
+        <tr><td>Two-factor in the request</td><td><code>release_payment</code>, <code>adjust_wallet</code>, <code>reverse_transaction</code>, <code>convert_balance</code>, <code>settle_manually</code>, <code>manage_backups</code>, <code>manage_integrations</code></td></tr>
+        <tr><td>Second approver (maker-checker)</td><td><code>release_payment</code></td></tr>
+        </tbody>
+    </table>
+    <p>Callers of <code>SensitiveActionGuard</code> found in <code>app/</code>: <code>SettlePaymentManually</code>, <code>ProcessRefund</code>, <code>SettleReturnRefundManually</code>, <code>ConfigureR2Storage</code>, <code>ReverseReferralByStaff</code> and <code>StorageSettingsController</code>. Most other sensitive actions get their escalation from route middleware (<code>RequirePassword</code>, <code>two-factor</code>) and the required-reason list in <code>config/reasons.php</code>, not from the guard.</p>
+
+    <h3>Two-factor for sensitive roles</h3>
+    <p><code>PlatformRole::requiresTwoFactor()</code> is <strong>derived, not listed</strong>: a role needs it when any permission it actually holds has a sensitive verb. Super Admin always qualifies. A role gaining a sensitive verb gains the requirement in the same edit. <code>User::requiresTwoFactorAuthentication()</code> is true when the user holds any such role; <code>RequireTwoFactorForSensitiveRoles</code> (alias <code>two-factor</code>) is applied to the whole <code>admin</code> route group. On mobile the equivalents are <code>mobile.two-factor</code>, <code>mobile.password</code> and <code>mobile.reason</code>.</p>
+
+    <h2>Entry points</h2>
+    <p>All under <code>/admin</code> (<code>auth</code>, <code>noindex</code>, <code>two-factor</code>), names prefixed <code>admin.</code>. <code>RequirePassword</code> is Laravel's password-confirmation middleware.</p>
+    <table>
+        <thead><tr><th>Name</th><th>Method and URL</th><th>Controller@method</th><th>Extra</th></tr></thead>
+        <tbody>
+        <tr><td><code>roles.index</code>, <code>roles.create</code>, <code>roles.show</code></td><td>GET <code>/admin/roles</code>, <code>/roles/create</code>, <code>/roles/{role}</code></td><td><code>RolesController</code></td><td><code>roles/create</code> is registered before <code>roles/{role}</code></td></tr>
+        <tr><td><code>roles.store</code>, <code>roles.update</code>, <code>roles.clone</code>, <code>roles.archive</code></td><td>POST <code>/roles</code>; PUT <code>/roles/{role}</code>; POST <code>/roles/{role}/clone</code>; DELETE <code>/roles/{role}</code></td><td><code>RolesController</code></td><td><code>RequirePassword</code></td></tr>
+        <tr><td><code>permissions.index</code></td><td>GET <code>/admin/permissions</code></td><td><code>PermissionsController@index</code></td><td></td></tr>
+        <tr><td><code>permissions.store</code>, <code>.update</code>, <code>.archive</code></td><td>POST <code>/permissions</code>; PUT / DELETE <code>/permissions/{permission}</code></td><td><code>PermissionsController</code></td><td><code>RequirePassword</code>; <code>{permission}</code> is a name</td></tr>
+        <tr><td><code>staff.index</code>, <code>staff.create</code>, <code>staff.show</code></td><td>GET <code>/admin/staff</code>, <code>/staff/create</code>, <code>/staff/{user}</code></td><td><code>PlatformStaffController</code></td><td></td></tr>
+        <tr><td><code>staff.store</code></td><td>POST <code>/admin/staff</code></td><td><code>PlatformStaffController@store</code></td><td><code>RequirePassword</code></td></tr>
+        <tr><td><code>staff.roles.update</code></td><td>PUT <code>/admin/staff/{user}/roles</code></td><td><code>updateRoles</code></td><td><code>RequirePassword</code></td></tr>
+        <tr><td><code>staff.resend-invite</code></td><td>POST <code>/admin/staff/{user}/resend-invite</code></td><td><code>resendInvite</code></td><td></td></tr>
+        <tr><td><code>staff.activate</code>, <code>staff.suspend</code>, <code>staff.deactivate</code></td><td>POST <code>/admin/staff/{user}/…</code></td><td><code>PlatformStaffController</code></td><td><code>RequirePassword</code></td></tr>
+        </tbody>
+    </table>
+    <p>Reasons are mandatory for <code>admin.roles.*</code>, <code>admin.permissions.*</code>, <code>admin.staff.*</code> and <code>admin.identities.*</code> (<code>config/reasons.php</code>). No scheduled task or queued job belongs to this module. Mobile admin routes: the mobile router loads <code>routes/mobile/admin/*.php</code> if present; that directory does not exist in this checkout.</p>
+
+    <h2>Permissions &amp; scoping</h2>
+    <ul>
+        <li>The module's own catalogue entries: <code>access.view</code>, <code>access.create</code>, <code>access.edit</code>, <code>access.delete</code>, <code>access.manage_settings</code>. <code>UserPolicy::assignRole</code> and <code>manageStaffAccess</code> use <code>access.edit</code>; <code>UserPolicy::lock</code> (a business owner's login) uses <code>account.edit</code>. They are different jobs under different permissions, on purpose.</li>
+        <li>Held by default: <code>system_administrator</code> has <code>access.*</code> (view, create, edit, delete, export, manage_settings). Admin does not hold <code>access.*</code>.</li>
+        <li><strong>Privilege ceilings:</strong> only a Super Admin grants or changes a Super Admin; nobody grants a custom role carrying a permission they lack; only a Super Admin deletes platform staff (<code>DeletionAuthority</code>); the platform always keeps at least one active Super Admin (<code>AssignPlatformRole</code>, <code>EraseAccount</code>).</li>
+        <li><strong>Platform staff are users with no membership.</strong> <code>AssignPlatformRole</code> refuses anyone who has one, and <code>PlatformStaffDirectory</code> filters on <code>whereDoesntHave('accountMembership')</code>. Mixing the two scopes is how a partner's bookkeeper ends up approving withdrawals for everyone.</li>
+        <li><strong>Data scope (§31.3):</strong> use <code>DataScopeResolver</code> for pages, exports, reports and APIs alike so the four routes to the same data stay closed together. Platform-wide visibility needs an explicit <code>view</code> permission; everything else is <code>Own</code>.</li>
+    </ul>
+
+    <h2>Money, ledger &amp; audit effects</h2>
+    <p>No money. Audit actions written: <code>access.role_created</code>, <code>access.role_updated</code>, <code>access.role_archived</code>, <code>access.role_assigned</code>, <code>access.staff_invited</code>, <code>access.permission_created</code> and the matching update/archive entries for permissions. All are <code>module: 'access'</code> and sensitive, with <code>before</code> and <code>after</code> state and the mandatory reason. See <a href="audit.html">Audit</a>.</p>
+
+    <h2>Configuration</h2>
+    <table>
+        <thead><tr><th>Item</th><th>Where</th></tr></thead>
+        <tbody>
+        <tr><td>Spatie settings, including models, <code>team_foreign_key = account_id</code>, <code>register_permission_check_method</code> off</td><td><code>config/permission.php</code></td></tr>
+        <tr><td>Reason requirements per route</td><td><code>config/reasons.php</code></td></tr>
+        <tr><td>Route middleware aliases <code>two-factor</code>, <code>mobile.two-factor</code>, <code>mobile.password</code>, <code>mobile.reason</code></td><td><code>bootstrap/app.php</code></td></tr>
+        </tbody>
+    </table>
+
+    <h2>Rules, invariants &amp; gotchas</h2>
+    <ul>
+        <li><strong>Seeding is idempotent and never deletes a permission.</strong> A permission that disappeared would silently detach from every role. Roles use <code>syncPermissions</code>, so a grant removed from <code>PlatformRole::grants()</code> <em>is</em> revoked on the next seed. After changing the matrix or grants: run the seeder in every environment, and the seeder flushes Spatie's cache (stale cache hands people yesterday's access).</li>
+        <li><strong>Custom permissions are inert.</strong> Creating one protects nothing; it still needs a policy or Gate check and a deploy. The catalogue screen labels it "unbound".</li>
+        <li><strong>Verbs outside a module's row do not exist.</strong> <code>PermissionCatalogue::name(Module::Audit, Action::Edit)</code> throws. This is intended (it catches typos in policies); there is deliberately no <code>audit.edit</code> and no <code>ledger.create</code>/<code>edit</code>/<code>delete</code>.</li>
+        <li><strong><code>audit.delete</code> is not "delete a row".</strong> It is the right to run the guarded purge, and even then only a Super Admin may (<code>AuditLogAuthority</code>). The Admin role no longer holds it (D33 restriction, 2026-10-14).</li>
+        <li><strong>The catalogue docblock figures are stale.</strong> <code>PermissionCatalogue</code> says "28 modules × 20 verbs = 560"; the enums now hold more modules and 36 verbs, and the role docblocks say "twenty" while there are 21 roles. Count from the enums, not the comments.</li>
+        <li><strong>Roles are 21, not 20,</strong> because <code>supplier_manager</code> was added by D25.</li>
+        <li>Platform staff invitation reuses the ordinary password-reset broker and token table; there is no bespoke invitation token. A previous unused token is left to expire.</li>
+    </ul>
+
+    <h2>How to&hellip;</h2>
+    <h3>Add a permission for a new module</h3>
+    <ol>
+        <li>Add a case to <code>PermissionModule</code> (<code>app/Domain/Access/Enums/PermissionModule.php</code>) and its <code>label()</code>.</li>
+        <li>Add a row to <code>PermissionCatalogue::matrix()</code> listing the verbs the module accepts. Add a new <code>PermissionAction</code> case (and its <code>label()</code>) only if no existing verb fits.</li>
+        <li>If the new verb is sensitive, add it to <code>PermissionAction::isSensitive()</code>; roles holding it become two-factor roles automatically. Add it to <code>SensitiveActionRequest::requiresTwoFactor()</code> if it needs two-factor on the request.</li>
+        <li>Grant it to roles in <code>PlatformRole::grants()</code>.</li>
+        <li>Check it in a policy via <code>PermissionCatalogue::name(PermissionModule::X, PermissionAction::Y)</code> and register the policy in <code>AuthorizationServiceProvider</code>.</li>
+        <li>Run <code>php artisan db:seed --class=RolesAndPermissionsSeeder</code> (idempotent). Add tests under <code>tests/Feature/Access</code> or the module.</li>
+    </ol>
+    <h3>Add or change a platform role's grants</h3>
+    <ol>
+        <li>Edit <code>PlatformRole::grants()</code> for the role. Use the local <code>$read</code>, <code>$manage</code> and <code>$review</code> bundles consistently.</li>
+        <li>Re-seed. Check whether <code>requiresTwoFactor()</code> changed for that role.</li>
+    </ol>
+    <h3>Add a brand new fixed role</h3>
+    <ol>
+        <li>Add the case, <code>label()</code> and a <code>grants()</code> arm to <code>PlatformRole</code>. The seeder creates it from <code>PlatformRole::cases()</code>.</li>
+        <li>Add translation keys if the UI lists it. Custom roles cannot reuse the new name (<code>ManageCustomRole::guardName</code> checks <code>PlatformRole::tryFrom</code>).</li>
+    </ol>
+    <h3>Gate an action behind password, reason and two-factor</h3>
+    <ol>
+        <li>On the route: add <code>RequirePassword::class</code> and list the route name under <code>required_for</code> in <code>config/reasons.php</code>.</li>
+        <li>In the Action, for money or credentials: build a <code>SensitiveActionRequest</code> and call <code>SensitiveActionGuard::authorize()</code>; follow <code>SettlePaymentManually</code>.</li>
+    </ol>
+
+    <h2>Testing</h2>
+    <p>Run <code>vendor/bin/pest tests/Feature/Access</code> in its own schema, one suite at a time (<a href="../guide/testing.html">Testing</a>). <code>PlatformGrantIsolationTest</code> proves a business identity cannot use a platform grant. Tests that need permissions seed <code>Database\Seeders\RolesAndPermissionsSeeder</code> in <code>beforeEach</code>. There is also a <code>permissions</code> Pest group (<code>tests/Feature/Permissions</code>) for cross-module permission tests.</p>
+
+    <h2>Related modules</h2>
+    <div class="cards">
+        <a class="card" href="account.html"><h3>Account</h3><p>Business roles, identity status, business-identity rules.</p></a>
+        <a class="card" href="audit.html"><h3>Audit</h3><p>Every role and staff change is recorded here.</p></a>
+        <a class="card" href="kyc.html"><h3>KYC</h3><p><code>kyc.*</code> and <code>kyc_batch.*</code> permissions.</p></a>
+        <a class="card" href="../guide/decisions.html"><h3>Decisions</h3><p>D2, D25, D33.</p></a>
+    </div>
+</main>
+</body>
+</html>

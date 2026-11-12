@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Inventory module</title>
+    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+    <script src="../assets/docs.js"></script>
+</head>
+<body>
+<main id="doc">
+    <h1>Inventory module</h1>
+    <p class="lead">Central warehouse stock, the stock ledger, reservations, per-account allocations, a Partner's own purchased stock, and the availability figures every website is told. Everything that changes a stock figure goes through one ledger service in one transaction, under a row lock.</p>
+
+    <h2>Purpose</h2>
+    <p>Spec §19 and §19.1 require stock that cannot be oversold, that has an explanation for every change, and that is shared consistently across all partner websites. This module holds three separate pools of units, each with the same discipline (a movement between buckets, written with the figures it explains):</p>
+    <ul>
+        <li><strong>Central stock</strong> (<code>stock_items</code>): Feriwala's warehouse stock, per warehouse and per stockable unit (the product, or each variation). Written only by platform staff and by order/return flows.</li>
+        <li><strong>Partner stock</strong> (<code>partner_stock_items</code>, D34): the units a Partner bought through paid wholesale orders. A storefront sells from this; central stock is not read for it, except for a Non-Conditional account (below).</li>
+        <li><strong>Supplier offer stock</strong> (owned by the <a href="supplier.html">Supplier</a> module) which uses the same reservation lifecycle through <code>StockReservations::reserveFromSupplier()</code>.</li>
+    </ul>
+    <p>Used by admins (inventory managers), the system (reservation expiry, low-stock alerts, out-of-stock protection), partners (read-only allocated stock and My Products ownership), and the Storefront API (availability only). Implements §19, §19.1, contract §5.2 and §6.1.2 (reservations), D15 (warehouse order), D25 (supplier stock), D34 (partner-owned stock).</p>
+
+    <div class="callout callout-rule"><p><strong>Rule.</strong> Nothing writes a stock bucket column except <code>StockLedger</code> (central) and <code>PartnerStock</code> (partner). Every change is a movement (units leave one bucket and arrive in another, or enter/leave stock entirely) written in the same transaction as the figures, with every bucket's figure before and after. Movements, adjustments and partner movements are append-only in the database. Corrections are new movements.</p></div>
+
+    <h2>Where it lives</h2>
+    <table>
+        <thead><tr><th>Path</th><th>Role</th></tr></thead>
+        <tbody>
+        <tr><td><code>app/Domain/Inventory/StockLedger.php</code></td><td>The only writer of central bucket figures; idempotent by key; locks the item row.</td></tr>
+        <tr><td><code>app/Domain/Inventory/StockReservations.php</code></td><td>Reserve / commit / release / expire for central, supplier and partner sources; distributed lock; unique reference makes it idempotent.</td></tr>
+        <tr><td><code>app/Domain/Inventory/StockAllocations.php</code></td><td>Mechanism for setting stock aside for one business account.</td></tr>
+        <tr><td><code>app/Domain/Inventory/PartnerStock.php</code>, <code>PartnerStockReservations.php</code></td><td>Partner-owned stock ledger and its half of the reservation lifecycle.</td></tr>
+        <tr><td><code>app/Domain/Inventory/ReservationWindows.php</code>, <code>StockEnforcement.php</code></td><td>Reservation expiry windows; "can stock block orders" switch.</td></tr>
+        <tr><td><code>app/Domain/Inventory/Models/</code></td><td><code>Warehouse</code>, <code>StockItem</code>, <code>StockMovement</code>, <code>StockAdjustment</code>, <code>StockAllocation</code>, <code>StockReservation</code>, <code>PartnerStockItem</code>, <code>PartnerStockMovement</code></td></tr>
+        <tr><td><code>app/Domain/Inventory/Enums/</code></td><td><code>StockBucket</code>, <code>StockMovementType</code>, <code>StockAdjustmentKind</code>, <code>StockReservationStatus</code>, <code>ReservationKind</code>, <code>PartnerStockMovementType</code></td></tr>
+        <tr><td><code>app/Domain/Inventory/Actions/</code></td><td><code>TrackStock</code>, <code>AdjustStock</code>, <code>DeleteStockItem</code>, <code>SetLowStockThreshold</code>, <code>CheckLowStock</code>, <code>RespondToStockChange</code>, <code>SyncProductStockStatus</code>, <code>AllocateStock</code>, <code>ReleaseAllocatedStock</code>, <code>OverrideReservation</code>, <code>ReleaseExpiredReservations</code>, <code>SetReservationWindows</code>, <code>ManageWarehouses</code>, <code>ReceivePartnerPurchase</code>, <code>BackfillPartnerStock</code></td></tr>
+        <tr><td><code>app/Domain/Inventory/Queries/</code></td><td><code>StockAvailability</code> (central), <code>PartnerStockAvailability</code> (storefront), <code>PartnerStockSummary</code> (My Products)</td></tr>
+        <tr><td><code>app/Domain/Inventory/Policies/InventoryPolicy.php</code>, <code>Data/MovementContext.php</code>, <code>Exceptions/InventoryRefused.php</code></td><td>Permissions; who/why/what-for of a movement; named refusals.</td></tr>
+        <tr><td><code>app/Notifications/Inventory/StockRunningLow.php</code></td><td>Low-stock alert.</td></tr>
+        <tr><td><code>app/Http/Controllers/Admin/</code></td><td><code>StockController</code>, <code>StockAdjustmentController</code>, <code>StockAllocationController</code>, <code>ReservationController</code>, <code>WarehouseController</code>, <code>AvailabilityController</code></td></tr>
+        <tr><td><code>app/Http/Controllers/Erp/AllocatedStockController.php</code>, <code>Api/Mobile/V1/Catalog/AllocatedStockController.php</code>, <code>Api/Storefront/V1/InventoryController.php</code></td><td>Partner and storefront read sides.</td></tr>
+        <tr><td><code>resources/js/pages/admin/inventory/</code></td><td><code>stock.tsx</code>, <code>stock-item.tsx</code>, <code>warehouses.tsx</code>, <code>allocations.tsx</code>, <code>reservations.tsx</code>, <code>availability.tsx</code> and dialogs; <code>resources/js/pages/inventory/forbidden.tsx</code></td></tr>
+        <tr><td><code>lang/en/inventory.php</code>, <code>lang/bn/inventory.php</code></td><td>Strings, including the <code>inventory.status_sync.*</code> reason keys.</td></tr>
+        <tr><td><code>database/migrations/2026_09_25_*</code>, <code>2026_11_08_*</code></td><td>Warehouses, stock items, movements, adjustments, reservations, allocations, thresholds, partner stock.</td></tr>
+        <tr><td><code>tests/Feature/Inventory/</code>, <code>tests/Feature/Concurrency/StockConcurrencyTest.php</code></td><td>Behaviour and race tests.</td></tr>
+        </tbody>
+    </table>
+
+    <h2>Key terms</h2>
+    <dl>
+        <dt>Bucket</dt>
+        <dd>One of the states a unit can be in: <code>available</code>, <code>reserved</code>, <code>processing</code>, <code>sold</code>, <code>returned</code>, <code>damaged</code>, and (central only) <code>allocated</code>. Each is an integer column on the stock item named like the enum value.</dd>
+        <dt>Stockable unit</dt>
+        <dd>A product with no variations, or one variation of a product with variations. A product with variations is not itself a unit; its own SKU is omitted from availability answers.</dd>
+        <dt>Movement</dt>
+        <dd>A row in <code>stock_movements</code> (or <code>partner_stock_movements</code>): type, from bucket, to bucket, quantity, before and after figures, reason, actor, source, idempotency key.</dd>
+        <dt>Adjustment</dt>
+        <dd>A stock change made by hand (<code>StockAdjustmentKind</code>) with who and why; linked one-to-one to its movement.</dd>
+        <dt>Reservation</dt>
+        <dd>Units held for an order not yet confirmed, ending exactly once (committed, released or expired). Identified by a unique <code>reference</code>.</dd>
+        <dt>Allocation</dt>
+        <dd>Available stock set aside for one business account (P3-30). That account's own orders draw on it first; nobody else can.</dd>
+        <dt>Reservation kind</dt>
+        <dd><code>online_payment</code> (default 15 minute window) or <code>cod</code> (default 24 hour confirmation window).</dd>
+        <dt>Non-Conditional account</dt>
+        <dd>An account type that sells without having bought stock; its storefront availability falls back to central stock when it owns no available unit.</dd>
+        <dt>Stock enforcement</dt>
+        <dd>The switch <code>inventory.stock_blocks_orders</code>. On (default): carts and orders beyond available stock are refused. Off: stock is counted but never blocks.</dd>
+    </dl>
+
+    <h2>Data model</h2>
+    <table>
+        <thead><tr><th>Table / model</th><th>Purpose and columns</th><th>Constraints</th></tr></thead>
+        <tbody>
+        <tr>
+            <td><code>warehouses</code><br><code>Warehouse</code></td>
+            <td><code>public_id</code>, <code>code</code>, <code>name</code>, <code>address</code>, <code>is_active</code>, <code>is_default</code>, <code>priority</code>.</td>
+            <td><code>code</code> unique, fixed once written (trigger), matches <code>^[A-Z0-9][A-Z0-9-]*$</code>. Exactly one default (partial unique index <code>warehouses_one_default</code>), and the default must be active (CHECK). Order used by reservations: default first, then <code>priority</code>, then id (<code>scopeInPriorityOrder</code>).</td>
+        </tr>
+        <tr>
+            <td><code>stock_items</code><br><code>StockItem</code></td>
+            <td><code>warehouse_id</code>, <code>product_id</code>, <code>product_variant_id</code>, the seven bucket integers, <code>low_stock_threshold</code>, <code>low_stock_alerted_at</code>, <code>product_id_snapshot</code>/<code>product_variant_id_snapshot</code> (JSON kept when a product is force-deleted), soft deletes.</td>
+            <td>Unique per (warehouse, product) and per (warehouse, variant) (two indexes); trigger refuses a variant that is not of the product; CHECK <code>stock_items_buckets_not_negative</code> and <code>allocated &gt;= 0</code>; <code>low_stock_threshold &gt;= 0</code>; identity columns locked. Deferred constraint triggers keep <code>allocated</code> equal to the sum of its allocations. <code>product()</code> uses <code>withTrashed()</code>; <code>sku()</code>, <code>productName()</code> fall back to the snapshot.</td>
+        </tr>
+        <tr>
+            <td><code>stock_movements</code><br><code>StockMovement</code></td>
+            <td>The ledger: <code>stock_item_id</code>, <code>warehouse_id</code>, product ids and snapshots, <code>type</code>, <code>from_bucket</code>, <code>to_bucket</code>, <code>quantity</code>, <code>before</code> and <code>after</code> (jsonb, read back in bucket order), <code>reason</code>, <code>actor_id</code>, <code>source_type</code>/<code>source_id</code>, <code>idempotency_key</code>, <code>occurred_at</code>.</td>
+            <td>Append-only (update and delete triggers). <code>quantity &gt; 0</code>; type and buckets restricted by CHECK; must move something; <code>idempotency_key</code> unique.</td>
+        </tr>
+        <tr>
+            <td><code>stock_adjustments</code><br><code>StockAdjustment</code></td>
+            <td><code>stock_item_id</code>, <code>stock_movement_id</code> (unique), <code>kind</code>, <code>quantity</code>, <code>reason</code>, <code>actor_id</code>.</td>
+            <td>Append-only; reason at least 10 characters (CHECK).</td>
+        </tr>
+        <tr>
+            <td><code>stock_reservations</code><br><code>StockReservation</code></td>
+            <td><code>stock_item_id</code> or <code>supplier_offer_stock_id</code> or <code>partner_stock_item_id</code>, <code>quantity</code>, <code>kind</code>, <code>status</code>, <code>reference</code>, <code>expires_at</code>, <code>committed_at</code>, <code>released_at</code>, <code>release_reason</code>, <code>overridden_by</code>, <code>business_account_id</code>, <code>stock_allocation_id</code>.</td>
+            <td><code>reference</code> unique (idempotency). CHECK exactly one source; <code>quantity &gt; 0</code>; status/kind known and consistent with timestamps; a reservation may only draw on its own account's allocation of the same item (trigger); a partner-sourced reservation is never allocation-backed. Status via <code>transitionTo()</code>.</td>
+        </tr>
+        <tr>
+            <td><code>stock_allocations</code><br><code>StockAllocation</code></td>
+            <td><code>stock_item_id</code>, <code>business_account_id</code>, <code>quantity</code> (still set aside, not yet reserved).</td>
+            <td>Unique per (item, account); <code>quantity &gt;= 0</code>; sum must match the item's <code>allocated</code> at commit.</td>
+        </tr>
+        <tr>
+            <td><code>partner_stock_items</code><br><code>PartnerStockItem</code></td>
+            <td><code>business_account_id</code>, <code>product_id</code>, <code>product_variant_id</code>, buckets <code>available</code>, <code>reserved</code>, <code>processing</code>, <code>sold</code>, <code>returned</code>, <code>damaged</code> (no <code>allocated</code>).</td>
+            <td>One row per account, product and exact variation (unique index); never negative (CHECK).</td>
+        </tr>
+        <tr>
+            <td><code>partner_stock_movements</code><br><code>PartnerStockMovement</code></td>
+            <td>As <code>stock_movements</code> for partner stock; types in <code>PartnerStockMovementType</code>.</td>
+            <td>Append-only; idempotency key unique.</td>
+        </tr>
+        </tbody>
+    </table>
+    <p>The product row never holds a stock figure. Related tables owned elsewhere: <code>supplier_offer_stocks</code> (Supplier), <code>order_item_allocations</code> (Order; <code>linked_stock_item_id</code> counts as history that blocks deleting a stock item).</p>
+
+    <h2>States &amp; lifecycle</h2>
+    <h3>Stock buckets</h3>
+    <p>A central unit's life: <code>(arrives)</code> to <code>available</code>; <code>available</code> to <code>reserved</code> when an order is placed; <code>reserved</code> to <code>processing</code> when the reservation is committed; <code>processing</code> to <code>sold</code> on delivery (Order flows); <code>sold</code> to <code>returned</code> on a return or damage intake; <code>returned</code> to <code>available</code> (restock) or <code>damaged</code> after inspection; <code>damaged</code> to <code>available</code> (repair) or out of stock (write-off, dispatch). <code>available</code> to <code>allocated</code> sets units aside for one account and back again.</p>
+    <h3>Movement types</h3>
+    <table>
+        <thead><tr><th><code>StockMovementType</code></th><th>Meaning</th></tr></thead>
+        <tbody>
+        <tr><td><code>adjustment</code></td><td>By hand, with a reason (also used by order/return/damage flows that move between buckets).</td></tr>
+        <tr><td><code>reservation</code>, <code>reservation_committed</code>, <code>reservation_released</code>, <code>reservation_expired</code></td><td>Reservation lifecycle.</td></tr>
+        <tr><td><code>allocation</code>, <code>allocation_released</code></td><td>Set aside for an account / given back.</td></tr>
+        </tbody>
+    </table>
+    <p><code>PartnerStockMovementType</code>: <code>purchase_received</code>, <code>purchase_reversed</code>, <code>reservation</code>, <code>reservation_released</code>, <code>reservation_expired</code>, <code>reservation_committed</code>, <code>return_received</code>, <code>adjustment</code>.</p>
+    <h3>Adjustment kinds (<code>StockAdjustmentKind</code>)</h3>
+    <table>
+        <thead><tr><th>Kind</th><th>From</th><th>To</th></tr></thead>
+        <tbody>
+        <tr><td><code>receive</code></td><td>outside</td><td>available</td></tr>
+        <tr><td><code>remove</code></td><td>available</td><td>outside</td></tr>
+        <tr><td><code>damage</code></td><td>available</td><td>damaged</td></tr>
+        <tr><td><code>repair</code></td><td>damaged</td><td>available</td></tr>
+        <tr><td><code>write_off_damaged</code></td><td>damaged</td><td>outside</td></tr>
+        <tr><td><code>restock_return</code></td><td>returned</td><td>available</td></tr>
+        <tr><td><code>reject_return</code></td><td>returned</td><td>damaged</td></tr>
+        </tbody>
+    </table>
+    <p>Reserving, committing and selling are not adjustment kinds; those belong to orders.</p>
+    <h3>Reservation status (<code>StockReservationStatus</code>, a <code>TransitionableState</code>)</h3>
+    <table>
+        <thead><tr><th>From</th><th>To</th><th>Trigger</th></tr></thead>
+        <tbody>
+        <tr><td>active</td><td>committed</td><td>Payment verified or order confirmed; units move to <code>processing</code>.</td></tr>
+        <tr><td>active</td><td>released</td><td>Failed/cancelled payment, cancellation, or a staff override.</td></tr>
+        <tr><td>active</td><td>expired</td><td>The scheduler (<code>ReleaseExpiredReservations</code>) after <code>expires_at</code>.</td></tr>
+        <tr><td>committed / released / expired</td><td>none</td><td>Terminal. A repeat of the same end state returns the existing row; a different end state throws <code>InventoryRefused::reservationEnded()</code>.</td></tr>
+        </tbody>
+    </table>
+
+    <h2>Actions &amp; workflows</h2>
+    <table>
+        <thead><tr><th>Class</th><th>Purpose</th></tr></thead>
+        <tbody>
+        <tr><td><code>StockLedger::move()</code></td><td>Core primitive: validate, find by idempotency key, lock item, check the source bucket inside the lock, write both buckets and the movement, then (after commit) call <code>RespondToStockChange</code> if available/allocated changed.</td></tr>
+        <tr><td><code>TrackStock</code></td><td>Start holding a SKU in a warehouse; every bucket opens at zero (stock arrives by adjustment so it has history). Audit <code>inventory.stock_tracked</code>.</td></tr>
+        <tr><td><code>AdjustStock</code></td><td>Manual change; <code>inventory.edit</code>; reason of at least <code>MINIMUM_REASON = 10</code> characters; writes the adjustment, the movement and audit <code>inventory.stock_adjusted</code> in one transaction.</td></tr>
+        <tr><td><code>DeleteStockItem</code></td><td>Delete an unused (never moved/reserved/allocated/sourced) item for real; one with history is soft-deleted and only when its product is trashed/force-deleted; otherwise <code>stockHasHistory</code>. Audit <code>inventory.stock_deleted</code>.</td></tr>
+        <tr><td><code>SetLowStockThreshold</code>, <code>CheckLowStock</code></td><td>Threshold per item; alert once per shortfall (<code>low_stock_alerted_at</code>), recipients = active platform staff with <code>inventory.view</code> plus Super Admin, never business identities. Audit <code>inventory.low_stock_threshold_set</code>.</td></tr>
+        <tr><td><code>RespondToStockChange</code></td><td>"Stock change response": after commit, run <code>SyncProductStockStatus</code> and, if an item is named, <code>CheckLowStock</code>. Each is wrapped so a failure is reported and never undoes the stock change.</td></tr>
+        <tr><td><code>SyncProductStockStatus</code></td><td>Active to out_of_stock when a tracked product has no sellable stock in active warehouses (<code>available &gt; 0</code> or <code>allocated &gt; 0</code>); back to active only when the system caused it. Reasons <code>inventory.status_sync.ran_out</code> / <code>.restocked</code>.</td></tr>
+        <tr><td><code>AllocateStock</code>, <code>ReleaseAllocatedStock</code></td><td>Allocate/release for an account; <code>inventory.approve</code>; reason at least 10 chars; sensitive audit <code>inventory.stock_allocated</code>, <code>inventory.allocation_released</code>.</td></tr>
+        <tr><td><code>OverrideReservation</code></td><td>Release a reservation now or extend its expiry (at most 168 hours ahead); <code>inventory.approve</code>; reason required; audit <code>inventory.reservation_released_by_hand</code>, <code>inventory.reservation_extended</code>.</td></tr>
+        <tr><td><code>ReleaseExpiredReservations</code></td><td>Scheduler pass (chunks of 200); each reservation expired under its own lock; busy or already-ended ones are skipped.</td></tr>
+        <tr><td><code>SetReservationWindows</code></td><td>Online minutes (5-1440) and COD hours (1-168); <code>inventory.approve</code>; sensitive audit <code>inventory.reservation_windows_set</code>. Not retrospective.</td></tr>
+        <tr><td><code>ManageWarehouses</code></td><td>Create (first becomes default; table locked <code>SHARE ROW EXCLUSIVE</code>), update (default cannot be switched off; switching a warehouse changes availability, so affected products get a stock response), make default. Audit <code>inventory.warehouse_created|updated</code>.</td></tr>
+        <tr><td><code>ReceivePartnerPurchase</code>, <code>BackfillPartnerStock</code></td><td>Credit a Partner's stock from a paid, non-cancelled wholesale order, one movement per line keyed <code>wholesale-line:&lt;line public id&gt;</code> (idempotent). Backfill ran once from migration <code>2026_11_08_110000_backfill_partner_stock</code>.</td></tr>
+        </tbody>
+    </table>
+
+    <h3>Reserving stock for an order</h3>
+    <ol>
+        <li>The order flow (e.g. <code>PlaceWholesaleOrder</code>, <code>PlaceWebsiteOrder</code>) calls <code>StockReservations::reserve()</code> (central), <code>reserveFromSupplier()</code> or <code>reserveFromPartner()</code> with a unique <code>$reference</code>.</li>
+        <li>If the reference already exists, the existing reservation is returned, but only if it matches the same product, variant, quantity, kind and account; otherwise <code>InventoryRefused::referenceInUse()</code>.</li>
+        <li>Under the distributed lock <code>inventory:reserve:&lt;product&gt;:&lt;variant|product&gt;</code> (partner: <code>inventory:reserve:partner:&lt;account&gt;:&lt;product&gt;:&lt;variant&gt;</code>), it builds the candidate list: the ordering account's own allocation first (in warehouse order, only if it covers the whole quantity), then any one active warehouse whose free stock covers the whole quantity. Never a split across warehouses or between allocation and shared stock.</li>
+        <li>For the first candidate that still holds enough after the row lock: allocate the reservation id from the sequence, <code>StockLedger::move()</code> available (or allocated) to reserved with type <code>reservation</code>, decrement the allocation, and create the <code>active</code> reservation with <code>expires_at</code> from <code>ReservationWindows::expiryFor($kind)</code>.</li>
+        <li>No candidate holds it: <code>InventoryRefused::outOfStock($sku, $requested, $held)</code>. Callers decide whether <code>StockEnforcement::enforced()</code> turns that into a refusal.</li>
+    </ol>
+    <h3>Ending a reservation</h3>
+    <ol>
+        <li><code>commit()</code>, <code>release()</code> or <code>expire()</code> lock the reservation by <code>inventory:reservation:&lt;id&gt;</code> and in a transaction re-read it with <code>lockForUpdate</code>.</li>
+        <li>Repeat of the same end state returns the row; another end state throws. An <code>expire()</code> of one whose expiry was extended meanwhile throws <code>notYetExpired</code>.</li>
+        <li>Central: reserved to processing (commit), or back to available (release/expire) or back to <code>allocated</code> (and the allocation quantity restored) when it had drawn on an allocation. Supplier/partner sources are delegated to <code>SupplierStockReservations</code> / <code>PartnerStockReservations</code>.</li>
+        <li>The reservation is moved with <code>transitionTo()</code> and stamped (<code>committed_at</code>, or <code>released_at</code> + reason + <code>overridden_by</code>).</li>
+    </ol>
+    <p><code>holdUntilDispatch()</code> pushes an active partner reservation's expiry out about 10 years once payment/confirmation proves the order real (D34), so the sweep never frees it. <code>extend()</code> keeps a reservation alive to a given time (D36 wallet deadline) and never shortens it.</p>
+    <h3>What websites are told (availability)</h3>
+    <ol>
+        <li>Storefront API <code>GET inventory</code> and <code>inventory/{sku}</code> use <code>PartnerStockAvailability</code>: the <code>available</code> bucket of the Partner's own row for that exact variation. Non-Conditional accounts fall back to central availability where they own none.</li>
+        <li><code>StockAvailability</code> (central) sums <code>available</code> across <strong>active</strong> warehouses plus the asking account's own allocation only. If any supplier offer exists for the unit, the answer comes from supplier stock instead and central stock is not consulted.</li>
+        <li>The shape is exactly SKU, <code>in_stock</code>, <code>quantity</code>, <code>updated_at</code>: never warehouse, reservation detail or another account's allocation (contract §5.2). The figure is advisory; the reservation at order time is binding.</li>
+        <li><code>SyncWebsiteInventory</code> (scheduler, every five minutes) tells websites about changed stock using this same query.</li>
+    </ol>
+
+    <h2>Entry points</h2>
+    <p>Admin routes are under <code>/admin</code> with names <code>admin.inventory.*</code>; permission is checked in each controller (<code>InventoryPolicy</code>), then again in the action.</p>
+    <table>
+        <thead><tr><th>Route name</th><th>Method and URL</th><th>Controller@method</th><th>Permission</th></tr></thead>
+        <tbody>
+        <tr><td><code>inventory.stock.index</code></td><td>GET <code>/admin/inventory/stock</code></td><td><code>StockController@index</code></td><td>view</td></tr>
+        <tr><td><code>inventory.stock.store</code></td><td>POST <code>/admin/inventory/stock</code></td><td><code>StockController@store</code> (TrackStock)</td><td>edit</td></tr>
+        <tr><td><code>inventory.stock.show</code></td><td>GET <code>/admin/inventory/stock/{item}</code></td><td><code>StockController@show</code></td><td>view</td></tr>
+        <tr><td><code>inventory.stock.destroy</code></td><td>DELETE <code>.../stock/{item}</code></td><td><code>StockController@destroy</code></td><td>edit</td></tr>
+        <tr><td><code>inventory.stock.adjustments.store</code></td><td>POST <code>.../stock/{item}/adjustments</code></td><td><code>StockAdjustmentController@store</code></td><td>edit</td></tr>
+        <tr><td><code>inventory.stock.threshold</code></td><td>PATCH <code>.../stock/{item}/threshold</code></td><td><code>StockController@threshold</code></td><td>edit</td></tr>
+        <tr><td><code>inventory.availability.index</code></td><td>GET <code>/admin/inventory/availability</code></td><td><code>AvailabilityController@index</code></td><td>view</td></tr>
+        <tr><td><code>inventory.reservations.index</code></td><td>GET <code>.../inventory/reservations</code></td><td><code>ReservationController@index</code></td><td>view</td></tr>
+        <tr><td><code>inventory.reservations.windows</code> / <code>.enforcement</code></td><td>PUT <code>.../reservations/windows</code>, <code>.../reservations/enforcement</code></td><td><code>ReservationController@windows</code>, <code>@enforcement</code></td><td>approve</td></tr>
+        <tr><td><code>inventory.reservations.release</code> / <code>.extend</code></td><td>POST <code>.../reservations/{reservation}/release</code>; PATCH <code>.../expiry</code></td><td><code>ReservationController@release</code>, <code>@extend</code></td><td>approve</td></tr>
+        <tr><td><code>inventory.allocations.index</code></td><td>GET <code>.../inventory/allocations</code></td><td><code>StockAllocationController@index</code></td><td>view</td></tr>
+        <tr><td><code>inventory.stock.allocations.store</code></td><td>POST <code>.../stock/{item}/allocations</code></td><td><code>StockAllocationController@store</code></td><td>approve</td></tr>
+        <tr><td><code>inventory.allocations.release</code></td><td>POST <code>.../allocations/{allocation}/release</code></td><td><code>StockAllocationController@release</code></td><td>approve</td></tr>
+        <tr><td><code>inventory.warehouses.index|store|update|default</code></td><td>GET/POST <code>.../warehouses</code>; PATCH <code>.../warehouses/{warehouse}[/default]</code></td><td><code>WarehouseController</code></td><td>view / edit</td></tr>
+        </tbody>
+    </table>
+    <table>
+        <thead><tr><th>Other surface</th><th>Detail</th></tr></thead>
+        <tbody>
+        <tr><td>Partner web</td><td><code>allocated-stock.index</code>, GET <code>/allocated-stock</code> (<code>Erp\AllocatedStockController</code>); stock filter on the catalogue (<code>?stock=in_stock|out_of_stock</code>, wholesale only).</td></tr>
+        <tr><td>Mobile API</td><td><code>mobile.v1.catalog.allocated-stock.index</code>, GET <code>/api/mobile/v1/allocated-stock</code>.</td></tr>
+        <tr><td>Storefront API</td><td><code>GET /api/storefront/v1/inventory</code> and <code>/inventory/{sku}</code> (names <code>storefront.v1.inventory.index</code> and <code>.show</code>), middleware <code>storefront.scope:inventory:read</code>. See <a href="../api/storefront-api.html">Storefront API</a>.</td></tr>
+        <tr><td>Scheduled: <code>stock-reservation-expiry</code></td><td><code>routes/console.php</code>: <code>ReleaseExpiredReservations</code> every minute, <code>onOneServer</code>, <code>withoutOverlapping</code>.</td></tr>
+        <tr><td>Scheduled: <code>website-inventory-sync</code></td><td>Every five minutes, <code>SyncWebsiteInventory</code> (Website module).</td></tr>
+        <tr><td>Related sweeps</td><td><code>wholesale-order-payment-sweep</code> and <code>cod-confirmation-sweep</code> (every minute) end unpaid/unconfirmed orders and release their stock through the reservation service.</td></tr>
+        <tr><td>Migration-time action</td><td><code>BackfillPartnerStock</code> invoked by migration <code>2026_11_08_110000_backfill_partner_stock.php</code>; no artisan command found.</td></tr>
+        </tbody>
+    </table>
+
+    <h2>Permissions &amp; scoping</h2>
+    <table>
+        <thead><tr><th>Permission</th><th>Allows</th></tr></thead>
+        <tbody>
+        <tr><td><code>inventory.view</code></td><td>Read stock, warehouses, reservations, allocations, availability.</td></tr>
+        <tr><td><code>inventory.edit</code></td><td>Warehouses, track/delete SKUs, manual adjustments, thresholds.</td></tr>
+        <tr><td><code>inventory.approve</code></td><td>Override or extend reservations, change reservation windows, switch stock enforcement, allocate/release allocations.</td></tr>
+        <tr><td><code>inventory.export</code></td><td>Export (policy method exists).</td></tr>
+        </tbody>
+    </table>
+    <p>Inventory Manager holds view/edit/approve/export; Admin holds view and export; Product, Order and Fulfillment Manager hold view (see <code>PlatformRole</code>). As with the catalogue, <code>InventoryPolicy::allows()</code> refuses anyone with an account membership, and <code>Gate::before</code> refuses every <code>inventory.*</code> ability and the <code>Warehouse</code>/<code>StockItem</code> models to business identities before any permission or Super Admin check (§12, §19). Partners reach stock only through read-only, self-scoped screens: allocated stock is the signed-in account's own, and My Products ownership comes from <code>PartnerStockSummary::forProducts($account, ...)</code>, which only reads that account's rows.</p>
+
+    <h2>Money, ledger &amp; audit effects</h2>
+    <ul>
+        <li>The stock ledger is a quantity ledger, not a money ledger; no money fields. Nothing in this module posts a wallet or financial ledger entry.</li>
+        <li>Idempotency keys: central movements take <code>MovementContext::idempotencyKey</code> (unique); reservation <code>reference</code> (unique); partner purchase credits <code>wholesale-line:&lt;order item public id&gt;</code>; partner reservations <code>partner-reservation:&lt;reference&gt;</code>; damage flows <code>order-damage:&lt;damage public id&gt;:&lt;purpose&gt;</code>.</li>
+        <li>Audit actions (module <code>inventory</code>): <code>inventory.stock_tracked</code>, <code>.stock_adjusted</code>, <code>.stock_deleted</code>, <code>.low_stock_threshold_set</code>, <code>.stock_allocated</code>, <code>.allocation_released</code> (sensitive), <code>.reservation_released_by_hand</code>, <code>.reservation_extended</code>, <code>.reservation_windows_set</code> (sensitive), <code>.stock_enforcement_switched</code>, <code>.warehouse_created</code>, <code>.warehouse_updated</code>, <code>.warehouse_default_changed</code>. Automatic reservation moves and ledger movements are not individually audited; the movement row is their record.</li>
+    </ul>
+
+    <h2>Configuration</h2>
+    <table>
+        <thead><tr><th>Settings key (settings table, not env)</th><th>Default and bounds</th></tr></thead>
+        <tbody>
+        <tr><td><code>inventory.reservation_online_minutes</code></td><td>15 (min 5, max 1440); unusable values fall back to the default, never to "forever".</td></tr>
+        <tr><td><code>inventory.reservation_cod_hours</code></td><td>24 (min 1, max 168).</td></tr>
+        <tr><td><code>inventory.stock_blocks_orders</code></td><td><code>true</code>. Off means partners can always order.</td></tr>
+        </tbody>
+    </table>
+    <p>No env variables are specific to this module. Locks (<code>DistributedLock</code>) use the dedicated Redis lock database so a cache flush cannot drop a lock (see <code>CLAUDE.md</code> Environment).</p>
+
+    <h2>Rules, invariants &amp; gotchas</h2>
+    <div class="callout callout-warn"><p><strong>Never write a bucket column or a <code>stock_*</code> table directly.</strong> Use <code>StockLedger::move()</code> / <code>PartnerStock::move()</code>. A figure changed without a movement cannot be explained, and the CHECK/trigger layer (non-negative, allocation sums) will reject inconsistent writes.</p></div>
+    <ul>
+        <li><strong>Overselling prevention has three layers:</strong> the distributed lock (contention), the row lock + re-check inside the ledger (correctness), the CHECK constraint (backstop).</li>
+        <li><strong>Lock order is item then allocation</strong> in every path (allocate, release, reserve, end). Keep it.</li>
+        <li><strong>A reservation is one whole line from one source.</strong> No split across warehouses, no mixing allocation and shared stock.</li>
+        <li><strong>Availability excludes inactive warehouses</strong> and everything but <code>available</code> (+ the asking account's own allocation). Switching a warehouse on/off therefore changes availability with no movement, which is why <code>ManageWarehouses::update()</code> triggers a stock response.</li>
+        <li><strong>Out of stock is only automatic for tracked products,</strong> and only between active and out_of_stock. Nothing is auto-activated that a person took off sale.</li>
+        <li><strong>Stock responses run after commit</strong> (<code>afterCommit</code>); failures are reported, never rethrown.</li>
+        <li><strong>Reservation windows are stamped at reservation time.</strong> Changing a setting does not shorten an existing hold.</li>
+        <li><strong>The default warehouse can never be inactive</strong>; make another warehouse default first.</li>
+        <li>New central items open at zero; stock arrives only by adjustment (<code>receive</code>), so every unit has a who/why.</li>
+        <li>Deleting a stock item with history is a soft delete and is only allowed once its product is trashed or force-deleted; a live product's stock row with history is refused.</li>
+        <li>A damaged unit never becomes sellable except by an inspector's explicit restock decision (see <a href="damage.html">Damage</a>). Supplier-backed order lines cannot be moved by the damage flow (<code>DamageRefused::supplierBacked</code>).</li>
+        <li><strong>Raw-SQL stock queries bypass the product soft-delete scope</strong>; <code>StockAvailability</code> adds <code>products.deleted_at IS NULL</code> explicitly. Do the same in any new raw query.</li>
+    </ul>
+
+    <h2>How to&hellip;</h2>
+    <h3>Add a new stock adjustment kind</h3>
+    <ol>
+        <li>Add the case to <code>StockAdjustmentKind</code> with <code>source()</code>, <code>destination()</code> and a label.</li>
+        <li>Update the <code>stock_adjustments_kind_known</code> CHECK in a new migration.</li>
+        <li>Add the label/option to <code>lang/en/inventory.php</code> and <code>lang/bn/inventory.php</code> and the dialog in <code>resources/js/pages/admin/inventory/adjust-stock-dialog.tsx</code>.</li>
+        <li>Cover it in <code>tests/Feature/Inventory/AdjustStockTest.php</code>.</li>
+    </ol>
+    <h3>Add a new movement type</h3>
+    <ol>
+        <li>Add the case to <code>StockMovementType</code> (or <code>PartnerStockMovementType</code>).</li>
+        <li>Update <code>stock_movements_type_known</code> (or the partner equivalent) with a migration that re-states the full list (see the allocation migration for the pattern).</li>
+        <li>Call <code>StockLedger::move()</code> with a <code>MovementContext</code> carrying reason, actor, <code>sourceType</code>/<code>sourceId</code> and an idempotency key if externally triggered.</li>
+    </ol>
+    <h3>Make an order flow consume stock</h3>
+    <ol>
+        <li>Choose a unique, stable <code>$reference</code> per line (for example order reference plus line number).</li>
+        <li>Reserve, in a deterministic product order (to avoid deadlocks), through <code>StockReservations</code>; handle <code>InventoryRefused</code> and <code>LockTimeout</code>; consult <code>StockEnforcement::enforced()</code>.</li>
+        <li>Commit on payment/confirmation, release on cancel; never touch buckets directly.</li>
+    </ol>
+    <h3>Change how long reservations hold</h3>
+    <ol>
+        <li>Prefer the admin screen (<code>admin.inventory.reservations.windows</code>, needs <code>inventory.approve</code>).</li>
+        <li>To change bounds or defaults edit the constants in <code>ReservationWindows</code> and the validation in <code>SetReservationWindows</code>. The storefront contract (§6.1.2) fixes 15 minutes and 24 hours as v1 defaults; do not change defaults without approval.</li>
+    </ol>
+
+    <h2>Testing</h2>
+    <p>Run <code>vendor/bin/pest tests/Feature/Inventory</code> (or <code>--group=inventory</code>) in its own schema; concurrency: <code>tests/Feature/Concurrency/StockConcurrencyTest.php</code>.</p>
+    <table>
+        <thead><tr><th>File</th><th>Covers</th></tr></thead>
+        <tbody>
+        <tr><td><code>StockLedgerTest</code>, <code>StockItemTest</code>, <code>AdjustStockTest</code>, <code>DeleteStockItemTest</code>, <code>WarehouseTest</code></td><td>Ledger, tracking, adjustments, deletion rules, warehouses.</td></tr>
+        <tr><td><code>StockReservationTest</code>, <code>ReservationExpiryTest</code>, <code>ReservationAdministrationTest</code>, <code>AllocatedReservationTest</code></td><td>Reservation lifecycle, scheduler, overrides, allocation-backed reservations.</td></tr>
+        <tr><td><code>StockAllocationTest</code>, <code>StockAvailabilityTest</code>, <code>OutOfStockProtectionTest</code>, <code>LowStockAlertTest</code></td><td>Allocation, availability answers, status sync, alerts.</td></tr>
+        <tr><td><code>PartnerStockTest</code>, <code>InventoryAccessTest</code></td><td>Partner-owned stock; access and partner refusal.</td></tr>
+        <tr><td><code>tests/Feature/SelfScope/AllocatedStockSelfScopeTest.php</code></td><td>An account sees only its own allocation.</td></tr>
+        </tbody>
+    </table>
+    <p>No factories exist for inventory models. Tests build warehouses and items through the actions (<code>ManageWarehouses</code>, <code>TrackStock</code>, <code>AdjustStock</code>) or file-local helpers such as <code>inventoryTrackPayload()</code> and <code>stockLedgerMove()</code>; keep new helper names prefixed.</p>
+
+    <h2>Related modules</h2>
+    <ul>
+        <li><a href="catalog.html">Catalog</a> - products and variations; out_of_stock status.</li>
+        <li><a href="wholesale.html">Wholesale</a> - cart stock checks; <code>PlaceWholesaleOrder</code> reserves; paid orders credit Partner stock.</li>
+        <li><a href="damage.html">Damage</a> - moves units between buckets through these ledgers.</li>
+        <li><a href="order.html">Order</a>, <a href="supplier.html">Supplier</a>, <a href="website.html">Website</a>, <a href="cases.html">Cases</a>, <a href="notification.html">Notification</a>.</li>
+        <li><a href="../guide/glossary.html">Glossary</a>, <a href="../guide/operations.html">Operations</a>.</li>
+    </ul>
+</main>
+</body>
+</html>

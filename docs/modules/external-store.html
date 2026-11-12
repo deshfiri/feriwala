@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>External store module</title>
+    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+    <script src="../assets/docs.js"></script>
+</head>
+<body>
+<main id="doc">
+    <h1>External store module</h1>
+    <p class="lead">A read-only mirror of orders from stores a partner runs on another platform. Feriwala pulls the orders (scheduled sync) and accepts signed webhooks, records them exactly as the store reported them, and shows them beside the partner's Feriwala orders. It changes nothing at the store and moves no money.</p>
+
+    <div class="callout callout-warn"><p><strong>Read this first.</strong> The brief for this module mentions WooCommerce, but <code>StorePlatform</code> has exactly one case, <code>dfcommerce</code> (DFCOMMERCE). Another platform is added with its driver, not before. Also, D30 retired the partner's self-service connection: today a partner can only <em>view</em> stores that were connected earlier (<code>stores.index</code>, <code>stores.show</code>). The connect, update, rotate and disconnect Actions, the jobs, the webhook endpoint and the scheduler all still exist and are tested, but no route currently calls the connect, test, update, rotate or disconnect Actions (I grepped <code>app/</code>; only the Actions' own classes, <code>SyncExternalStore</code> and tests reference them).</p></div>
+
+    <h2>Purpose</h2>
+    <p>Partners may run their own shop on a platform other than Feriwala's storefront and want its orders next to their Feriwala orders in the Owner Panel (D29). Four decisions settle the design:</p>
+    <ol>
+        <li><strong>A separate, read-only mirror.</strong> External orders live in their own tables (<code>external_orders</code>, <code>external_order_items</code>, <code>external_order_events</code>, <code>external_customers</code>), never in <code>orders</code>, which is bound to Feriwala's catalogue, status machine, stock, payment and earnings workflows.</li>
+        <li><strong>The store is the source of truth.</strong> Feriwala records what the store reports and changes nothing there. Feriwala's own status vocabulary is never applied to these orders.</li>
+        <li><strong>Partner-merchant, no Feriwala money path.</strong> The partner collects payment and fulfils. Amounts are stored for display; no payment, wallet, ledger, commission, settlement, refund or fulfilment row is ever written.</li>
+        <li><strong>A package feature with a per-package limit.</strong> <code>PackageFeature::ExternalStoreAccess</code> (<code>external_store_access</code>) and <code>PackageFeature::ExternalStoreLimit</code> (<code>external_store_limit</code>), off and zero by default.</li>
+    </ol>
+    <p>Who uses it: the <strong>partner</strong> (account holder with <code>AccountPermission::ManageStores</code>, value <code>store:manage</code>) views stores; the <strong>system</strong> syncs and receives webhooks; <strong>platform staff</strong> have no ability here by design, since they have no reason to hold a partner's store keys. Decisions: D29, amended by D30 (self-service connection retired). D11 still holds: an external store is never given ERP credentials; Feriwala calls it. D12 still holds for every Feriwala order source.</p>
+
+    <div class="callout callout-rule"><p><strong>Rule.</strong> No Feriwala money path for an external order. It never creates a payment, wallet or ledger row, never touches stock, and is never deleted (a database trigger refuses it). Its history is append-only and an older copy never overwrites a newer one.</p></div>
+
+    <h2>Where it lives</h2>
+    <table>
+        <thead><tr><th>Path</th><th>Role</th></tr></thead>
+        <tbody>
+        <tr><td><code>app/Domain/ExternalStore/Models/</code></td><td><code>ExternalStore</code>, <code>ExternalStoreStatusChange</code>, <code>ExternalStoreWebhookEvent</code>, <code>ExternalCustomer</code>, <code>ExternalOrder</code>, <code>ExternalOrderItem</code>, <code>ExternalOrderEvent</code>.</td></tr>
+        <tr><td><code>app/Domain/ExternalStore/Actions/</code></td><td><code>ConnectExternalStore</code>, <code>UpdateExternalStoreConnection</code>, <code>DisconnectExternalStore</code>, <code>TestExternalStoreConnection</code>, <code>RotateExternalStoreWebhookSecret</code>, <code>ImportExternalOrders</code>, <code>RecordExternalOrder</code>, <code>ReceiveExternalStoreWebhook</code>, <code>ApplyExternalStoreWebhook</code>, <code>DispatchExternalStoreSyncs</code>.</td></tr>
+        <tr><td><code>app/Domain/ExternalStore/Jobs/</code></td><td><code>SyncExternalStore</code>, <code>ProcessExternalStoreWebhook</code>.</td></tr>
+        <tr><td><code>app/Domain/ExternalStore/Enums/</code></td><td><code>StorePlatform</code>, <code>ExternalStoreStatus</code>, <code>ExternalStoreStatusChangeSource</code>, <code>ExternalWebhookState</code>, <code>ExternalOrderEventType</code>, <code>ExternalOrderEventSource</code>.</td></tr>
+        <tr><td><code>app/Domain/ExternalStore/Queries/</code></td><td><code>ExternalStoreAllowance</code> (package limit), <code>ExternalStoreOverview</code> (what the partner sees).</td></tr>
+        <tr><td><code>app/Domain/ExternalStore/Policies/ExternalStorePolicy.php</code>, <code>Exceptions/</code>, <code>ExternalOrderStatusDisplay.php</code></td><td>Authorisation; <code>ExternalStoreRefused</code>, <code>ExternalOrderNotRecorded</code>; the display label of the store's own status word.</td></tr>
+        <tr><td><code>app/Integrations/Store/</code></td><td>The driver layer: <code>StorePlatformManager</code>, <code>Contracts/StorePlatformDriver</code>, <code>Drivers/DfcommerceDriver</code>, <code>Support/OutboundAddressGuard</code>, <code>StoreAddress</code>, <code>ExactJson</code>, <code>DnsHostResolver</code>, <code>Data/*</code>. See <a href="../integrations/overview.html">Integrations</a>.</td></tr>
+        <tr><td><code>app/Providers/StoreServiceProvider.php</code></td><td>Binds <code>HostResolver</code> to <code>DnsHostResolver</code>; defines the <code>store-webhooks</code> and <code>store-actions</code> rate limiters.</td></tr>
+        <tr><td><code>app/Http/Controllers/Erp/ExternalStoreController.php</code>, <code>Webhook/ExternalStoreWebhookController.php</code></td><td>The read-only screens; the webhook endpoint.</td></tr>
+        <tr><td><code>app/Http/Controllers/Erp/OrderController.php</code></td><td>Serves <code>orders.external.show</code> (<code>showExternal</code>), the detail screen of an external order. <code>Domain/Order/Queries/CustomerDirectory</code> and <code>OrderTimeline</code> also read external orders.</td></tr>
+        <tr><td><code>config/stores.php</code></td><td>Queue, failure threshold, paging and window settings.</td></tr>
+        <tr><td><code>resources/js/pages/stores/</code>, <code>lang/{en,bn}/stores.php</code></td><td>The <code>index.tsx</code> and <code>show.tsx</code> pages; strings.</td></tr>
+        <tr><td><code>database/migrations/2026_11_01_100000_create_external_stores.php</code></td><td>All nine tables, constraints and triggers.</td></tr>
+        <tr><td><code>tests/Feature/ExternalStore/</code></td><td>Six feature test files, plus a unit test under <code>tests/Unit/Integrations/Store/</code> (see Testing).</td></tr>
+        </tbody>
+    </table>
+
+    <h2>Key terms</h2>
+    <dl>
+        <dt>External store</dt>
+        <dd>A partner's own shop on another platform, connected to their business account. One <em>live</em> connection per store address across all accounts.</dd>
+        <dt>Platform / driver</dt>
+        <dd><code>StorePlatform</code> names the platform; its <code>StorePlatformDriver</code> knows how to verify credentials, fetch orders and read webhooks.</dd>
+        <dt>Mirror</dt>
+        <dd>The set of <code>external_*</code> tables: a copy of what the store said, not a Feriwala order.</dd>
+        <dt>Sync</dt>
+        <dd>A pull of orders in two passes, each with its own cursor: new orders (by increasing id) and changed orders (by <code>updated_since</code>).</dd>
+        <dt>Deferred notification</dt>
+        <dd>A signed webhook too thin to create its order (missing store id, amount or items). Kept with its payload; the pull brings the order in whole.</dd>
+        <dt>Live</dt>
+        <dd>Not <code>disconnected</code> (<code>ExternalStoreStatus::isLive()</code>).</dd>
+    </dl>
+
+    <h2>Data model</h2>
+    <table>
+        <thead><tr><th>Model (table)</th><th>Purpose and key columns</th></tr></thead>
+        <tbody>
+        <tr><td><code>ExternalStore</code> (<code>external_stores</code>)</td><td><code>public_id</code> (ULID), <code>business_account_id</code>, <code>platform</code>, <code>name</code>, <code>base_url</code> (CHECK <code>https://</code>), <code>normalized_host</code> (lowercase CHECK; host plus non-default port), <code>api_key</code>, <code>api_secret</code>, <code>webhook_secret</code> (all <code>encrypted</code> casts and in <code>$hidden</code>), <code>api_key_hint</code> (last four of the key), <code>status</code>, <code>order_cursor</code>, <code>orders_updated_through</code>, <code>connected_at</code>, <code>last_synced_at</code>, <code>last_success_at</code>, <code>last_failure_at</code>, <code>last_error</code>, <code>consecutive_failures</code>, <code>last_webhook_at</code>, <code>disconnected_at</code>. A partial unique index (<code>external_stores_one_live_owner</code>) allows one live connection per platform and host; a CHECK requires a live store to hold credentials and a disconnected one to record its disconnection; a trigger locks columns. Uses <code>HasStateMachine</code> and <code>RecordsStatusHistory</code>.</td></tr>
+        <tr><td><code>ExternalStoreStatusChange</code> (<code>external_store_status_history</code>)</td><td>Append-only status history with <code>source</code> (<code>ExternalStoreStatusChangeSource</code>); triggers refuse update and delete; a CHECK requires an actual change.</td></tr>
+        <tr><td><code>ExternalCustomer</code> (<code>external_customers</code>)</td><td>Known <em>within one store only</em>: unique <code>(external_store_id, identity_key)</code>. Two stores' customers who share a name or phone are two records. <code>name</code>, <code>phone</code>, <code>email</code>, <code>first_order_at</code>, <code>last_order_at</code>.</td></tr>
+        <tr><td><code>ExternalOrder</code> (<code>external_orders</code>)</td><td><code>public_id</code>, <code>business_account_id</code>, <code>external_store_id</code>, <code>platform</code>, <code>external_id</code> and <code>order_number</code> (each unique per store), <code>source_status</code> and <code>payment_status</code> (the store's own words, as text), <code>payment_method</code>, snapshots <code>customer</code>, <code>shipping_address</code>, <code>billing_address</code>, <code>currency_code</code>, Money columns <code>subtotal</code>, <code>discount</code>, <code>shipping_total</code>, <code>tax</code>, <code>total</code>, <code>paid_total</code>, <code>coupon_code</code>, <code>note</code>, <code>cancel_reason</code>, <code>placed_at</code>, <code>source_updated_at</code>, <code>last_synced_at</code>. Triggers force the order to match its store's account and platform and its customer's store, and refuse deletion.</td></tr>
+        <tr><td><code>ExternalOrderItem</code> (<code>external_order_items</code>)</td><td>The store's snapshot of a line: <code>line_number</code> (unique per order), <code>external_product_id</code>, <code>sku</code>, <code>name</code>, <code>variant_label</code>, <code>quantity</code> (CHECK positive), <code>unit_price</code>, <code>line_total</code>. Points at the store's product, never a Feriwala one. Not rewritten after import.</td></tr>
+        <tr><td><code>ExternalOrderEvent</code> (<code>external_order_events</code>)</td><td>Append-only history of what the store said: <code>type</code> (<code>imported</code>, <code>status_changed</code>, <code>payment_status_changed</code>, <code>payment_received</code>), <code>source</code> (<code>external_store</code>, <code>system</code>), <code>previous_value</code>, <code>new_value</code>, <code>description</code>, <code>external_event_id</code>, <code>occurred_at</code>, <code>recorded_at</code>. <code>imported</code> carries the state the order was in when first seen, not a made-up history.</td></tr>
+        <tr><td><code>ExternalStoreWebhookEvent</code> (<code>external_store_webhook_events</code>)</td><td>Unique <code>(external_store_id, event_id)</code>. <code>event</code> (first 64 characters), <code>state</code> (<code>ExternalWebhookState</code>), <code>payload</code>, <code>attempts</code>, <code>duplicate_count</code>, <code>error</code>, <code>received_at</code>, <code>processed_at</code>, <code>last_duplicate_at</code>.</td></tr>
+        </tbody>
+    </table>
+    <p>Amounts are parsed from the store's text without passing through a float (<code>ExactJson</code> decodes numbers as strings; D26). There are no <code>HasSlug</code> columns; <code>public_id</code> is the only public identifier.</p>
+
+    <h2>States &amp; lifecycle</h2>
+    <h3>ExternalStoreStatus</h3>
+    <table>
+        <thead><tr><th>Case</th><th>Meaning</th><th>May move to</th></tr></thead>
+        <tbody>
+        <tr><td><code>pending</code></td><td>Saved and verified once; first import not through.</td><td><code>connected</code>, <code>failing</code>, <code>disconnected</code></td></tr>
+        <tr><td><code>connected</code></td><td>The last sync succeeded.</td><td><code>failing</code>, <code>disconnected</code></td></tr>
+        <tr><td><code>failing</code></td><td>Syncs have failed in a row; still retried.</td><td><code>connected</code>, <code>disconnected</code></td></tr>
+        <tr><td><code>disconnected</code></td><td>The partner ended it. Credentials forgotten, orders kept.</td><td><code>pending</code> (reconnect)</td></tr>
+        </tbody>
+    </table>
+    <p><code>isTerminal()</code> is always false. Moves happen through <code>transitionWithHistory()</code>, never by assigning <code>status</code>. Who moves it: the partner (connect, reconnect, disconnect: source <code>account</code>), a sync or connection test (<code>system</code>), the scheduled round (<code>scheduler</code>). A sync that fails <code>stores.failing_after</code> (3) times in a row, or fails with a non-retryable error, moves the store to <code>failing</code>; the next successful sync from <code>pending</code> or <code>failing</code> moves it to <code>connected</code>.</p>
+    <h3>ExternalWebhookState</h3>
+    <table>
+        <thead><tr><th>Case</th><th>Meaning</th></tr></thead>
+        <tbody>
+        <tr><td><code>received</code></td><td>Written down, not yet applied.</td></tr>
+        <tr><td><code>processed</code></td><td>Applied, or closed because a pull brought the order in.</td></tr>
+        <tr><td><code>ignored</code></td><td>Understood and nothing to do (an unused event, a store no longer live, a payment for an order not imported yet).</td></tr>
+        <tr><td><code>failed</code></td><td>Could not be applied; keeps its payload so a retry has something to apply.</td></tr>
+        <tr><td><code>deferred</code></td><td>Too thin to create its order; waits for the pull.</td></tr>
+        </tbody>
+    </table>
+
+    <h2>Actions &amp; workflows</h2>
+    <table>
+        <thead><tr><th>Class</th><th>Purpose</th></tr></thead>
+        <tbody>
+        <tr><td><code>ConnectExternalStore</code></td><td><code>handle()</code> connects; <code>check()</code> runs steps 1 to 3 without saving.</td></tr>
+        <tr><td><code>UpdateExternalStoreConnection</code></td><td>Rename, replace credentials (verified before they replace the old ones), or reconnect a disconnected store. The address is never editable.</td></tr>
+        <tr><td><code>DisconnectExternalStore</code></td><td>Clears the key, secret and webhook secret; moves to <code>disconnected</code>; audit <code>external_store.disconnected</code>. Orders stay; the address is freed.</td></tr>
+        <tr><td><code>TestExternalStoreConnection</code></td><td>Informational: does the store still answer? Moves nothing.</td></tr>
+        <tr><td><code>RotateExternalStoreWebhookSecret</code></td><td><code>handle()</code> generates a new secret (48 random characters, returned once); <code>provide()</code> stores one the partner got from the store (never returned). Either way the old secret stops working at once. Refused for a store that is not live. Audit <code>external_store.webhook_secret_rotated</code> with <code>webhook_signing_origin</code> of <code>feriwala</code> or <code>store</code>; no part of the secret is audited.</td></tr>
+        <tr><td><code>ImportExternalOrders</code></td><td>The sync (two passes, lock, success and failure bookkeeping).</td></tr>
+        <tr><td><code>RecordExternalOrder</code></td><td>Writes one order idempotently; the one path both sync and webhook use.</td></tr>
+        <tr><td><code>ReceiveExternalStoreWebhook</code>, <code>ApplyExternalStoreWebhook</code></td><td>Accept and apply a notification (below).</td></tr>
+        <tr><td><code>DispatchExternalStoreSyncs</code></td><td>Queues a sync for every live store of an account whose package still includes external stores and which may trade.</td></tr>
+        <tr><td><code>SyncExternalStore</code> (job)</td><td>Runs <code>ImportExternalOrders</code> off the request. <code>$tries = 3</code>, backoff 60 s then 300 s; a non-retryable <code>StorePlatformException</code> fails the job at once (the scheduler tries again on its next round). Queue: <code>stores.queue</code>.</td></tr>
+        <tr><td><code>ProcessExternalStoreWebhook</code> (job)</td><td>Applies one received notification off the request.</td></tr>
+        </tbody>
+    </table>
+
+    <h3>Connecting a store (<code>ConnectExternalStore::handle</code>)</h3>
+    <ol>
+        <li>Package must include external stores with room for another (<code>ExternalStoreAllowance</code>: account can transact and holds <code>ExternalStoreAccess</code>; live stores count against <code>ExternalStoreLimit</code>).</li>
+        <li>The address must be HTTPS (<code>StoreAddress::parse()</code> refuses plain HTTP and embedded credentials) and not held by any live connection on the same platform, this account's or anybody else's. Whose is not said.</li>
+        <li>The driver's <code>verify()</code> reads one order, which proves the address, the key and the <code>orders.read</code> scope in one call.</li>
+        <li>In a transaction, lock the <code>business_accounts</code> row, repeat the capacity check, create the store (<code>pending</code>, credentials encrypted, <code>api_key_hint</code> = last four of the key) with the webhook secret the partner provided or a generated one, and write the first history row. A unique-index race settles as <code>ExternalStoreRefused::alreadyConnected()</code>.</li>
+        <li>Audit <code>external_store.connected</code> and queue the first import with <code>SyncExternalStore::dispatch(...)->afterCommit()</code>, never inside the request.</li>
+        <li>A generated webhook secret is returned in plain text once for the setup screen; a provided one is never handed back.</li>
+    </ol>
+
+    <h3>Syncing (<code>ImportExternalOrders</code>)</h3>
+    <ol>
+        <li>Takes a distributed lock <code>external-store-sync:{id}</code> (TTL 600 s); a sync already running means this one returns <code>null</code>. Does nothing if the store is not live or the package no longer includes stores.</li>
+        <li><strong>New orders pass.</strong> Walk the store's ids upward from <code>order_cursor</code>, advancing the cursor only past what was recorded. Stops at <code>stores.max_pages_per_pass</code> (20) or when the store returns a cursor that does not move forward.</li>
+        <li><strong>Changed orders pass.</strong> Everything the store says changed since <code>orders_updated_through</code> (first run: <code>initial_change_window_hours</code>, 24) minus <code>change_overlap_minutes</code> (10), walked from the start. The window is advanced only when the whole window was read; a pass that hits the page limit re-reads it next time.</li>
+        <li>Each order goes through <code>RecordExternalOrder</code>, which locks by the store's own id and only creates an order that is absent (a unique index settles races). A newer copy updates the order and records each change to <code>source_status</code> or <code>payment_status</code> as an event dated by the store's <code>updated at</code>; a same-or-older copy leaves it untouched. An order short of what is needed, or whose id and number belong to two different orders, throws <code>ExternalOrderNotRecorded</code> and is counted as unreadable, never guessed at or merged.</li>
+        <li>On success: <code>consecutive_failures = 0</code>, <code>last_error</code> set only if some orders were unreadable, <code>pending</code>/<code>failing</code> moves to <code>connected</code>, and <code>ApplyExternalStoreWebhook::settleDeferred()</code> closes deferred notifications whose orders have now arrived. On a <code>StorePlatformException</code>: failure counters and <code>last_error</code> (255 characters, a message written in our code, never copied from the store), possible move to <code>failing</code>, and the exception is rethrown to the job.</li>
+    </ol>
+
+    <h3>Receiving a webhook (<code>ReceiveExternalStoreWebhook::handle</code>)</h3>
+    <p>Unauthenticated by necessity, so the order of checks is the security:</p>
+    <ol>
+        <li>The store must exist, be live and hold a webhook secret; otherwise <code>unknown_store</code> (an unknown and a disconnected store answer the same, so it cannot be used to find which stores exist).</li>
+        <li>The driver checks the signature: for DFCOMMERCE, <code>X-Webhook-Signature: sha256=&lt;hex hmac of the raw body&gt;</code>, compared with <code>hash_equals</code>. Bad: <code>unauthorised</code>.</li>
+        <li>The body is decoded without floats; the store's event id (<code>X-Webhook-Event-Id</code>) is required, with no made-up fallback. Missing or unparseable: <code>malformed</code>.</li>
+        <li>An <code>ExternalStoreWebhookEvent</code> is created in state <code>received</code>. A unique-violation (same store and event id) is a duplicate: counted, acknowledged, and re-queued only if the first attempt ended <code>failed</code> or <code>deferred</code>.</li>
+        <li><code>last_webhook_at</code> is stamped and <code>ProcessExternalStoreWebhook</code> is dispatched: a store waiting on our database times out and resends.</li>
+    </ol>
+    <p><code>ApplyExternalStoreWebhook</code> then reads the notification through the driver: an <em>order</em> event goes through <code>RecordExternalOrder</code> (the same idempotent path a sync uses, so a webhook and a sync can never write an order twice); a <em>payment</em> confirmation is recorded as a <code>payment_received</code> event and updates <code>paid_total</code> and <code>payment_status</code> to <code>paid</code> (the store's own account of its payment); anything else is ignored. After success the stored payload is cleared because it held customer details. A deferred event is never applied late: once the order exists it is closed as processed.</p>
+
+    <h3>Unified orders</h3>
+    <p>"All orders" for a partner lists website, external and wholesale orders in one place (<code>orders.index</code>), and an external row opens <code>orders.external.show</code>, which renders the mirror with <code>ExternalOrderStatusDisplay::label()</code> (the store's word, translated where Feriwala recognises it, otherwise shown as written) and an <code>OrderTimeline</code> built from the order's events. External customers appear in the customer directory (<code>CustomerDirectory</code>). Nothing maps the store's status onto Feriwala's order statuses.</p>
+
+    <h2>Entry points</h2>
+    <table>
+        <thead><tr><th>Entry</th><th>Detail</th></tr></thead>
+        <tbody>
+        <tr><td><code>stores.index</code></td><td>GET <code>/stores</code> &rarr; <code>Erp\ExternalStoreController@index</code>. Authorises <code>viewAny</code>.</td></tr>
+        <tr><td><code>stores.show</code></td><td>GET <code>/stores/{store}</code> (public id) &rarr; <code>@show</code>. Authorises <code>view</code>; another partner's store is a 404.</td></tr>
+        <tr><td><code>orders.external.show</code></td><td>GET <code>/orders/external/{order}</code> &rarr; <code>Erp\OrderController@showExternal</code>.</td></tr>
+        <tr><td><code>webhooks.stores</code></td><td>POST <code>/webhooks/stores/{store}</code> &rarr; <code>Webhook\ExternalStoreWebhookController</code>. Middleware <code>throttle:store-webhooks</code> (<code>stores.webhook_rate_limit</code>, 240 a minute per store and sender address). CSRF is exempt in <code>bootstrap/app.php</code>. Answers <code>200 {ok:true}</code>, <code>200 {ok:true, duplicate:true}</code>, <code>401</code> (invalid signature), <code>422</code> (malformed), <code>404</code> (unknown store).</td></tr>
+        <tr><td>Schedule <code>external-store-sync</code></td><td>Every ten minutes, <code>onOneServer</code>, <code>withoutOverlapping</code>: <code>DispatchExternalStoreSyncs</code>. The safety net under the webhooks; it only queues, so no store is called from the scheduler itself.</td></tr>
+        <tr><td>Rate limiter <code>store-actions</code></td><td>6 per minute per person, defined for "Sync now" and "Test connection"; nothing currently uses it (those routes were retired).</td></tr>
+        </tbody>
+    </table>
+
+    <h2>Permissions &amp; scoping</h2>
+    <ul>
+        <li><code>ExternalStorePolicy</code>: <code>viewAny</code> and <code>create</code> need the account permission <code>AccountPermission::ManageStores</code> (<code>store:manage</code>; the owner by default); <code>view</code> and <code>manage</code> also need the store to belong to the signed-in person's own business account. Platform staff are granted nothing.</li>
+        <li>Self-scoping is a query concern: <code>ExternalStore::scopeForAccount()</code>, and the overview is built only from the account's own stores. A partner reads orders with <code>order:view</code> through the unified orders screens.</li>
+        <li>Credentials never leave the server: the key is shown by its last four characters, the secrets not at all; they are encrypted, hidden from serialisation, and never in a page prop, log or error.</li>
+    </ul>
+
+    <h2>Money, ledger &amp; audit effects</h2>
+    <p>No ledger, wallet or payment effect, by design. Money columns are display-only <code>Money</code> values parsed from the store's decimal text. Audit actions (module <code>external_store</code>): <code>external_store.connected</code> (with <code>webhook_signing_origin</code>), <code>external_store.webhook_secret_rotated</code>, <code>external_store.disconnected</code>, plus <code>external_store.updated</code> and <code>external_store.reconnected</code> from <code>UpdateExternalStoreConnection</code>.</p>
+
+    <h2>Configuration</h2>
+    <table>
+        <thead><tr><th>Key</th><th>Env</th><th>Meaning</th></tr></thead>
+        <tbody>
+        <tr><td><code>stores.queue</code></td><td><code>STORES_QUEUE</code> (<code>default</code>)</td><td>Queue for syncs and notification processing.</td></tr>
+        <tr><td><code>stores.failing_after</code></td><td>none (3)</td><td>Consecutive failed syncs before <code>failing</code>.</td></tr>
+        <tr><td><code>stores.max_pages_per_pass</code></td><td>none (20)</td><td>Pages one pass walks.</td></tr>
+        <tr><td><code>stores.initial_change_window_hours</code>, <code>change_overlap_minutes</code></td><td>none (24, 10)</td><td>The change pass's first reach back and its overlap.</td></tr>
+        <tr><td><code>stores.webhook_rate_limit</code></td><td><code>STORES_WEBHOOK_RATE_LIMIT</code> (240)</td><td>Per store and sender per minute.</td></tr>
+        </tbody>
+    </table>
+    <p>Package features <code>external_store_access</code> and <code>external_store_limit</code> are configured on packages (see <a href="package.html">Package</a>).</p>
+
+    <h2>Rules, invariants &amp; gotchas</h2>
+    <ul>
+        <li><strong>Outbound calls are SSRF-guarded.</strong> The address is typed by a partner, so every call goes through <code>OutboundAddressGuard</code>: the host is resolved, every address must be public, the request is pinned to the checked address with <code>CURLOPT_RESOLVE</code>, redirects are off, and timeouts are short (the DFCOMMERCE driver uses 15 s). Carrier-grade NAT space (<code>100.64.0.0/10</code>) and IPv4-mapped IPv6 are handled explicitly.</li>
+        <li><strong>One sync per store at a time.</strong> A lock, not a queue property: a manual sync and the scheduled round cannot overlap.</li>
+        <li><strong>Two cursors.</strong> The OMS this mirrors could lose a status change because its passes shared one watermark; here new orders and changed orders each have their own.</li>
+        <li><strong>Webhooks are a hint, the pull is the truth.</strong> A thin event is deferred rather than filled in; an older notification arriving late never rolls an order back.</li>
+        <li><strong>The address is the identity.</strong> It cannot be edited, because pointing a connection at another shop would graft one store's history onto another. A different store is a new connection.</li>
+        <li><strong>Disconnect keeps orders.</strong> Credentials and the webhook secret are forgotten, so a notification signed with the old secret is refused from then on; reconnecting starts again from <code>pending</code> and resumes from where the cursors left off.</li>
+        <li><code>RotateExternalStoreWebhookSecret</code> has no grace window (unlike the Website module): the old secret stops working immediately.</li>
+        <li>Entitlement lapse does not delete anything: syncing simply stops until the package includes stores again, and the scheduled round skips such accounts.</li>
+        <li>Unlike a partner <em>website</em> (<a href="website.html">Website</a>), an external store holds no Feriwala credential and has no storefront API surface.</li>
+    </ul>
+
+    <h2>How to&hellip;</h2>
+    <h3>Add a platform</h3>
+    <ol>
+        <li>Add a case to <code>StorePlatform</code> with a <code>label()</code>. The <code>external_stores_platform_known</code> and <code>external_orders_platform_known</code> CHECK constraints list the platforms, so add a migration that replaces them.</li>
+        <li>Write <code>app/Integrations/Store/Drivers/&lt;Name&gt;Driver.php</code> implementing <code>StorePlatformDriver</code> (<code>verify</code>, <code>fetchOrders</code>, <code>signatureIsValid</code>, <code>webhookEventId</code>, <code>readWebhook</code>, <code>webhookEvents</code>). Use <code>OutboundAddressGuard</code> for every call and <code>ExactJson</code> for amounts.</li>
+        <li>Add the arm to the <code>match</code> in <code>StorePlatformManager::driver()</code> (PHP's exhaustive <code>match</code> will fail loudly on the new case until you do).</li>
+        <li>Add tests faking HTTP with <code>Http::fake()</code> and DNS with <code>externalStoreFakeDns()</code>.</li>
+    </ol>
+    <h3>Add a webhook event</h3>
+    <ol>
+        <li>Add it to the driver's <code>WEBHOOK_EVENTS</code> (and its order or payment event list) so <code>readWebhook()</code> classifies it.</li>
+        <li>If it carries a new kind of change, add an <code>ExternalOrderEventType</code> case and the migration for its CHECK, then handle it in <code>ApplyExternalStoreWebhook</code>.</li>
+    </ol>
+    <h3>Re-expose connecting to partners</h3>
+    <p>This is a decision (D29 as amended by D30), not a code change: raise it for approval first. The Actions are ready; you would add routes and a controller guarded by <code>ExternalStorePolicy</code>, rate-limited with <code>store-actions</code>, and Inertia pages next to <code>pages/stores/</code>.</p>
+
+    <h2>Testing</h2>
+    <pre><code>vendor/bin/pest tests/Feature/ExternalStore
+vendor/bin/pest --group=external-store</code></pre>
+    <table>
+        <thead><tr><th>File</th><th>Covers</th></tr></thead>
+        <tbody>
+        <tr><td><code>ExternalStoreConnectionTest</code></td><td>Connect, verify, update, disconnect, address rules.</td></tr>
+        <tr><td><code>ExternalStoreEntitlementTest</code></td><td>Package feature and limit.</td></tr>
+        <tr><td><code>ExternalStoreWebhookTest</code></td><td>Signature, replay, deferral, processing.</td></tr>
+        <tr><td><code>ExternalOrderSyncTest</code></td><td>Two-pass sync, cursors, idempotency.</td></tr>
+        <tr><td><code>UnifiedOrdersTest</code>, <code>BusinessCustomersTest</code></td><td>The merged order list and customer directory.</td></tr>
+        <tr><td><code>tests/Unit/Integrations/Store/StoreSupportTest.php</code></td><td>Unit tests of the store support classes (address parsing, outbound guard).</td></tr>
+        </tbody>
+    </table>
+    <p>Fakes: <code>Http::fake()</code> for the store's API, <code>Queue::fake([SyncExternalStore::class])</code>, and <code>externalStoreFakeDns($address = '93.184.216.34')</code> in <code>tests/Pest.php</code>, which binds <code>HostResolver</code> to a stub so the SSRF guard sees a public address. Run one suite at a time; see <a href="../guide/testing.html">Testing</a>.</p>
+
+    <h2>Related modules</h2>
+    <ul>
+        <li><a href="../integrations/overview.html">Integrations</a>: the store driver layer and the outbound guard.</li>
+        <li><a href="website.html">Website</a>: Feriwala-hosted storefronts, the opposite arrangement.</li>
+        <li><a href="order.html">Order</a>, <a href="package.html">Package</a>, <a href="account.html">Account</a>, <a href="audit.html">Audit</a>.</li>
+    </ul>
+</main>
+</body>
+</html>

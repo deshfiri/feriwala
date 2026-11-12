@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Storage module</title>
+    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+    <script src="../assets/docs.js"></script>
+</head>
+<body>
+<main id="doc">
+    <h1>Storage module</h1>
+    <p class="lead">Managed file storage: one place that decides which disk a file is written to and read from, an admin-configured Cloudflare R2 backend, a metadata table for files that previously had none, and a resumable command that moves existing local files to R2. Read this before adding any upload feature.</p>
+
+    <h2>Purpose</h2>
+    <p>Files in Feriwala fall into two kinds: <em>public</em> assets that anyone with the address may load (product images, brand and category images, website logos, branding, content-library files) and <em>private</em> files that may only be streamed through a controller that checks permission (KYC documents, supplier listing media, case evidence). The module lets storage move from the local disks to Cloudflare R2 without every caller being told: a caller asks for a <code>StorageVisibility</code>, not a disk name. It was built as the "beta-critical batch" (code comments refer to Commits 3, 4 and 5 of that batch). Users: administrators with the <code>integration.*</code> permissions (configuration) and every upload surface in the application.</p>
+
+    <h2>Where it lives</h2>
+    <table>
+        <thead><tr><th>Path</th><th>Role</th></tr></thead>
+        <tbody>
+            <tr><td><code>app/Domain/Storage/ManagedStorage.php</code></td><td>The fork point: resolves a visibility, a local disk name, a stored disk name or a bare path to a filesystem</td></tr>
+            <tr><td><code>app/Domain/Storage/R2StorageSettings.php</code></td><td>Reads the R2 configuration from the settings table (masked, never exposes secrets to the UI)</td></tr>
+            <tr><td><code>app/Integrations/Storage/R2Manager.php</code></td><td>Builds an ad-hoc S3-compatible disk from credentials and runs the live connection test</td></tr>
+            <tr><td><code>app/Domain/Storage/Models/StoredFile.php</code></td><td>Metadata row for files written through the abstraction (table <code>stored_files</code>)</td></tr>
+            <tr><td><code>app/Domain/Storage/Enums/StorageVisibility.php</code></td><td><code>Public</code>, <code>Private</code></td></tr>
+            <tr><td><code>app/Domain/Storage/Actions/</code></td><td><code>StoreManagedFile</code>, <code>DeleteManagedFile</code>, <code>ConfigureR2Storage</code>, <code>TestR2Connection</code>, <code>MigrateManagedFileToR2</code>, <code>RunStorageMigration</code></td></tr>
+            <tr><td><code>app/Domain/Storage/MigrationSources.php</code>, <code>Data/*</code></td><td>The closed list of tables the migration moves; value objects for outcomes and reports</td></tr>
+            <tr><td><code>app/Domain/Storage/Policies/StorageSettingsPolicy.php</code></td><td>Static <code>canView</code> / <code>canManage</code></td></tr>
+            <tr><td><code>app/Domain/Storage/Exceptions/UnacceptableFile.php</code></td><td>Mime or size refusal from <code>StoreManagedFile</code></td></tr>
+            <tr><td><code>app/Console/Commands/MigrateManagedFilesToR2Command.php</code></td><td><code>storage:migrate-to-r2</code></td></tr>
+            <tr><td><code>app/Http/Controllers/Admin/StorageSettingsController.php</code></td><td>Settings &rarr; Storage screen</td></tr>
+            <tr><td><code>resources/js/pages/admin/storage-settings/index.tsx</code></td><td>Frontend</td></tr>
+            <tr><td><code>lang/{en,bn}/storage_settings.php</code></td><td>Strings</td></tr>
+            <tr><td><code>config/filesystems.php</code></td><td>Local disks: <code>local</code>, <code>kyc</code>, <code>supplier-media</code>, <code>public</code>, <code>private</code>, <code>s3</code></td></tr>
+            <tr><td><code>database/migrations/2026_10_25_100000_create_stored_files.php</code>, <code>2026_10_25_110000_unlock_stored_files_disk_column.php</code></td><td>Schema and trigger</td></tr>
+            <tr><td><code>tests/Feature/Storage/</code></td><td><code>ManagedStorageTest</code>, <code>StorageSettingsControllerTest</code>, <code>MigrateManagedFilesToR2Test</code></td></tr>
+        </tbody>
+    </table>
+
+    <h2>Key terms</h2>
+    <dl>
+        <dt>Managed file</dt>
+        <dd>A file written through <code>StoreManagedFile</code> and tracked by a <code>stored_files</code> row.</dd>
+        <dt>Visibility</dt>
+        <dd>A property of the file (<code>public</code> or <code>private</code>), independent of which backend holds it.</dd>
+        <dt>Local disk name</dt>
+        <dd>A disk from <code>config/filesystems.php</code>. Surfaces with their own dedicated disk (<code>kyc</code>, <code>supplier-media</code>) keep it when R2 is off.</dd>
+        <dt>Stored disk name</dt>
+        <dd>The value of a row's own <code>disk</code> column (<code>public</code>, <code>private</code>, <code>kyc</code>, <code>supplier-media</code> or <code>r2</code>). The disk a file is <em>read</em> from is always its own column, never today's active disk.</dd>
+        <dt><code>r2</code></dt>
+        <dd>A stored disk name only. It is not registered in <code>config/filesystems.php</code>; <code>R2Manager</code> builds it on demand from the settings table.</dd>
+        <dt>Available vs configured vs enabled</dt>
+        <dd><code>isConfigured()</code>: all five required fields present. <code>isEnabled()</code>: the switch is on. <code>isAvailable()</code>: both. Only <em>available</em> R2 takes over writes.</dd>
+    </dl>
+
+    <h2>Data model</h2>
+    <p><code>stored_files</code> / <code>StoredFile</code> (uses <code>HasPublicId</code>):</p>
+    <table>
+        <thead><tr><th>Column</th><th>Notes</th></tr></thead>
+        <tbody>
+            <tr><td><code>public_id</code></td><td>ULID, unique</td></tr>
+            <tr><td><code>purpose</code></td><td>string(60), indexed; the path prefix, e.g. <code>content-library</code>, <code>websites/{id}/{asset}</code>, <code>catalog/{folder}</code>, <code>product-content/{product public_id}</code>, <code>Branding::FOLDER/{asset}</code></td></tr>
+            <tr><td><code>fileable_type</code>, <code>fileable_id</code></td><td>Nullable polymorphic owner (<code>fileable()</code> morph). Nullable because branding and website logos have no natural owner model.</td></tr>
+            <tr><td><code>disk</code></td><td>string(20); where the bytes are now</td></tr>
+            <tr><td><code>path</code></td><td>string(500), <strong>unique</strong>; <code>&lt;purpose&gt;/&lt;32 hex random&gt;.&lt;ext&gt;</code></td></tr>
+            <tr><td><code>visibility</code></td><td>cast to <code>StorageVisibility</code>; check constraint allows only <code>public</code>/<code>private</code></td></tr>
+            <tr><td><code>mime_type</code>, <code>size_bytes</code></td><td>Check <code>size_bytes &gt; 0</code></td></tr>
+            <tr><td><code>checksum</code></td><td><code>char(64)</code> SHA-256 of the bytes (before encryption), nullable, length checked</td></tr>
+            <tr><td><code>is_encrypted</code></td><td>When true the stored bytes are <code>encrypt($bytes)</code> ciphertext</td></tr>
+            <tr><td><code>retain_until</code></td><td>Retention window; <code>isRetained()</code> blocks deletion while in the future</td></tr>
+            <tr><td><code>created_by</code></td><td>User, <code>restrictOnDelete</code></td></tr>
+        </tbody>
+    </table>
+    <p>A trigger (<code>stored_files_locked_columns</code>, function <code>feriwala_catalogue_columns_are_locked</code>) rejects updates to <code>public_id</code>, <code>path</code>, <code>fileable_type</code>, <code>fileable_id</code>. <code>disk</code> was originally locked too; the second migration released it because the R2 migration must flip it once from a local disk to <code>r2</code>.</p>
+    <p><code>stored_files</code> does <strong>not</strong> replace <code>product_media</code>, <code>supplier_listing_media</code>, <code>kyc_documents</code> or <code>supplier_kyc_documents</code>. Those keep their own <code>disk</code>/<code>path</code>/<code>size_bytes</code> columns and compliance history; <code>stored_files</code> is the home for surfaces that previously tracked nothing. Settings rows for R2 live in the settings table (below), not in a table of their own.</p>
+
+    <h2>States &amp; lifecycle</h2>
+    <p>There is no status enum. The only lifecycle is a file's <code>disk</code>: a local disk until <code>MigrateManagedFileToR2</code> flips it to <code>r2</code> (once, one way), plus the R2 switch itself (<code>storage.r2.enabled</code>). Turning R2 <em>off</em> does not move anything back: existing rows keep <code>disk = 'r2'</code> and <code>resolveNamedDisk('r2')</code> still builds the R2 disk from the stored credentials.</p>
+
+    <h2>Actions &amp; workflows</h2>
+    <table>
+        <thead><tr><th>Class</th><th>Purpose</th></tr></thead>
+        <tbody>
+            <tr><td><code>ManagedStorage::diskFor() / diskNameFor()</code></td><td>For a <code>StorageVisibility</code>: R2 if available, else local <code>public</code> (Public) or <code>private</code> (Private).</td></tr>
+            <tr><td><code>diskForLocal() / diskNameForLocal()</code></td><td>Same, for a surface with its own local disk (<code>kyc</code>, <code>supplier-media</code>).</td></tr>
+            <tr><td><code>diskForFile(StoredFile)</code>, <code>resolveNamedDisk(string)</code></td><td>The disk a stored row actually lives on. <strong>Every caller resolving a disk by a stored name must use these</strong>, never <code>Storage::disk()</code>, because <code>r2</code> is not a configured disk.</td></tr>
+            <tr><td><code>diskForPath() / urlForPath() / existsForPath()</code></td><td>For a bare path string with no <code>disk</code> column: looks up a <code>StoredFile</code> by <code>path</code> first, falls back to the disk the visibility resolves to today.</td></tr>
+            <tr><td><code>url(StoredFile)</code>, <code>temporaryUrl(StoredFile)</code></td><td><code>url</code> is null for private files; <code>temporaryUrl</code> is null for public ones and for disks that cannot sign (local private). Expiry from <code>storage.r2.signed_url_expiry_minutes</code>. Both swallow exceptions and return null.</td></tr>
+            <tr><td><code>StoreManagedFile</code></td><td>Validate and write one upload.</td></tr>
+            <tr><td><code>DeleteManagedFile</code></td><td>Delete bytes and row; refuses while retained; <code>forPath()</code> for the replace-then-cleanup pattern.</td></tr>
+            <tr><td><code>ConfigureR2Storage</code></td><td><code>handle()</code> saves credentials; <code>setEnabled()</code> toggles.</td></tr>
+            <tr><td><code>TestR2Connection</code></td><td>Live round trip with unsaved or stored credentials.</td></tr>
+            <tr><td><code>RunStorageMigration</code>, <code>MigrateManagedFileToR2</code></td><td>The migration engine.</td></tr>
+        </tbody>
+    </table>
+
+    <h3>Writing a file (<code>StoreManagedFile::handle()</code>)</h3>
+    <ol>
+        <li>The caller passes the upload, a <code>purpose</code>, a <code>StorageVisibility</code>, its own MIME allow-list and <code>$maxBytes</code> (no defaults), optionally <code>encrypt</code>, a <code>fileable</code> owner, <code>createdBy</code>, <code>retainUntil</code> and an extension-by-MIME override.</li>
+        <li>The MIME type is read from the file's own bytes via <code>$file->getMimeType()</code>; one outside the allow-list throws <code>UnacceptableFile::mimeNotAccepted</code>; a larger size throws <code>tooLarge</code>. Callers catch it and raise their own domain refusal (e.g. <code>WebsiteRefused</code>).</li>
+        <li>SHA-256 is computed over the plaintext; the path is <code>{purpose}/{random 32 hex}.{ext}</code>; <code>$disk-&gt;put()</code> stores the bytes (or <code>encrypt($bytes)</code>).</li>
+        <li>A <code>StoredFile</code> is created recording the disk name actually used (<code>diskNameFor</code>), visibility, size (<code>strlen($bytes)</code>), checksum and flags.</li>
+    </ol>
+    <p>Callers I found using <code>StoreManagedFile</code>: platform branding (<code>Settings\Actions\ManageBranding</code>), website logo/banner (<code>Website\WebsiteImageStore</code>), brand/category images (<code>Catalog\CatalogImageStore</code>), product content attachments (<code>Catalog\Actions\PublishProductContent</code>), content library (<code>ContentLibrary\Actions\UploadContentLibraryFile</code>), case evidence (<code>Cases\Actions\StoreCaseEvidence</code>, private).</p>
+
+    <h3>Surfaces that do not use <code>StoreManagedFile</code></h3>
+    <table>
+        <thead><tr><th>Surface</th><th>Writes with</th><th>Disk when R2 off</th><th>Visibility</th></tr></thead>
+        <tbody>
+            <tr><td>Product media (<code>Catalog\ProductMediaStore</code>)</td><td><code>diskFor(Public)</code> + <code>diskNameFor(Public)</code></td><td><code>public</code></td><td>Public; path <code>catalog/products/{product public_id}/{random}.{ext}</code></td></tr>
+            <tr><td>Supplier listing media (<code>Supplier\SupplierListingMediaStore</code>, <code>DISK = 'supplier-media'</code>)</td><td><code>diskForLocal('supplier-media')</code></td><td><code>supplier-media</code> (private, <code>serve</code> off)</td><td>Private; streamed by <code>Supplier\ListingMediaDownloadController</code> and its mobile twin via <code>resolveNamedDisk($model-&gt;disk)</code></td></tr>
+            <tr><td>KYC documents (<code>Kyc\KycDocumentStore</code>, <code>DISK = 'kyc'</code>)</td><td><code>diskForLocal('kyc')</code>, app-level <code>encrypt()</code></td><td><code>kyc</code> (private, <code>serve</code> off, <code>throw</code> on)</td><td>Private, read only through the permission-checked controller</td></tr>
+            <tr><td>Supplier KYC (<code>Supplier\SupplierKycDocumentStore</code>)</td><td>same as above</td><td><code>kyc</code></td><td>Private</td></tr>
+        </tbody>
+    </table>
+    <p><code>Account\Actions\EraseAccount</code> deletes files via <code>resolveNamedDisk($file['disk'])</code>.</p>
+
+    <h3>Configuring R2</h3>
+    <ol>
+        <li>Admin opens <strong>Settings &rarr; Storage</strong> (<code>admin.storage-settings.index</code>). The controller returns only booleans and a masked access key (<code>••••</code> plus the last four characters); secrets are never sent to the browser.</li>
+        <li>Saving (<code>PATCH</code>) and switching on/off (<code>PUT</code>) sit behind the <code>RequirePassword</code> middleware. <code>ConfigureR2Storage</code> then runs <code>SensitiveActionGuard::authorize()</code> with <code>PermissionModule::Integration</code> / <code>ManageIntegrations</code>, a required reason, password-confirmed and two-factor flags (enforced again inside the action).</li>
+        <li><code>R2StorageSettings::candidate()</code> merges submitted fields over stored values: <strong>a blank field means "keep what is there"</strong>, never "clear".</li>
+        <li>The five required fields (<code>account_id</code>, <code>access_key_id</code>, <code>secret_access_key</code>, <code>bucket</code>, <code>endpoint</code>) must be present, then <code>TestR2Connection</code> runs a live <code>directoryExists('')</code> against the bucket. If it fails, <strong>nothing is written</strong>; the previous configuration is untouched by construction.</li>
+        <li>Each field is stored with <code>SettingsRepository::define()</code>/<code>set()</code> under the <code>storage</code> group; <code>access_key_id</code> and <code>secret_access_key</code> are marked encrypted. Audit: <code>storage.r2_configured</code> (sensitive; field names written, bucket and endpoint, never values).</li>
+        <li>Entering credentials is preparation. <code>setEnabled(true)</code> is the moment uploads start landing on R2 and requires <code>isConfigured()</code>. Audit: <code>storage.r2_enabled</code> / <code>storage.r2_disabled</code>.</li>
+    </ol>
+    <p><code>R2Manager::diskConfig()</code> produces an <code>s3</code> driver config with <code>use_path_style_endpoint = true</code>, <code>url</code> = the public domain, <code>visibility</code> = default visibility, <code>throw = true</code>. It builds the disk with <code>Storage::build()</code> instead of registering it, so a credential rotation applies on the next call without a config cache clear. <code>sanitize()</code> redacts <code>AWS4-HMAC-SHA256…</code> and <code>Authorization:</code> text from provider errors and truncates to 500 characters.</p>
+
+    <h3>Migrating existing files (<code>storage:migrate-to-r2</code>)</h3>
+    <pre><code>php artisan storage:migrate-to-r2 --mode=inventory
+php artisan storage:migrate-to-r2 --mode=dry-run
+php artisan storage:migrate-to-r2 --mode=migrate --chunk=200 --report=/path/report.json
+php artisan storage:migrate-to-r2 --mode=verify</code></pre>
+    <table>
+        <thead><tr><th>Mode</th><th>Behaviour</th></tr></thead>
+        <tbody>
+            <tr><td><code>inventory</code> (default)</td><td>Counts per source: <code>total</code>, <code>already_on_r2</code>, <code>eligible</code>. No disk access.</td></tr>
+            <tr><td><code>dry-run</code></td><td>Inventory plus <code>missing_local_file</code> count (checks <code>Storage::disk($disk)-&gt;exists()</code>). No writes, no network to R2; safe before R2 is configured.</td></tr>
+            <tr><td><code>migrate</code></td><td>For each row not on R2: read local bytes, upload to R2 unless that object already exists, read it back, compare SHA-256, and only then set the row's <code>disk</code> to <code>r2</code>. The local original is never touched. Outcomes: <code>migrated</code>, <code>already_on_r2</code>, <code>missing_local_file</code>, <code>verification_failed</code>. Rows already on R2 drop out of the next run's query, so it is resumable. Requires R2 available.</td></tr>
+            <tr><td><code>verify</code></td><td>Re-checks every row already on R2 against its recorded size and checksum (where the table has one). Outcomes: <code>verified</code>, <code>missing_remote_file</code>, <code>verification_failed</code>. Never writes. Requires R2 available.</td></tr>
+        </tbody>
+    </table>
+    <p>The command prints the report as JSON, or writes it to <code>--report</code>. Unknown mode returns failure; <code>RuntimeException</code> (e.g. R2 not available) is reported as an error and returns failure.</p>
+    <p><code>MigrationSources::all()</code> is a deliberately closed list of five sources, read from the tables' own columns (never by walking the filesystem, so framework assets, logs, cache, <code>vendor/</code> are untouchable):</p>
+    <table>
+        <thead><tr><th>Key</th><th>Model</th><th>Size column</th><th>Checksum column</th></tr></thead>
+        <tbody>
+            <tr><td><code>product_media</code></td><td><code>ProductMedia</code></td><td><code>size_bytes</code></td><td>none</td></tr>
+            <tr><td><code>supplier_listing_media</code></td><td><code>SupplierListingMedia</code></td><td><code>size_bytes</code></td><td>none</td></tr>
+            <tr><td><code>kyc_documents</code></td><td><code>KycDocument</code></td><td><code>size_bytes</code></td><td><code>checksum</code></td></tr>
+            <tr><td><code>supplier_kyc_documents</code></td><td><code>SupplierKycDocument</code></td><td><code>size_bytes</code></td><td><code>checksum</code></td></tr>
+            <tr><td><code>stored_files</code></td><td><code>StoredFile</code></td><td><code>size_bytes</code></td><td><code>checksum</code></td></tr>
+        </tbody>
+    </table>
+    <p>Not migrated, by decision: a storefront's logo/banner path and the platform branding logo/favicon where the file predates the abstraction (a bare path with no size or checksum to verify). They are re-uploaded through their screens, which creates a <code>stored_files</code> row. Encrypted KYC files move as the same ciphertext; the command never decrypts.</p>
+
+    <h2>Entry points</h2>
+    <table>
+        <thead><tr><th>Name</th><th>Method and URL</th><th>Handler and middleware</th></tr></thead>
+        <tbody>
+            <tr><td><code>admin.storage-settings.index</code></td><td>GET <code>/admin/storage-settings</code></td><td><code>StorageSettingsController@index</code>; <code>abort_unless(canView, 403)</code></td></tr>
+            <tr><td><code>admin.storage-settings.update</code></td><td>PATCH <code>/admin/storage-settings</code></td><td><code>@update</code>; <code>RequirePassword</code>; <code>canManage</code>; <code>reason</code> required</td></tr>
+            <tr><td><code>admin.storage-settings.enable</code></td><td>PUT <code>/admin/storage-settings/enabled</code></td><td><code>@enable</code>; <code>RequirePassword</code>; <code>canManage</code></td></tr>
+            <tr><td><code>admin.storage-settings.test-connection</code></td><td>POST <code>/admin/storage-settings/test-connection</code></td><td><code>@testConnection</code>; JSON; <code>canManage</code></td></tr>
+            <tr><td>Console</td><td><code>storage:migrate-to-r2</code></td><td><code>MigrateManagedFilesToR2Command</code>; not scheduled</td></tr>
+        </tbody>
+    </table>
+
+    <h2>Permissions &amp; scoping</h2>
+    <p>No storage-specific permission module exists. <code>StorageSettingsPolicy</code> reuses <code>integration.*</code>: <code>canView</code> needs <code>integration.view</code>, <code>canManage</code> needs <code>integration.manage_integrations</code> (the latter covers saving, switching and the live test, since all touch the secret). The permission names are built via <code>PermissionCatalogue::name(PermissionModule::Integration, ...)</code>. The code comment says <code>SystemAdministrator</code> holds all three verbs. Serving a private file is the responsibility of each surface's own controller (supplier ownership or the staff <code>supplier_listing.view</code> permission for listing media, KYC review permissions for KYC); this module only supplies the disk.</p>
+
+    <h2>Money, ledger &amp; audit effects</h2>
+    <p>No money. Audit entries (module <code>storage</code>, all sensitive): <code>storage.r2_configured</code>, <code>storage.r2_enabled</code>, <code>storage.r2_disabled</code>. No audit row is written per file migrated.</p>
+
+    <h2>Configuration</h2>
+    <table>
+        <thead><tr><th>Key</th><th>Meaning</th></tr></thead>
+        <tbody>
+            <tr><td>Setting <code>storage.r2.enabled</code></td><td>Switch (default false)</td></tr>
+            <tr><td><code>storage.r2.account_id</code>, <code>.bucket</code>, <code>.endpoint</code></td><td>Plain strings</td></tr>
+            <tr><td><code>storage.r2.access_key_id</code>, <code>.secret_access_key</code></td><td>Encrypted settings</td></tr>
+            <tr><td><code>storage.r2.region</code></td><td>Default <code>auto</code></td></tr>
+            <tr><td><code>storage.r2.public_domain</code></td><td>Base URL for public files (the disk <code>url</code>)</td></tr>
+            <tr><td><code>storage.r2.default_visibility</code></td><td><code>public</code> or <code>private</code>; anything else becomes <code>private</code></td></tr>
+            <tr><td><code>storage.r2.signed_url_expiry_minutes</code></td><td>Integer, default 15; validated 1&ndash;10080 on save</td></tr>
+            <tr><td>Env <code>FILESYSTEM_DISK</code></td><td>Laravel default disk (<code>local</code> in <code>.env.example</code>)</td></tr>
+            <tr><td>Env <code>KYC_DISK_DRIVER</code>, <code>SUPPLIER_MEDIA_DISK_DRIVER</code>, <code>PRIVATE_DISK_DRIVER</code></td><td>Driver of the <code>kyc</code>, <code>supplier-media</code>, <code>private</code> disks (each defaults to <code>local</code>)</td></tr>
+            <tr><td>Env <code>APP_URL</code></td><td>Base of the <code>public</code> disk URL: <code>{APP_URL}/storage</code></td></tr>
+            <tr><td>Env <code>AWS_*</code></td><td>Feed the static <code>s3</code> disk only. <code>R2Manager</code> does not read them; the docblock calls them an emergency fallback a deploy may use.</td></tr>
+        </tbody>
+    </table>
+
+    <h3>Disks in <code>config/filesystems.php</code></h3>
+    <table>
+        <thead><tr><th>Disk</th><th>Root</th><th>Notes</th></tr></thead>
+        <tbody>
+            <tr><td><code>local</code></td><td><code>storage/app/private</code></td><td>Laravel default</td></tr>
+            <tr><td><code>public</code></td><td><code>storage/app/public</code></td><td>URL <code>{APP_URL}/storage</code>; served through the <code>public/storage</code> symlink</td></tr>
+            <tr><td><code>private</code></td><td><code>storage/app/private-media</code></td><td>Generic private target; <code>serve</code> off, <code>throw</code> on</td></tr>
+            <tr><td><code>kyc</code></td><td><code>storage/app/kyc</code></td><td>KYC identity documents (&sect;7.5); <code>serve</code> off, <code>throw</code> on, <code>report</code> on</td></tr>
+            <tr><td><code>supplier-media</code></td><td><code>storage/app/supplier-media</code></td><td>Supplier listing images; private (D25: supplier-rate-adjacent data never gets a guessable public URL)</td></tr>
+            <tr><td><code>s3</code></td><td>n/a</td><td>Static S3 disk from <code>AWS_*</code>; not used by managed storage</td></tr>
+        </tbody>
+    </table>
+
+    <h2>Rules, invariants &amp; gotchas</h2>
+    <div class="callout callout-rule"><p><strong>Rule.</strong> Resolve a stored file's disk from <em>its own</em> <code>disk</code> value through <code>ManagedStorage::diskForFile()</code> / <code>resolveNamedDisk()</code>. <code>Storage::disk('r2')</code> does not exist.</p></div>
+    <div class="callout callout-warn"><p><strong>Product media in local development (CLAUDE.md).</strong> With R2 not configured, product images go to the local <code>public</code> disk and their URLs are <code>{APP_URL}/storage/catalog/products/&hellip;</code>. Three things must hold for those URLs to load: (1) <code>php artisan storage:link</code> has created <code>public/storage</code>; (2) <code>APP_URL</code> is the origin the app is actually served on, <strong>port included</strong> (<code>http://127.0.0.1:8000</code> for <code>php artisan serve</code>, not bare <code>http://localhost</code>); (3) anything outside this machine, such as a preview storefront, can only load them if that origin is reachable from it over HTTPS. Each <code>product_media</code> row records its own disk, so a later move to R2 changes new uploads only; the storefront payload resolves every URL from the row's disk.</p></div>
+    <ul>
+        <li><strong>Switching R2 on moves writes only.</strong> A file written locally before R2 was enabled stays on the local disk until <code>storage:migrate-to-r2 --mode=migrate</code>. Reads follow the row's <code>disk</code> column, so both coexist.</li>
+        <li><strong>When R2 is available it takes over every managed surface</strong>, including the private ones (<code>kyc</code>, <code>supplier-media</code>, <code>private</code>). <code>diskFor()</code> returns the same R2 disk regardless of visibility, so confidentiality for private files on R2 depends on the app never exposing a direct URL (<code>url()</code> returns null for private files) and on the bucket's own configuration, not on a separate private bucket in code.</li>
+        <li>Public URLs on R2 come from <code>storage.r2.public_domain</code>; if it is unset, <code>url()</code> on the R2 disk has no base. <code>ManagedStorage::url()</code> and <code>urlForPath()</code> swallow the exception and return null.</li>
+        <li><strong>Bare path surfaces</strong> (<code>diskForPath</code>) find their disk by <code>stored_files.path</code>. Because <code>path</code> is unique and random, collisions are not a concern, but a file with no tracked row always resolves to whatever disk today's visibility maps to.</li>
+        <li><strong>Secrets.</strong> Never print or log R2 values, never add a prop that returns them, and never write them in an audit payload. Follow the existing "report presence, never the value" pattern.</li>
+        <li><strong>One-way, verified, non-destructive migration.</strong> The command never deletes the local copy. Cleanup of local files is manual and out of scope.</li>
+        <li><strong>Encrypted files</strong>: the checksum is over plaintext, but <code>MigrateManagedFileToR2</code> compares ciphertext bytes it copied, so migration verification is self-consistent while <code>verify</code> on an encrypted <code>stored_files</code> row would compare <code>size_bytes</code> (plaintext length) against ciphertext length. See the report: not verified whether any <code>stored_files</code> row is created with <code>encrypt: true</code> today.</li>
+    </ul>
+
+    <h2>How to&hellip;</h2>
+    <h3>Add a new upload feature</h3>
+    <ol>
+        <li>Inject <code>StoreManagedFile</code>; call <code>handle()</code> with your own MIME allow-list and size cap, a <code>purpose</code> and a <code>StorageVisibility</code>. Pass <code>fileable</code> and <code>createdBy</code> where there is an owner.</li>
+        <li>Catch <code>UnacceptableFile</code> and raise your module's own refusal.</li>
+        <li>For public files render with <code>ManagedStorage::url($storedFile)</code>; for private files stream through a controller that checks permission (<code>diskForFile()</code> + <code>response()</code>), or use <code>temporaryUrl()</code> when it returns non-null.</li>
+        <li>Delete with <code>DeleteManagedFile::handle()</code> (or <code>forPath()</code> on replace).</li>
+    </ol>
+    <h3>Add a table to the R2 migration</h3>
+    <ol>
+        <li>The table must have a per-row <code>disk</code> column, a <code>path</code> and a recorded size (and ideally a checksum).</li>
+        <li>Add a <code>MigrationSourceDefinition</code> to <code>MigrationSources::all()</code> and extend <code>MigrateManagedFilesToR2Test</code>.</li>
+        <li>Make sure every reader of that table resolves via <code>resolveNamedDisk()</code> with the row's disk.</li>
+    </ol>
+    <h3>Test an R2 change without real credentials</h3>
+    <ol>
+        <li>Follow <code>tests/Feature/Storage/MigrateManagedFilesToR2Test.php</code> and <code>ManagedStorageTest.php</code> for how R2 and the settings are faked.</li>
+    </ol>
+    <h3>Make a product image URL load locally</h3>
+    <ol>
+        <li>Run <code>php artisan storage:link</code>.</li>
+        <li>Set <code>APP_URL</code> to the origin and port you actually serve on, then clear config cache if it is cached.</li>
+    </ol>
+
+    <h2>Testing</h2>
+    <pre><code>vendor/bin/pest tests/Feature/Storage   # in its own schema, see the Testing page</code></pre>
+    <ul>
+        <li><code>ManagedStorageTest</code>: store public and private, collision-safe path, MIME refusal from bytes, size cap, delete and retention, <code>forPath()</code> fallback, URL behaviour.</li>
+        <li><code>StorageSettingsControllerTest</code>: settings screen and gating.</li>
+        <li><code>MigrateManagedFilesToR2Test</code>: inventory, dry-run, refuses before R2 is available, migrate flips the column only after verification, safe re-run, verification failure keeps the local pointer, <code>verify</code> checks.</li>
+    </ul>
+    <p>Related coverage: <code>tests/Feature/Supplier/SupplierListingMediaTest.php</code>, <code>tests/Feature/Api/Mobile/Supplier/MobileSupplierListingMediaTest.php</code>.</p>
+
+    <h2>Related modules</h2>
+    <ul>
+        <li><a href="settings.html">Settings</a> &mdash; the settings repository that stores the R2 rows; branding</li>
+        <li><a href="kyc.html">KYC</a> and <a href="supplier.html">Supplier</a> &mdash; private encrypted documents and listing media</li>
+        <li><a href="catalog.html">Catalog</a> &mdash; product media, brand and category images</li>
+        <li><a href="website.html">Website</a> &mdash; logo and banner</li>
+        <li><a href="content-library.html">Content library</a>, <a href="cases.html">Cases</a></li>
+        <li><a href="audit.html">Audit</a>, <a href="access.html">Access</a></li>
+        <li><a href="../guide/operations.html">Operations</a></li>
+    </ul>
+</main>
+</body>
+</html>

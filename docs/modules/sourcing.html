@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Sourcing module</title>
+    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+    <script src="../assets/docs.js"></script>
+</head>
+<body>
+<main id="doc">
+    <h1>Sourcing module</h1>
+    <p class="lead">Product Sourcing Groups: staff-declared sets of catalogue products that can fulfil one another's orders. This mechanism is now legacy history; allocation no longer reads it. The module also holds the staff-only queries behind the "Suppliers" section of a product.</p>
+
+    <div class="callout callout-warn"><p><strong>Legacy.</strong> The route comment in <code>routes/web.php</code> says groups "are kept as history only and no longer affect allocation". <code>OrderItem</code> marks <code>sourcing_group_id</code>, <code>sourcing_canonical_product_id</code> and <code>sourcing_canonical_variant_id</code> as "never written now". Allocation offers only sources for the exact ordered product and variation (<code>Order\Queries\AllocationSourceCandidates</code>). Do not build new behaviour on groups. The related <code>ProductSourceLink</code> (Order module) is likewise marked legacy.</p></div>
+
+    <h2>Purpose</h2>
+    <p>A group said "these catalogue products are commercially interchangeable when fulfilling an order" (for example one supplier's "Regular Pants" and the warehouse's "Men's Regular Pants"). It was a fulfilment concept, never a browsing category and never inferred from names or SKUs. It was later replaced by the rule "one central product has one BPC and many Supplier Offers": Supplier Offers are the one record of a supplier holding a product. Staff-only; implements D25 (supplier confidentiality) context. See <a href="supplier.html">Supplier</a> for offers and <a href="order.html">Order</a> for allocation.</p>
+
+    <h2>Where it lives</h2>
+    <table>
+        <thead><tr><th>Path</th><th>Role</th></tr></thead>
+        <tbody>
+        <tr><td><code>app/Domain/Sourcing/Models/</code></td><td><code>ProductSourcingGroup</code>, <code>ProductSourcingGroupProduct</code>, <code>ProductSourcingVariantMapping</code></td></tr>
+        <tr><td><code>app/Domain/Sourcing/Enums/SourcingMappingStatus.php</code></td><td><code>active</code>, <code>removed</code></td></tr>
+        <tr><td><code>app/Domain/Sourcing/Actions/ManageSourcingGroups.php</code></td><td>Every change to a group, with audit</td></tr>
+        <tr><td><code>app/Domain/Sourcing/Policies/</code></td><td><code>ProductSourcingGroupPolicy</code> (registered with <code>Gate::policy</code>), <code>ProductSupplierPolicy</code> (static checks)</td></tr>
+        <tr><td><code>app/Domain/Sourcing/Queries/</code></td><td><code>ProductLinkSummaries</code> (product recognition cards, staff only), <code>ProductSuppliersSection</code> (supplier offers shown on a product / supplier page)</td></tr>
+        <tr><td><code>app/Domain/Sourcing/Exceptions/SourcingGroupRefused.php</code></td><td>Named refusals</td></tr>
+        <tr><td><code>app/Http/Controllers/Admin/SourcingGroupController.php</code>, <code>ProductSupplierController.php</code></td><td>Admin controllers</td></tr>
+        <tr><td><code>resources/js/pages/admin/sourcing-groups/</code> (<code>index.tsx</code>, <code>show.tsx</code>)</td><td>Screens</td></tr>
+        <tr><td><code>database/factories/ProductSourcingGroupFactory.php</code>; migrations <code>2026_10_27_100000_create_product_sourcing_groups.php</code>, <code>2026_10_27_110000_snapshot_sourcing_group_on_order_items.php</code>, <code>2026_10_30_110000_convert_sourcing_groups_to_product_links.php</code> (now an empty step)</td><td>Factory and schema</td></tr>
+        <tr><td><code>lang/en/sourcing.php</code>, <code>lang/bn/sourcing.php</code>; <code>tests/Feature/Sourcing/</code></td><td>Strings; tests</td></tr>
+        </tbody>
+    </table>
+
+    <h2>Key terms</h2>
+    <dl>
+        <dt>Sourcing group</dt><dd>A named set (<code>code</code>, <code>name_en</code>, <code>name_bn</code>) of products declared fulfilment-equivalent.</dd>
+        <dt>Canonical product</dt><dd>The member flagged <code>is_canonical</code>; the others map onto it. Only one active canonical per group (partial unique index).</dd>
+        <dt>Variant mapping</dt><dd>An explicit row saying a member's variation fulfils a canonical variation. Membership alone is never enough: Black/M does not match Blue/L.</dd>
+        <dt>Product source link</dt><dd>Older cross-catalogue assertion (Order module, <code>product_source_links</code>); inactive history.</dd>
+        <dt>Supplier offer</dt><dd>The live record of a supplier holding a product (Supplier module); what allocation uses today.</dd>
+    </dl>
+
+    <h2>Data model</h2>
+    <table>
+        <thead><tr><th>Table / model</th><th>Columns</th><th>Constraints</th></tr></thead>
+        <tbody>
+        <tr><td><code>product_sourcing_groups</code></td><td><code>public_id</code>, <code>code</code>, <code>name_en</code>, <code>name_bn</code>, <code>description</code>, <code>is_active</code>, <code>created_by</code>, <code>updated_by</code></td><td><code>code</code> unique and matches <code>^[a-z0-9][a-z0-9_-]*$</code>. Never deleted; deactivated.</td></tr>
+        <tr><td><code>product_sourcing_group_products</code></td><td><code>sourcing_group_id</code>, <code>product_id</code>, <code>is_canonical</code>, <code>status</code>, <code>added_by</code>, <code>added_reason</code>, <code>removed_by</code>, <code>removed_at</code>, <code>removal_reason</code></td><td>Status CHECK <code>active|removed</code>; removal must be recorded (CHECK); partial unique indexes: one active group per product, one active canonical per group; identity columns locked by trigger. Never deleted.</td></tr>
+        <tr><td><code>product_sourcing_variant_mappings</code></td><td><code>sourcing_group_id</code>, <code>product_id</code>, <code>product_variant_id</code>, <code>canonical_product_variant_id</code>, status and the same added/removed columns</td><td>One active mapping per thing (partial unique index). Null variants mean product-level mapping. Never deleted.</td></tr>
+        </tbody>
+    </table>
+    <p>Group-level audit entries are all filed against the group, so its history reads as one timeline.</p>
+
+    <h2>States &amp; lifecycle</h2>
+    <p>No transition enum. A group is active or inactive (<code>is_active</code>); memberships and mappings are <code>active</code> or <code>removed</code> (<code>SourcingMappingStatus</code>), one-way by convention: removal records who, when and why and the row is kept.</p>
+
+    <h2>Actions &amp; workflows</h2>
+    <table>
+        <thead><tr><th>Method (<code>ManageSourcingGroups</code>)</th><th>Rules</th><th>Audit</th></tr></thead>
+        <tbody>
+        <tr><td><code>create</code></td><td>Starts active.</td><td><code>sourcing_group.created</code></td></tr>
+        <tr><td><code>update</code></td><td>Audits only when something changed.</td><td><code>sourcing_group.updated</code></td></tr>
+        <tr><td><code>setActive</code></td><td>Reason required.</td><td>(see action)</td></tr>
+        <tr><td><code>addProduct</code></td><td>Group must be active (<code>inactiveGroup</code>); a product may be in only one active group (<code>alreadyInAGroup</code>).</td><td><code>sourcing_group.product_added</code></td></tr>
+        <tr><td><code>removeProduct</code></td><td>Must be an active member; the canonical cannot be removed while others depend on it; refused while an open allocation relies on it (<code>inUseByOpenAllocation</code>).</td><td><code>sourcing_group.product_removed</code></td></tr>
+        <tr><td><code>mapVariant</code></td><td>Group active, both products members, variants belong to their products, a product with variations must be mapped per variation, no second active mapping.</td><td><code>sourcing_group.variant_mapped</code></td></tr>
+        <tr><td><code>unmapVariant</code></td><td>Refused while an open allocation relies on it; reason required.</td><td><code>sourcing_group.variant_unmapped</code></td></tr>
+        </tbody>
+    </table>
+    <p>All run in a database transaction. The controller authorises with <code>Gate::authorize</code> before delegating.</p>
+    <h3>Product suppliers section</h3>
+    <p><code>ProductSuppliersSection::forProduct()</code> lists a product's supplier offers (and <code>forSupplier()</code> a supplier's), returning <code>null</code> to anyone who may not <code>ProductSupplierPolicy::canView()</code>. The Supplier Base Price (<code>supplier_rate</code>) appears only if the viewer has <code>supplier_pricing.view</code>; it is confidential (D25). <code>ProductLinkSummaries</code> builds staff-recognition cards (image, BPC, barcode, variation summary, counts of active supplier offers and active-warehouse stock items) for the product pickers; it never goes into a client, partner or storefront payload.</p>
+
+    <h2>Entry points</h2>
+    <table>
+        <thead><tr><th>Route name (admin.)</th><th>Method and URL</th><th>Controller@method</th><th>Policy ability</th></tr></thead>
+        <tbody>
+        <tr><td><code>sourcing-groups.index</code></td><td>GET <code>/admin/sourcing-groups</code></td><td><code>SourcingGroupController@index</code></td><td>viewAny</td></tr>
+        <tr><td><code>sourcing-groups.store</code></td><td>POST <code>/admin/sourcing-groups</code></td><td><code>@store</code></td><td>create</td></tr>
+        <tr><td><code>sourcing-groups.show</code> / <code>.update</code></td><td>GET / PATCH <code>/admin/sourcing-groups/{group}</code></td><td><code>@show</code>, <code>@update</code></td><td>view / update</td></tr>
+        <tr><td><code>sourcing-groups.toggle</code></td><td>POST <code>.../{group}/toggle</code></td><td><code>@toggle</code></td><td>toggle (archive permission)</td></tr>
+        <tr><td><code>sourcing-groups.products.store|destroy</code></td><td>POST <code>.../{group}/products</code>; DELETE <code>.../{group}/products/{product}</code></td><td><code>@addProduct</code>, <code>@removeProduct</code></td><td>update</td></tr>
+        <tr><td><code>sourcing-groups.mappings.store|destroy</code></td><td>POST <code>.../{group}/mappings</code>; DELETE <code>.../{group}/mappings/{mapping}</code></td><td><code>@mapVariant</code>, <code>@unmapVariant</code></td><td>update</td></tr>
+        <tr><td><code>product-suppliers.suppliers</code>, <code>.store</code>, <code>.price.update</code></td><td>GET <code>/admin/product-suppliers/suppliers</code>; POST <code>/admin/product-suppliers</code>; PATCH <code>.../{offer}/price</code></td><td><code>ProductSupplierController@browse|store|updatePrice</code></td><td><code>ProductSupplierPolicy::canAssign</code> / <code>canEditOffer</code></td></tr>
+        </tbody>
+    </table>
+    <p>There are no console commands, jobs or mobile endpoints.</p>
+
+    <h2>Permissions &amp; scoping</h2>
+    <p>Module <code>sourcing_group</code>: <code>view</code>, <code>create</code>, <code>edit</code>, <code>archive</code> (archive toggles active). Product Manager holds view/create/edit/archive; Admin holds view only. Product suppliers use <code>product_supplier.view|create|edit</code>; assigning or editing an offer's price also needs <code>supplier_pricing.edit</code>, and seeing prices needs <code>supplier_pricing.view</code>. <code>ProductSupplierPolicy</code> refuses anyone with an account membership. Groups are staff-only, not account data, so there is no self-scoping.</p>
+
+    <h2>Money, ledger &amp; audit effects</h2>
+    <p>The group tables hold no money. The supplier-offer price (Supplier Base Price) edited from <code>ProductSupplierController</code> is a Money value parsed by <code>DecimalAmount::parse</code> and handled by <code>ChangeSupplierBasePrice</code> (Supplier module, reason required). Audit actions above; <code>sourcing_group.*</code> names are used without a module-prefixed enum.</p>
+
+    <h2>Configuration</h2>
+    <p>None.</p>
+
+    <h2>Rules, invariants &amp; gotchas</h2>
+    <ul>
+        <li>Groups no longer drive allocation, but the tables, screens and permissions remain, and <code>ManageProducts::assertPermanentlyDeletable()</code> and <code>ForceDeleteProduct</code> still check/deactivate group memberships and mappings.</li>
+        <li>Nothing is deleted: removal rows stay as the explanation for past allocations.</li>
+        <li>A product with variations must be mapped variation by variation.</li>
+        <li><code>product_supplier_assignments</code> (migration <code>2026_10_31_100000</code>) exists, but no application code references it; assignment now creates a <code>SupplierOffer</code> with origin <code>admin_assignment</code> through <code>Supplier\Actions\AssignProductToSupplier</code>.</li>
+    </ul>
+
+    <h2>How to&hellip;</h2>
+    <ol>
+        <li><strong>Read why an old order line was fulfilled from another product:</strong> open the group at <code>admin.sourcing-groups.show</code> and the order line's snapshot columns on <code>OrderItem</code>.</li>
+        <li><strong>Add a rule to group membership:</strong> change <code>ManageSourcingGroups</code>, add a refusal to <code>SourcingGroupRefused</code>, and extend <code>tests/Feature/Sourcing/SourcingGroupScreenTest.php</code>. Prefer not to; the feature is legacy.</li>
+        <li><strong>Assign a supplier to a product:</strong> use the product's Suppliers section (<code>product-suppliers.store</code>), not groups.</li>
+    </ol>
+
+    <h2>Testing</h2>
+    <p><code>vendor/bin/pest tests/Feature/Sourcing</code> in its own schema: <code>SourcingGroupScreenTest</code>, <code>SourcingGroupSchemaTest</code>, <code>ProductBrowseTest</code>, <code>OrderItemWithoutSourcingGroupTest</code>, <code>ProductCreateWithoutGroupTest</code>. Related: <code>tests/Feature/Orders/ProductSourceLinkTest.php</code>. Create groups through <code>ProductSourcingGroupFactory</code> or <code>ManageSourcingGroups::create()</code> (tests use a helper <code>sourcingScreenGroup()</code>).</p>
+
+    <h2>Related modules</h2>
+    <ul>
+        <li><a href="supplier.html">Supplier</a>, <a href="order.html">Order</a>, <a href="catalog.html">Catalog</a>, <a href="inventory.html">Inventory</a>, <a href="access.html">Access</a>, <a href="audit.html">Audit</a></li>
+    </ul>
+</main>
+</body>
+</html>

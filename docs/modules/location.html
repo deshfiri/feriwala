@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Location module</title>
+    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+    <script src="../assets/docs.js"></script>
+</head>
+<body>
+<main id="doc">
+    <h1>Location module</h1>
+    <p class="lead">The Bangladesh administrative directory (Division, District, Upazila, Union) as bilingual reference data, with a pinned-source importer, cached cascading lookups for address forms and a public-id scheme for storefront delivery areas.</p>
+
+    <h2>Purpose</h2>
+    <p>Addresses (<a href="address.html">Address</a>), bank branches (<a href="bank.html">Bank</a>) and storefront delivery areas all refer to one directory instead of free text. The data is bundled in the repo from a pinned upstream commit (see <code>database/data/bangladesh-location/NOTICE.md</code>) rather than fetched at runtime. Users: partners and Suppliers (address forms), storefronts (delivery area picker), the system (import). Spec: §39 (never send the whole directory on a page).</p>
+
+    <h2>Where it lives</h2>
+    <table>
+        <thead><tr><th>Path</th><th>Role</th></tr></thead>
+        <tbody>
+        <tr><td><code>app/Domain/Location/Models/BdLocation.php</code>, <code>BdLocationImport.php</code></td><td>Directory node; append-only import log</td></tr>
+        <tr><td><code>app/Domain/Location/Enums/BdLocationType.php</code></td><td>Levels</td></tr>
+        <tr><td><code>app/Domain/Location/Actions/ImportBdLocations.php</code></td><td>Validate, dry-run, import</td></tr>
+        <tr><td><code>app/Domain/Location/Data/</code></td><td><code>BdLocationNode</code>, <code>ImportReport</code></td></tr>
+        <tr><td><code>app/Domain/Location/Queries/</code></td><td><code>BdLocationChildren</code> (cached cascade), <code>DeliveryAreas</code> (storefront)</td></tr>
+        <tr><td><code>app/Domain/Location/Rules/ValidBdLocationHierarchy.php</code></td><td>Validation rule for the four-level form</td></tr>
+        <tr><td><code>app/Console/Commands/ImportBdLocationsCommand.php</code></td><td><code>bd-locations:import</code></td></tr>
+        <tr><td><code>app/Http/Controllers/LocationLookupController.php</code></td><td>JSON lookups for the web and Supplier trees</td></tr>
+        <tr><td><code>app/Http/Controllers/Api/Mobile/V1/Locations/LocationController.php</code>, <code>.../Supplier/Locations/LocationLookupController.php</code></td><td>Mobile lookups</td></tr>
+        <tr><td><code>app/Http/Controllers/Api/Storefront/V1/DeliveryAreaController.php</code></td><td>Storefront API</td></tr>
+        <tr><td><code>database/migrations/2026_10_09_100000_take_bd_locations.php</code>, <code>2026_10_09_110000_take_bd_location_imports.php</code></td><td>Schema</td></tr>
+        <tr><td><code>tests/Feature/Location/</code></td><td><code>ImportBdLocationsTest</code>, <code>BdLocationChildrenTest</code>, <code>ValidBdLocationHierarchyTest</code></td></tr>
+        </tbody>
+    </table>
+
+    <h2>Key terms</h2>
+    <dl>
+        <dt>Node</dt><dd>One <code>bd_locations</code> row of any level.</dd>
+        <dt><code>source_id</code></dt><dd>The upstream id (a string). Unique only within its parent, not globally; the English upstream file uses numbers and the Bangla one strings, so everything is cast to string.</dd>
+        <dt>Natural key</dt><dd>(<code>type</code>, <code>source_id</code>, <code>source_parent_id</code>). Hierarchy is part of identity.</dd>
+        <dt>Delivery area public id</dt><dd><code>{type}:{source_parent_id}:{source_id}</code>, with <code>-</code> for a Division's missing parent. Stable across re-imports.</dd>
+    </dl>
+
+    <h2>Data model</h2>
+    <table>
+        <thead><tr><th>Table / model</th><th>Columns</th><th>Constraints</th></tr></thead>
+        <tbody>
+        <tr><td><code>bd_locations</code> <code>BdLocation</code></td><td><code>parent_id</code> (self FK, restrict), <code>type</code> (16), <code>source_id</code> (32), <code>source_parent_id</code> (32), <code>name_en</code>, <code>name_bn</code>, <code>is_active</code></td><td>Unique <code>bd_locations_natural_key</code>; check type is one of the four; a division has no <code>parent_id</code> and no <code>source_parent_id</code>; trigger <code>bd_locations_locked_columns</code> forbids changing <code>type</code>, <code>source_id</code>, <code>source_parent_id</code>, <code>parent_id</code>; trigger <code>bd_locations_no_delete</code> forbids deleting. No public id: the internal id is used by FKs, while URLs use the natural key.</td></tr>
+        <tr><td><code>bd_location_imports</code> <code>BdLocationImport</code></td><td><code>source_url</code>, <code>commit_sha</code>, <code>checksum_en</code>, <code>checksum_bn</code>, <code>license</code>, <code>mode</code>, four counts, <code>deactivated_count</code>, <code>imported_at</code></td><td>One row per run; append-only in the database. <code>currentVersion()</code> = latest <code>import</code> id (0 before any), used as the cache version.</td></tr>
+        </tbody>
+    </table>
+    <p>Relationships: <code>parentLocation()</code>, <code>children()</code>. <code>name($locale)</code> returns Bangla for <code>bn</code>, else English.</p>
+
+    <h2>States &amp; lifecycle</h2>
+    <p>A node is active or inactive. Nodes are never deleted: one missing from a later import is deactivated, and one that returns is reactivated by the upsert. Because the identity columns are locked, a node that would move under another parent is a different natural key: a new row is created and the old one deactivated.</p>
+    <p><code>BdLocationType</code>: <code>division</code> &rarr; <code>district</code> &rarr; <code>upazila</code> (labelled "Thana / Upazila") &rarr; <code>union</code>. <code>child()</code> and <code>parent()</code> walk by enum order; <code>sourceCollectionKey($locale)</code> gives the upstream JSON key, e.g. <code>districts_en</code>.</p>
+
+    <h2>Actions &amp; workflows</h2>
+    <h3><code>ImportBdLocations::handle($mode)</code></h3>
+    <ol>
+        <li>Loads the bundled <code>en.json</code> and <code>bn.json</code> from <code>database/data/bangladesh-location/</code>.</li>
+        <li>Flattens each level, dedupes by <code>type|source_id</code> (first wins; later ones are reported as problems, never silently dropped), reports orphans (parent missing) and hierarchy disagreement between the two languages (missing counterpart, or different parent).</li>
+        <li>Any problem, or mode <code>validate</code>, returns the report with no writes.</li>
+        <li><code>dry-run</code> runs the identical upsert inside a transaction that is always rolled back (a private <code>DryRunRollback</code> exception) and returns the counts.</li>
+        <li><code>import</code> commits <code>updateOrCreate</code> per node (parents first, so ids resolve), sets <code>is_active = true</code> for everything seen, deactivates every active node not seen, and appends a <code>bd_location_imports</code> row, all in one transaction.</li>
+    </ol>
+    <p>The source URL, commit SHA, both checksums and license (MIT) are constants in the class. <code>handleDecoded()</code> takes decoded arrays so tests can prove duplicate, orphan and mismatch rejection without corrupting the real files.</p>
+    <h3>Lookups</h3>
+    <ul>
+        <li><code>BdLocationChildren::topLevel()</code> and <code>childrenOf(type, parentSourceId)</code> return <code>{id, source_id, name_en, name_bn}</code> sorted by English name, cached 1 day under <code>bd_locations.v{importId}.{type}.{key}</code>. A re-import changes the version so every key invalidates; nothing flushes by hand. One payload carries both languages.</li>
+        <li><code>DeliveryAreas::children($parent)</code> / <code>find($publicId)</code>: active children with <code>has_children</code>, capped at 1000 (<code>MAX_RESULTS</code>), identified by the natural key, never the database id.</li>
+        <li><code>ValidBdLocationHierarchy(BdLocationType)</code>: the field must be an <em>active</em> node of that level whose parent is the value already submitted in the level above's field (<code>division_id</code>, <code>district_id</code>, <code>upazila_id</code>), read from the request data via <code>DataAwareRule</code>.</li>
+    </ul>
+
+    <h2>Entry points</h2>
+    <table>
+        <thead><tr><th>Surface</th><th>Name / URL</th></tr></thead>
+        <tbody>
+        <tr><td>Partner web (<code>auth</code>, <code>business.activated</code>)</td><td><code>locations.divisions</code> GET <code>/locations/divisions</code>; <code>locations.children</code> GET <code>/locations/{type}/{sourceId}/children</code> &mdash; <code>LocationLookupController</code> (an unknown <code>type</code> is a 404)</td></tr>
+        <tr><td>Supplier web</td><td>Same controller, <code>routes/supplier.php</code>, same names under the Supplier prefix</td></tr>
+        <tr><td>Mobile</td><td><code>mobile.v1.locations.divisions</code>, <code>mobile.v1.locations.children</code> under <code>/api/mobile/v1/locations</code> (inside <code>mobile.activated</code>); Supplier mobile mirror</td></tr>
+        <tr><td>Storefront API</td><td><code>GET delivery/areas</code> (<code>routes/api.php</code>), <code>DeliveryAreaController</code>; <code>DeliveryAreas</code> also used by the storefront checkout and order controllers. Contract: <a href="../api/storefront-api.html">Storefront API</a></td></tr>
+        <tr><td>Console</td><td><code>php artisan bd-locations:import --mode=validate|dry-run|import</code> (default <code>import</code>; an unknown mode fails). Prints per-level counts and the deactivated count. Also called by <code>SafeSeeder</code> with <code>import</code>.</td></tr>
+        </tbody>
+    </table>
+    <p>No scheduled tasks.</p>
+
+    <h2>Permissions &amp; scoping</h2>
+    <p>Reference data with no owner, so no self-scoping applies; the lookup routes sit behind ordinary authentication. There is no admin screen to edit locations and no permission for it.</p>
+
+    <h2>Money, ledger &amp; audit effects</h2>
+    <p>None. The import writes no audit entry; <code>bd_location_imports</code> is its own record.</p>
+
+    <h2>Configuration</h2>
+    <p>No env or settings keys. Source data and its <code>NOTICE.md</code> live in <code>database/data/bangladesh-location/</code>. Cache driver follows the app's cache store (Redis).</p>
+
+    <h2>Rules, invariants &amp; gotchas</h2>
+    <ul>
+        <li><strong>Never delete or edit identity columns</strong> (the database refuses). Rename = change <code>name_en</code>/<code>name_bn</code>; retire = <code>is_active</code> false.</li>
+        <li>A row referenced by an address that later becomes obsolete stays readable because addresses also freeze a <code>location_snapshot</code>.</li>
+        <li><code>source_id</code> must be unique within a <code>type</code> for parent references to resolve at all; a repeat under another parent is rejected as a duplicate.</li>
+        <li>An import deactivates anything the file no longer contains, so a truncated data file would deactivate real locations. Run <code>--mode=dry-run</code> first and read <code>deactivated</code>.</li>
+        <li>Cache entries last a day but are version-keyed; a failed or rolled-back import does not bump the version.</li>
+    </ul>
+
+    <h2>How to&hellip;</h2>
+    <h3>Refresh the directory</h3>
+    <ol>
+        <li>Replace the JSON under <code>database/data/bangladesh-location/</code> and update <code>NOTICE.md</code>, then update the commit SHA and checksum constants in <code>ImportBdLocations</code>.</li>
+        <li><code>php artisan bd-locations:import --mode=validate</code>, then <code>--mode=dry-run</code>, then default.</li>
+        <li>Re-run <code>bd-banks:import</code> if district names changed, since branches resolve districts by name.</li>
+    </ol>
+    <h3>Use the cascade in a form</h3>
+    <ol>
+        <li>Validate with <code>new ValidBdLocationHierarchy(BdLocationType::Division)</code> and the three below it on <code>division_id</code>, <code>district_id</code>, <code>upazila_id</code>, <code>union_id</code>.</li>
+        <li>Fetch options from <code>locations.divisions</code> and <code>locations.children</code> (route helpers via Wayfinder).</li>
+    </ol>
+    <h3>Expose areas to a new consumer</h3>
+    <ol><li>Use <code>DeliveryAreas::publicId()</code> / <code>find()</code>; never expose <code>bd_locations.id</code>.</li></ol>
+
+    <h2>Testing</h2>
+    <p>Pest group <code>location</code>: <code>vendor/bin/pest tests/Feature/Location</code> in its own schema, one suite at a time. Import tests feed arrays to <code>handleDecoded()</code>.</p>
+
+    <h2>Related modules</h2>
+    <div class="cards">
+        <a class="card" href="address.html"><h3>Address</h3><p>Stores location ids and a snapshot.</p></a>
+        <a class="card" href="bank.html"><h3>Bank</h3><p>Branches link to districts.</p></a>
+        <a class="card" href="website.html"><h3>Website</h3><p>Storefront delivery areas.</p></a>
+        <a class="card" href="../api/storefront-api.html"><h3>Storefront API</h3><p><code>delivery/areas</code>.</p></a>
+    </div>
+</main>
+</body>
+</html>

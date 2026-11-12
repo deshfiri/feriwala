@@ -1,0 +1,419 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Billing and payments</title>
+    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+    <script src="../assets/docs.js"></script>
+</head>
+<body>
+<main id="doc">
+    <h1>Billing and payments</h1>
+    <p class="lead">Billing prices what Feriwala charges (fees, coupons, tax, delivery), records a payment with its itemised components and invoice, settles it against a gateway, and refunds it. It also covers manual settlement, the exchange-rate layer for international gateways, webhook receipt, and the Partner-owned gateway model (D36). The Money API reference is at the end of the page.</p>
+
+    <div class="callout callout-rule"><p><strong>Rule.</strong> <code>SettlePayment</code> is the only place a payment becomes paid. Every route in (browser return, IPN, reconciliation sweep, manual settlement) lands there or in <code>applyPurpose()</code>. A browser return or webhook body is never evidence: the gateway is asked server to server, every time. Payment status moves only through <code>transitionTo()</code>.</p></div>
+
+    <h2>Purpose</h2>
+    <p>Everything a customer or partner pays Feriwala goes through one <code>payments</code> table with child allocations (registration fee, package fee, discount, tax, gateway charge, wallet deposit, goods, delivery and so on, §5.1, §9). The split is the data model: it is what makes a refund of just the package fee, or a report of registration revenue in March, possible.</p>
+    <ul>
+        <li><strong>Applicant / partner</strong> pays an activation, renewal, package change, top-up or wholesale order and reads invoices and receipts.</li>
+        <li><strong>Admin staff</strong> price fees, coupons, tax and delivery; enable gateways and enter credentials; settle by hand; decide and send refunds.</li>
+        <li><strong>Partner</strong> (D36) may configure its own gateway for its Storefront, where Admin allows it.</li>
+        <li><strong>System</strong> verifies notifications, reconciles with providers, expires unpaid checkouts, settles refunds.</li>
+    </ul>
+    <p>Specification: §5.1, §8.2 to §8.4, §9, §26.3, §26.4, §28.1, §36, §42. Decisions: D4 (currency, amended for exchange rates), D12 (merchant of record, Model A), D17 (refundability), D19 (tax, see <a href="tax.html">Tax</a>), D26 (flat Taka), D36 (Partner-owned gateways, Model B).</p>
+    <div class="callout callout-note"><p><strong>Merchant of record.</strong> For dropshipping, Feriwala is merchant of record and partner websites never use their own gateway credentials (D12). D36 adds a second, separately approved payment direction (Model B) for eligible Storefront orders only. Retail margin remains a commission calculation base, not a money path.</p></div>
+
+    <h2>Where it lives</h2>
+    <table>
+        <thead><tr><th>Path</th><th>Role</th></tr></thead>
+        <tbody>
+            <tr><td><code>app/Domain/Billing/Models/</code></td><td><code>Payment</code>, <code>PaymentAllocation</code>, <code>PaymentTaxLine</code>, <code>Invoice</code>, <code>InvoiceLine</code>, <code>PaymentLog</code>, <code>FeeRule</code>, <code>Coupon</code>, <code>CouponRedemption</code>, <code>RefundRequest</code>, <code>DeliveryChargeRule</code>, <code>PartnerGatewayConfiguration</code>, <code>PartnerGatewayConfigurationVersion</code>.</td></tr>
+            <tr><td><code>app/Domain/Billing/Actions/</code></td><td>Quotes, recording, settlement, manual settlement, refunds, gateway and rate configuration, fee, coupon and delivery rule management.</td></tr>
+            <tr><td><code>app/Domain/Billing/</code> (top level)</td><td>Resolvers and policies as classes: <code>FeeRuleResolver</code>, <code>CouponValidator</code>, <code>RefundabilityPolicy</code>, <code>ExchangeRates</code>, <code>PaymentDeadline</code>, <code>CalculateDeliveryCharge</code>, <code>DeliveryChargeSettings</code>, <code>PartnerGatewayResolver</code>, <code>PartnerGatewayEligibility</code>, <code>PartnerGatewayAvailability</code>, <code>PaymentLogRedactor</code>.</td></tr>
+            <tr><td><code>app/Domain/Billing/Data/</code>, <code>Queries/</code>, <code>Jobs/</code>, <code>Events/</code>, <code>Policies/</code>, <code>Exceptions/</code>, <code>Enums/</code></td><td><code>ActivationQuote</code>, <code>PaymentQuote</code>, <code>QuoteLine</code>, <code>PaymentReceipt</code>; <code>RefundableAmount</code>, <code>GatewayPaymentTotals</code>, <code>ResolveNotifiedPayment</code>, <code>AccountSpendSummary</code>; <code>SettleGatewayNotification</code>; <code>PartnerGatewayPaymentVerified</code>; <code>BillingSettingsPolicy</code>, <code>PartnerGatewayPolicy</code>.</td></tr>
+            <tr><td><code>app/Integrations/Payment/</code></td><td>One contract (<code>PaymentGateway</code>), <code>PaymentGatewayManager</code>, and a driver per provider. Config: <code>config/payment.php</code>.</td></tr>
+            <tr><td><code>app/Http/Controllers/Erp/CheckoutController.php</code>, <code>PaymentReturnController.php</code></td><td>Activation checkout and the signed-in return pages.</td></tr>
+            <tr><td><code>app/Http/Controllers/Webhook/PaymentWebhookController.php</code>, <code>GatewayReturnController.php</code></td><td>Stateless IPN and browser-post receivers.</td></tr>
+            <tr><td><code>app/Http/Controllers/Admin/</code></td><td><code>BillingController</code>, <code>PaymentGatewayController</code>, <code>PaymentLogController</code>, <code>PaymentManualSettlementController</code>, <code>PaymentRefundController</code>, <code>DeliverySettingsController</code>.</td></tr>
+            <tr><td><code>resources/js/pages/admin/</code></td><td><code>billing.tsx</code>, <code>billing-coupons.tsx</code>, <code>billing-tax.tsx</code>, <code>gateways.tsx</code>, <code>payment-switches.tsx</code>, <code>exchange-rates.tsx</code>, <code>payments/index.tsx</code>, <code>payments/show.tsx</code>.</td></tr>
+            <tr><td><code>lang/en/billing.php</code>, <code>payment.php</code>, <code>payments.php</code>, <code>gateways.php</code> (and <code>lang/bn</code>)</td><td>Strings.</td></tr>
+            <tr><td><code>app/Support/Money/</code>, <code>app/Casts/MoneyCast.php</code></td><td>Money API (below).</td></tr>
+            <tr><td><code>tests/Feature/Payment/</code></td><td>The billing tests (about 40 files).</td></tr>
+        </tbody>
+    </table>
+
+    <h2>Key terms</h2>
+    <dl>
+        <dt>Quote</dt>
+        <dd>A priced breakdown (<code>ActivationQuote</code> implements <code>PaymentQuote</code>): a list of <code>QuoteLine</code>s plus the tax breakdown. Calculated entirely on the server.</dd>
+        <dt>Allocation</dt>
+        <dd>One component of a payment (<code>AllocationType</code>). Discount is stored positive and flagged as a deduction.</dd>
+        <dt>Purpose</dt>
+        <dd>What a payment is for (<code>PaymentPurpose</code>, §26.3). Decides what settlement unlocks.</dd>
+        <dt>Revenue</dt>
+        <dd>The part of a payment that is Feriwala's earning. Excludes wallet deposit, tax, gateway charge and discount. A top-up has revenue zero.</dd>
+        <dt>Settled</dt>
+        <dd><code>paid</code> or <code>partially_refunded</code> (<code>PaymentStatus::isSettled()</code>). Only settled money releases anything.</dd>
+        <dt>IPN</dt>
+        <dd>The gateway's server-to-server notification. It says which payment to look at, nothing more.</dd>
+        <dt>Reconciliation required</dt>
+        <dd>Money confirmed after the checkout had closed. Real money, purchase not reopened, waits for a person.</dd>
+        <dt>Charge amount / FX rate</dt>
+        <dd>What an international gateway is asked for when Taka is converted; stored beside, never instead of, the Taka <code>amount</code>.</dd>
+        <dt>Platform / Partner ownership</dt>
+        <dd><code>GatewayOwnership</code>: whose gateway took the money. Frozen on the payment.</dd>
+        <dt>Platform receivable</dt>
+        <dd>Under Model B, Feriwala's share of a Storefront order, collected from the Partner's wallet (D36).</dd>
+    </dl>
+
+    <h2>Data model</h2>
+    <table>
+        <thead><tr><th>Table / model</th><th>Purpose and notable columns</th></tr></thead>
+        <tbody>
+            <tr><td><code>payments</code> / <code>Payment</code></td><td><code>HasPublicId</code>, <code>HasReference</code> (prefix <code>Payment</code>), <code>HasStateMachine</code>. <code>business_account_id</code>, <code>purpose</code>, <code>status</code>, <code>amount</code> and <code>revenue</code> (Money), <code>currency_code</code>, <code>gateway</code>, <code>gateway_mode</code> (stamped when handed to the gateway), <code>gateway_reference</code>, <code>gateway_settlement_reference</code>, <code>settled_amount</code> (own currency column <code>settled_currency_code</code>), <code>gateway_fee</code> (own currency column; recorded, never netted off), <code>charge_amount</code> / <code>charge_currency_code</code> / <code>fx_rate</code> / <code>fx_quoted_at</code>, <code>expires_at</code> (deadline, stamped at creation), <code>initiated_at</code>, <code>completed_at</code>, <code>failed_at</code>, <code>failure_reason</code>, <code>reconciliation_reason</code>, <code>reconciliation_required_at</code>, <code>wallet_credited_at</code> / <code>wallet_credit_failed_at</code> / <code>wallet_credit_failure_reason</code>, <code>payer_address_snapshot</code> (array), <code>idempotency_key</code> (unique, hidden), polymorphic <code>payable</code>, and the D36 ownership set: <code>gateway_ownership</code>, <code>funds_destination</code>, <code>website_id</code>, <code>partner_gateway_configuration_version_id</code>.</td></tr>
+            <tr><td><code>payment_allocations</code> / <code>PaymentAllocation</code></td><td>Type, amount, description, <code>sort_order</code>. <code>Payment::allocationsBalance()</code> checks parts equal the whole (plus minus discount).</td></tr>
+            <tr><td><code>payment_tax_lines</code> / <code>PaymentTaxLine</code></td><td>Per-rate tax: <code>tax_code</code>, label, <code>rate_basis_points</code>, mode, <code>taxable_amount</code>, <code>tax_amount</code>. Copied in, not referenced, so a later rate change cannot rewrite an issued invoice.</td></tr>
+            <tr><td><code>invoices</code> / <code>Invoice</code>, <code>invoice_lines</code> / <code>InvoiceLine</code></td><td>One invoice per payment (unique <code>payment_id</code>). Number <code>INV-{year}-{id padded to 6}</code>. Immutable (model throws on update and delete). Lines are copies of the allocations, labels included. "Paid" is read from the payment, never stored.</td></tr>
+            <tr><td><code>payment_logs</code> / <code>PaymentLog</code></td><td>Every exchange with a gateway (§42): <code>direction</code> (<code>outbound</code> or <code>inbound</code>), event, outcome, http status, redacted <code>context</code>, IP. Written only through <code>RecordPaymentLog</code>, which redacts and never lets a logging failure break the caller.</td></tr>
+            <tr><td><code>fee_rules</code> / <code>FeeRule</code></td><td>Dated fee amount per <code>FeeType</code>, optional <code>package_id</code>. Closed, not edited.</td></tr>
+            <tr><td><code>coupons</code> / <code>Coupon</code>, <code>coupon_redemptions</code> / <code>CouponRedemption</code></td><td>Code (case-insensitive), <code>discount_type</code>, <code>value</code>, scope, minimum spend, maximum discount, usage and per-account limits, window. Redemption is <code>reserved</code>, <code>redeemed</code> or <code>released</code>.</td></tr>
+            <tr><td><code>refund_requests</code> / <code>RefundRequest</code></td><td>One component of a payment: <code>allocation_type</code>, <code>amount</code>, <code>refundability</code> rule applied, <code>status</code>, <code>reason</code>, decision fields, <code>gateway</code>, <code>idempotency_key</code> (hidden), <code>gateway_refund_reference</code>, <code>wallet_transaction_id</code>, redacted <code>evidence</code>. Partial unique index <code>refund_requests_open_unique</code> permits one open request.</td></tr>
+            <tr><td><code>delivery_charge_rules</code> / <code>DeliveryChargeRule</code></td><td>Weight tier: from and to grams, <code>base_charge</code>, <code>per_kg_charge</code>, area, courier, priority, dated.</td></tr>
+            <tr><td><code>partner_gateway_configurations</code> / <code>PartnerGatewayConfiguration</code></td><td>One per Storefront: account, website, <code>provider</code>, <code>status</code> (<code>active</code> or <code>disabled</code>).</td></tr>
+            <tr><td><code>partner_gateway_configuration_versions</code> / <code>PartnerGatewayConfigurationVersion</code></td><td>Immutable versions (triggers forbid update and delete). <code>credentials</code> is <code>encrypted:array</code> and hidden; <code>mode</code> is <code>sandbox</code> or <code>live</code>.</td></tr>
+        </tbody>
+    </table>
+    <p>The <code>payments_gateway_ownership_set_once</code> trigger and <code>payments_gateway_ownership_consistent</code> check protect the ownership snapshot (migration <code>2026_11_20_110000</code>).</p>
+
+    <h2>States &amp; lifecycle</h2>
+    <h3>PaymentStatus (§26.4)</h3>
+    <table>
+        <thead><tr><th>From</th><th>May move to</th><th>Triggered by</th></tr></thead>
+        <tbody>
+            <tr><td><code>draft</code></td><td>initiated, cancelled</td><td>Gateway session opened; deadline sweep</td></tr>
+            <tr><td><code>initiated</code></td><td>pending, paid, failed, cancelled</td><td>Gateway answers</td></tr>
+            <tr><td><code>pending</code></td><td>paid, failed, cancelled</td><td>Gateway later answers (a transfer, a risk review)</td></tr>
+            <tr><td><code>paid</code></td><td>refunded, partially_refunded</td><td><code>ProcessRefund::settleStatus</code></td></tr>
+            <tr><td><code>partially_refunded</code></td><td>refunded</td><td>Further refunds</td></tr>
+            <tr><td><code>failed</code>, <code>cancelled</code></td><td>reconciliation_required</td><td>Late confirmed success</td></tr>
+            <tr><td><code>refunded</code>, <code>reconciliation_required</code></td><td>none</td><td>Terminal (reconciliation waits for a person)</td></tr>
+        </tbody>
+    </table>
+    <p>Terminal in <code>isTerminal()</code>: failed, cancelled, refunded, reconciliation_required. Failed and cancelled are retried as a new attempt, never revived. The one exception is <code>Payment::transitionToPaidManually()</code>, which reads <code>PaymentStatus::manuallySettleable()</code> (initiated, pending, failed, cancelled, reconciliation_required; not draft) and is called only by <code>SettlePaymentManually</code>. Paid has no move to cancelled, so a sweep cannot cancel money that arrived.</p>
+    <h3>RefundStatus (D17)</h3>
+    <table>
+        <thead><tr><th>From</th><th>May move to</th></tr></thead>
+        <tbody>
+            <tr><td><code>requested</code></td><td>approved, rejected</td></tr>
+            <tr><td><code>approved</code></td><td>processed, failed</td></tr>
+            <tr><td><code>failed</code></td><td>processed (retry without re-approval)</td></tr>
+            <tr><td><code>rejected</code>, <code>processed</code></td><td>none</td></tr>
+        </tbody>
+    </table>
+    <p>Approval is a decision; processing is money leaving. They are separate states so a refund that fails at the gateway does not look like money that went back. A rejected request may be asked for again with new grounds.</p>
+    <h3>Other enums</h3>
+    <table>
+        <thead><tr><th>Enum</th><th>Cases</th></tr></thead>
+        <tbody>
+            <tr><td><code>PaymentPurpose</code></td><td>activation, package_renewal, package_upgrade, package_downgrade, wholesale_order, website_order, wallet_deposit, wallet_top_up, website_setup, domain_charge, hosting_charge, maintenance_charge. The last four are not deliverable through a gateway; settling one is flagged, not silently accepted.</td></tr>
+            <tr><td><code>AllocationType</code></td><td>registration_fee, package_fee, renewal_fee, wallet_deposit, website_setup, domain_charge, hosting_charge, maintenance_charge, wholesale_goods, website_goods, delivery_charge, discount, tax, gateway_charge. <code>isRevenue()</code> false for wallet_deposit, tax, gateway_charge, discount. <code>isTaxable()</code> true for fees, goods and delivery only.</td></tr>
+            <tr><td><code>FeeType</code></td><td>registration, wholesale_delivery, website_delivery, website_setup, website_domain, website_hosting, website_maintenance.</td></tr>
+            <tr><td><code>Refundability</code></td><td>never, before_activation, always. Defaults: package and renewal fee before_activation, wallet deposit always, everything else never (configurable via settings <code>billing.refundability.{type}</code>).</td></tr>
+            <tr><td><code>DiscountType</code>, <code>CouponScope</code>, <code>RedemptionStatus</code></td><td>percentage, fixed; fees, registration_fee, package_fee, wholesale_order; reserved, redeemed, released.</td></tr>
+            <tr><td><code>GatewayOwnership</code></td><td>platform, partner.</td></tr>
+            <tr><td><code>PartnerGatewayProviderSupport</code></td><td>supported_tested, implemented_unverified, unsupported. <code>canCarryPartnerPayments()</code> decides eligibility.</td></tr>
+            <tr><td><code>PartnerGatewayFallbackReason</code></td><td>feature_disabled, provider_not_allowed, configuration_unavailable, sandbox_not_allowed_in_production, provider_unsupported, credentials_incomplete, currency_unsupported, requested_other_provider, account_not_non_conditional, line_not_central_stock, line_amount_undefined, currency_mismatch, snapshot_incomplete. Named reasons, never provider messages.</td></tr>
+        </tbody>
+    </table>
+
+    <h2>Actions &amp; workflows</h2>
+    <table>
+        <thead><tr><th>Class</th><th>Purpose</th></tr></thead>
+        <tbody>
+            <tr><td><code>CalculateActivationQuote</code>, <code>CalculateRenewalQuote</code>, <code>CalculatePackageChangeQuote</code></td><td>Server-side pricing for each purpose.</td></tr>
+            <tr><td><code>RecordPaymentFromQuote</code></td><td>One transaction: payment, allocations, tax lines and (for non-order purposes) the invoice. Idempotent on <code>idempotency_key</code>.</td></tr>
+            <tr><td><code>IssueInvoice</code></td><td>Copies allocations into an immutable invoice. Idempotent at the unique index.</td></tr>
+            <tr><td><code>StartGatewayPayment</code>, <code>PreparePaymentAttempt</code>, <code>QuoteGatewayCharge</code>, <code>RecordGatewaySession</code></td><td>Open a session, stamp gateway and mode, prepare per-attempt ids (EPS) and FX quote.</td></tr>
+            <tr><td><code>VerifyGatewayReturn</code></td><td>Decides whether a browser return may ask for verification (only with a signature or an identifier we already hold).</td></tr>
+            <tr><td><code>SettlePayment</code></td><td>Verify, check, mark paid under lock, then apply the purpose.</td></tr>
+            <tr><td><code>SettlePaymentManually</code></td><td>Audited override for a confirmation that never landed.</td></tr>
+            <tr><td><code>ReconcileGatewayPayments</code>, <code>ExpireUnpaidPayments</code>, <code>SetPaymentDeadline</code></td><td>Scheduled sweeps and the deadline setting.</td></tr>
+            <tr><td><code>ReserveCoupon</code>, <code>SettleCouponRedemption</code>, <code>ManageCoupons</code></td><td>Coupon slot lifecycle and admin management.</td></tr>
+            <tr><td><code>RequestRefund</code>, <code>DecideRefund</code>, <code>ProcessRefund</code>, <code>SettleRefund</code>, <code>ApplyRefundReversal</code>, <code>RefundPaymentToWallet</code></td><td>The refund pipeline.</td></tr>
+            <tr><td><code>ManageFeeRules</code>, <code>ManageDeliveryChargeRules</code>, <code>SetDeliveryChargeSettings</code></td><td>Rule management (close and reopen, never edit).</td></tr>
+            <tr><td><code>ConfigureGateway</code>, <code>TestGatewayConnection</code>, <code>ConfigureExchangeRates</code></td><td>Platform gateways and rates. Credentials encrypted in settings, write-only.</td></tr>
+            <tr><td><code>SavePartnerGateway</code>, <code>UsePlatformGateway</code>, <code>ConfigurePartnerGatewayAvailability</code></td><td>D36 configuration.</td></tr>
+        </tbody>
+    </table>
+
+    <h3>Flow 1: activation payment, end to end</h3>
+    <ol>
+        <li><code>CheckoutController::show</code> builds the quote with <code>CalculateActivationQuote</code> (order below), lists <code>PaymentGatewayManager::availableFor(Currency::base())</code>, and revalidates any session coupon (nothing is reserved on a render).</li>
+        <li><code>CheckoutController::pay</code> validates the gateway is in that list, recalculates the quote (never trusts the form), closes anything overdue, refuses if the payment is being reconciled, and records via <code>RecordPaymentFromQuote</code>.</li>
+        <li>A gateway session opens (<code>StartGatewayPayment</code>): <code>gateway</code> and <code>gateway_mode</code> are stamped, <code>PaymentIntent::forPayment</code> carries the success, fail, cancel and IPN URLs, and the status moves to <code>initiated</code>. If the gateway is unavailable the payment stays a draft so another gateway can be tried.</li>
+        <li>The payer pays. Two things come back: the browser (<code>/checkout/return</code> and friends) and the IPN (<code>/webhooks/payment/{gateway}</code>).</li>
+        <li>Either way <code>SettleGatewayNotification</code> runs. It uses <code>dispatchSync</code> first and falls back to the <code>payments</code> queue with five tries and backoff 30, 120, 600, 1800 seconds. It exits if already settled, and uses <code>WithoutOverlapping</code> per payment.</li>
+        <li><code>SettlePayment::handle</code> takes the distributed lock <code>payment:settle:{id}</code> (ttl 30s, wait 10s), re-reads the payment, and returns early if settled.</li>
+        <li>A closed payment is still verified: a confirmed success lands in <code>reconciliation_required</code>, nothing activates. An overdue order is cancelled first.</li>
+        <li>Verification: <code>PartnerGatewayResolver::driverFor</code> picks the driver (Feriwala's, or the frozen Partner version), then <code>verify()</code>; the answer is logged to <code>payment_logs</code>.</li>
+        <li>Checks, in order: <code>belongsToPayment</code> (the gateway's reference matches ours; no other payment already holds this gateway or settlement reference), then <code>matchesAmount(expectedGatewayAmount())</code>. A mismatch is logged critical and marks a live payment failed.</li>
+        <li>Inside a transaction, re-read with <code>lockForUpdate</code>, go <code>draft</code> to <code>initiated</code> if needed, then <code>paid</code>, storing reference, settlement reference, <code>settled_amount</code>, <code>gateway_fee</code>, <code>completed_at</code>.</li>
+        <li>After commit, <code>applyPurpose()</code> (below). It never fails the settlement: each consequence is wrapped, logged and left for a sweep or an admin.</li>
+    </ol>
+    <h3>applyPurpose: what settlement unlocks</h3>
+    <table>
+        <thead><tr><th>Purpose</th><th>Consequence</th></tr></thead>
+        <tbody>
+            <tr><td>activation</td><td><code>ActivateAccountAutomatically</code> re-evaluates readiness (D27).</td></tr>
+            <tr><td>package_renewal</td><td><code>ActivateRenewal</code>.</td></tr>
+            <tr><td>package_upgrade, package_downgrade</td><td><code>ActivatePackageChange</code>.</td></tr>
+            <tr><td>wallet_deposit, wallet_top_up</td><td><code>CreditSettledPayment</code> (see <a href="wallet.html">Wallet</a>).</td></tr>
+            <tr><td>wholesale_order, website_order</td><td><code>ConfirmOrderPayment</code>.</td></tr>
+            <tr><td>website_setup, domain, hosting, maintenance</td><td>Flagged undeliverable (critical log and a payment-log row).</td></tr>
+        </tbody>
+    </table>
+    <p>For every non-Partner payment, first a coupon held against it becomes a use (<code>SettleCouponRedemption::redeem</code>) and the owner gets a <code>PaymentReceived</code> notification (not for <code>website_order</code>, whose money is the shop customer's). A Partner-owned payment skips all of this (see D36).</p>
+
+    <h3>Flow 2: quote order of operations (<code>CalculateActivationQuote</code>)</h3>
+    <ol>
+        <li>Gather fees. Registration fee by dated rule: a rule naming the package, then the package's own <code>registration_fee</code>, then the global rule, then the legacy setting <code>billing.registration_fee</code>. Always resolved against the moment of charge, so a reissued quote reproduces the original. Unconfigured means zero.</li>
+        <li>Discount comes off the fees, capped at the taxable base, and is apportioned across the taxable lines with <code>Money::allocate()</code> using integer ratios (smallest-unit counts). Shares always sum to the discount exactly.</li>
+        <li>Tax is charged per fee on what remains, at that fee's own rate and mode (<a href="tax.html">Tax</a>). Only <em>added</em> (exclusive) tax joins the total.</li>
+        <li>The wallet deposit is added, untaxed.</li>
+        <li>The gateway charge, if the setting <code>billing.gateway_charge_percent</code> is above zero, is a percentage of the total at that point, added last.</li>
+    </ol>
+    <p>Renewal quotes have no registration fee and no deposit; the fee is the terms' renewal fee, else the package fee. Package-change quotes treat the credit for unused time as a discount line, so it reduces the taxable base before tax.</p>
+
+    <h3>Flow 3: manual settlement (<code>SettlePaymentManually</code>)</h3>
+    <ol>
+        <li><code>SensitiveActionGuard</code> requires <code>payment.settle_manually</code>, a reason, a freshly confirmed password and two-factor.</li>
+        <li>Take the same lock as <code>SettlePayment</code> (<code>payment:settle:{id}</code>). Already settled: return "already settled", change nothing.</li>
+        <li>Refuse a Partner-owned payment, a status that is not manually settleable, or a gateway reference already held by another payment.</li>
+        <li>Ask the gateway about the reference the person gave. A confirmed, matching answer settles like an IPN (basis <code>gateway_verified</code>). A gateway that contradicts the claim (another payment's transaction, another amount) is never overridable. If the gateway cannot answer, does not support verify, or says "not paid", an explicit override flag allows basis <code>manual_override</code>.</li>
+        <li>In a transaction: <code>transitionToPaidManually()</code>, store reference, completion time, settled amount (the gateway's, or the payment's own on override), append a note to <code>reconciliation_reason</code>, and write audit <code>billing.payment_settled_manually</code> (sensitive, with before and after).</li>
+        <li>Write a <code>manual_settle</code> payment log, then run <code>SettlePayment::applyPurpose()</code> so a deposit credits the ledger and an order confirms exactly as for a gateway-confirmed payment.</li>
+    </ol>
+
+    <h3>Flow 4: webhook receipt (<code>PaymentWebhookController</code>)</h3>
+    <ol>
+        <li>Unknown gateway: 404. On the Partner address (<code>/webhooks/payment/{gateway}/{payment}</code>) the payment must exist, be Partner-owned and of this gateway, or 404; the signature is checked with that payment's frozen version.</li>
+        <li>A driver that cannot verify (EPS, Nagad) is answered 404: no notification from it means anything.</li>
+        <li>If the driver signs notifications and the signature is bad: 401 and an inbound log row (<code>refused_signature</code>). Three providers do not sign; they are accepted because a notification only names a payment, and the job asks the gateway.</li>
+        <li>Parse with <code>handleCallback</code>; an unreadable body is logged (<code>unreadable</code>) and acknowledged. Resolve the payment (<code>ResolveNotifiedPayment</code>); unknown, a Partner payment on the platform endpoint, or no transaction id: logged and acknowledged.</li>
+        <li>Otherwise log <code>queued</code> and call <code>SettleGatewayNotification::now()</code>. Every non-signature outcome returns the same <code>{"message":"Acknowledged."}</code>, so the endpoint cannot be used to ask whether a reference exists or is paid.</li>
+    </ol>
+
+    <h3>Flow 5: refund</h3>
+    <ol>
+        <li><code>RequestRefund</code> (locks the payment, refuses a Partner-owned one, evaluates <code>RefundabilityPolicy</code> inside the transaction, copies the rule used onto the row, audit <code>billing.refund_requested</code>, announces to the staff queue). A reason is mandatory. Where the UI calls it from I did not verify.</li>
+        <li><code>DecideRefund::approve</code> re-evaluates eligibility inside the lock (an account activated since the request makes a package fee ineligible); <code>reject</code> needs a note. Audit <code>billing.refund_approved</code> / <code>billing.refund_rejected</code>; the requester is notified.</li>
+        <li><code>ProcessRefund</code> (route <code>admin.refunds.process</code>, <code>RequirePassword</code>): needs <code>payment.reverse_transaction</code>, a confirmed password, two-factor and the request's reason. Step one, claim, in a transaction: lock the request and payment; status approved or failed; refuse Partner-owned, unsettled, or no gateway; compute <code>RefundableAmount</code> excluding itself (approved, in-flight and processed refunds all count); check the gateway supports full or partial refund; <code>ApplyRefundReversal::assertPossible</code> (the wallet must be able to give the money back, taken from the kind it was credited as); write idempotency key <code>refund:{public id}</code>.</li>
+        <li>Step two, outside any transaction, ask the provider (amount in the charged currency via <code>gatewayShareOf</code>). A wallet-paid payment goes back to the wallet instead (<code>RefundPaymentToWallet</code>: platform credit up to what the debit took from it, the rest withdrawable, keys <code>order-refund:{id}:{kind}</code>).</li>
+        <li>Step three, record: success moves to <code>processed</code>, then the wallet reversal (<code>refund_debit</code>, key <code>refund:{public id}</code>), the referral reversal (<code>ReverseQualifyingEvent::forRefund</code>, which reverses the whole event on any refund of the qualifying payment), the payment status (refunded or partially refunded) and audit <code>billing.refund_processed</code>. Pending leaves it approved with the amount still claimed; unavailable leaves it approved; a definite failure moves it to <code>failed</code> and releases the claim. <code>SettleRefund</code> (every 15 minutes) asks providers what became of accepted refunds; a failed refund is never re-sent automatically.</li>
+        <li>If the wallet reversal cannot post after the provider has already refunded, the refund still stands and the failure is logged critical and written to the request: a discrepancy a person must settle.</li>
+    </ol>
+
+    <h3>Flow 6: Partner-owned gateway (D36, Model B)</h3>
+    <ol>
+        <li>Admin turns on <code>payment.partner_gateways.enabled</code> (default off) and lists allowed providers in <code>payment.partner_gateways.providers</code> (default empty) through <code>ConfigurePartnerGatewayAvailability</code> (<code>payment.manage_integrations</code>).</li>
+        <li>A Partner (the business owning the Storefront, with <code>UpdateAccount</code> account permission; no platform role, Super Admin included) saves a gateway with <code>SavePartnerGateway</code>: a new immutable version holding the whole credential set. A blank field keeps what exists, except sandbox/live changes, which need every credential again. <code>UsePlatformGateway</code> switches back; saved versions and past payments stay. Audit carries field names, never values. I found no controller in <code>app/Http</code> that calls these actions, so I could not verify where the Partner UI is wired.</li>
+        <li>For a new attempt, <code>PartnerGatewayEligibility::candidate()</code> returns usable or a named fallback reason (switch, allow-list, version, live mode in production, provider capability, credentials, currency). Order-side conditions (Non-Conditional account, central stock, defined line amounts, one payment owner) are checked where the order is placed.</li>
+        <li>The payment freezes ownership, funds destination, website and the exact configuration version. From then on <code>PartnerGatewayResolver::driverFor</code> resolves that version for verify, notify, reconcile and refund status. Credentials are never copied into payments, logs or audit; provider HTTP errors are replaced by a generic "could not be reached".</li>
+        <li>Settlement of a Partner payment verifies the same way but then does only <code>applyPartnerPayment()</code>: record the collection fact for the order, log <code>partner_payment_verified</code>, dispatch <code>PartnerGatewayPaymentVerified</code>. It does not confirm the order, commit stock, credit a profit, or debit a wallet.</li>
+        <li><code>CollectPartnerReceivable</code> (Order domain) then collects the frozen receivable from the Partner's wallet all-or-nothing under the order, collection, payment and wallet locks: platform credit first, one <code>partner_gateway_receivable_debit</code> entry per kind used. A short wallet is not touched; the order is held with <code>partner_wallet_insufficient</code> and the withdrawal path refuses new withdrawals while a live hold exists. A wallet credit (<code>WalletCredited</code>) or the every-minute sweep <code>partner-receivable-collection-sweep</code> releases waiting collections oldest first.</li>
+        <li>Feriwala never records the customer's gross payment as received or refunded in Model B. The standard refund refuses a Partner-owned payment; manual settlement does too.</li>
+    </ol>
+
+    <h2>Entry points</h2>
+    <h3>Routes</h3>
+    <table>
+        <thead><tr><th>Name</th><th>Method and URL</th><th>Controller</th><th>Middleware and permission</th></tr></thead>
+        <tbody>
+            <tr><td><code>checkout.show</code>, <code>checkout.pay</code>, <code>checkout.coupon</code></td><td>GET, POST <code>/checkout</code>; POST <code>/checkout/coupon</code></td><td><code>Erp\CheckoutController</code></td><td><code>auth</code>, <code>noindex</code>; in the pre-activation group</td></tr>
+            <tr><td><code>checkout.return</code>, <code>.cancelled</code>, <code>.failed</code></td><td>GET <code>/checkout/return|cancelled|failed</code></td><td><code>Erp\PaymentReturnController</code></td><td>Signed in. Nothing settles here.</td></tr>
+            <tr><td><code>checkout.return.receive</code>, <code>.cancelled.receive</code>, <code>.failed.receive</code>; <code>wholesale.orders.payment.*.receive</code></td><td>POST at the same addresses</td><td><code>Webhook\GatewayReturnController</code></td><td>Outside the <code>web</code> middleware, <code>throttle:payment-returns</code>; 303 to the GET page</td></tr>
+            <tr><td><code>website-orders.payment.return|cancelled|failed</code></td><td>GET or POST <code>/website-orders/{order}/payment/...</code></td><td><code>Webhook\GatewayReturnController</code></td><td>Same group</td></tr>
+            <tr><td><code>webhooks.payment</code></td><td>POST <code>/webhooks/payment/{gateway}</code></td><td><code>Webhook\PaymentWebhookController</code></td><td><code>throttle:payment-webhooks</code>; CSRF-exempt</td></tr>
+            <tr><td><code>webhooks.partner-payment</code></td><td>POST <code>/webhooks/payment/{gateway}/{payment}</code></td><td>same</td><td>same</td></tr>
+            <tr><td><code>subscription.invoices.index|show</code>, <code>subscription.receipts.index|show</code></td><td>GET <code>/settings/invoices[/{invoice}]</code>, <code>/settings/receipts[/{payment}]</code></td><td><code>InvoiceController</code>, <code>ReceiptController</code> (routes/settings.php)</td><td>Named under <code>subscription.</code> so the §5.4 allow-list keeps them reachable</td></tr>
+            <tr><td><code>admin.billing.index</code></td><td>GET <code>/admin/billing</code></td><td><code>Admin\BillingController</code></td><td><code>payment.view</code>; changes need <code>payment.manage_settings</code></td></tr>
+            <tr><td><code>admin.billing.fee-rules.store|close</code>, <code>.coupons.store|withdraw</code>, <code>.tax-rates.store|close</code>, <code>.tax-rules.store|close</code>, <code>.payment-deadline</code></td><td>POST/DELETE <code>/admin/billing/...</code>; PUT <code>/admin/billing/payment-deadline</code></td><td><code>Admin\BillingController</code></td><td><code>payment.manage_settings</code></td></tr>
+            <tr><td><code>admin.gateways.index|update|test-connection|toggle|switches</code></td><td>GET, PUT <code>/admin/gateways</code>; POST <code>/gateways/test-connection</code>; PUT <code>/gateways/enabled</code>; GET <code>/settings/payments</code></td><td><code>Admin\PaymentGatewayController</code></td><td>View <code>payment.view</code>; change <code>payment.manage_integrations</code></td></tr>
+            <tr><td><code>admin.gateways.exchange-rates</code>, <code>.update</code></td><td>GET, PUT <code>/admin/settings/payments/exchange-rates</code></td><td><code>Admin\PaymentGatewayController</code></td><td>same</td></tr>
+            <tr><td><code>admin.payments.index|show</code></td><td>GET <code>/admin/payments[/{payment}]</code></td><td><code>Admin\PaymentLogController</code></td><td><code>payment.view</code></td></tr>
+            <tr><td><code>admin.payments.manual-settlement</code></td><td>POST <code>/admin/payments/{payment}/manual-settlement</code></td><td><code>Admin\PaymentManualSettlementController</code></td><td><code>payment.settle_manually</code>, <code>RequirePassword</code>, two-factor, reason</td></tr>
+            <tr><td><code>admin.refunds.process</code></td><td>POST <code>/admin/refunds/{refund}/process</code></td><td><code>Admin\PaymentRefundController</code></td><td><code>payment.reverse_transaction</code>, <code>RequirePassword</code></td></tr>
+            <tr><td><code>admin.delivery-settings.*</code></td><td><code>/admin/delivery-settings</code>, <code>/rules</code>, <code>/rules/{rule}/close</code></td><td><code>Admin\DeliverySettingsController</code></td><td>Its own <code>delivery_settings.*</code> permissions</td></tr>
+        </tbody>
+    </table>
+    <p>Mobile top-ups and activation payments start a session through <code>StartGatewayPayment</code> / <code>StartWalletTopUp</code> and return the gateway address. The mobile and storefront contracts are on the <a href="../api/mobile-api.html">Mobile API</a> and <a href="../api/storefront-api.html">Storefront API</a> pages.</p>
+    <h3>Scheduled tasks</h3>
+    <table>
+        <thead><tr><th>Name</th><th>Cadence</th><th>Action</th></tr></thead>
+        <tbody>
+            <tr><td><code>gateway-reconciliation</code></td><td>every two minutes</td><td><code>ReconcileGatewayPayments</code>: asks providers that publish a status lookup about payments older than <code>SETTLE_AFTER_MINUTES</code> (2); batch of 200; never downgrades a settled payment (mismatches are reported only); an unreachable provider changes nothing.</td></tr>
+            <tr><td><code>payment-deadline-sweep</code></td><td>hourly</td><td><code>ExpireUnpaidPayments</code>: closes only <code>draft</code> and <code>initiated</code> payments past <code>expires_at</code>; releases the coupon slot held against that payment. Does nothing until <code>billing.payment_deadline_hours</code> is set (1 to 720).</td></tr>
+            <tr><td><code>refund-settlement-sweep</code></td><td>every 15 minutes</td><td><code>SettleRefund</code> for accepted-not-confirmed refunds.</td></tr>
+            <tr><td><code>partner-receivable-collection-sweep</code></td><td>every minute</td><td>Order domain, D36.</td></tr>
+        </tbody>
+    </table>
+    <p>All use <code>onOneServer()</code> and <code>withoutOverlapping()</code>.</p>
+
+    <h2>Permissions &amp; scoping</h2>
+    <table>
+        <thead><tr><th>Permission</th><th>Allows</th></tr></thead>
+        <tbody>
+            <tr><td><code>payment.view</code></td><td>Billing screens, gateway list, payment log (<code>BillingSettingsPolicy::canView</code>). Also lets staff see <em>that</em> a Storefront uses a Partner gateway.</td></tr>
+            <tr><td><code>payment.manage_settings</code></td><td>Fees, coupons, tax rates and rules, payment deadline (<code>canManage</code>). Deliberately not <code>package.edit</code>.</td></tr>
+            <tr><td><code>payment.manage_integrations</code></td><td>Gateway credentials and switches, exchange rates, Partner-gateway availability (<code>canManageGateways</code>). Narrower than pricing: it holds the keys to where money lands.</td></tr>
+            <tr><td><code>payment.settle_manually</code></td><td>Manual settlement.</td></tr>
+            <tr><td><code>payment.reverse_transaction</code></td><td>Sending an approved refund.</td></tr>
+        </tbody>
+    </table>
+    <p><code>PartnerGatewayPolicy</code> uses static checks (not a registered policy) because <code>Gate::before</code> grants Super Admin every policy ability and this must not: only the owning business with <code>AccountPermission::UpdateAccount</code> can configure, and staff never see a secret. Self-scoping for accounts: invoices, receipts and checkout resolve the payment through the signed-in account; the checkout re-derives everything server-side.</p>
+
+    <h2>Money, ledger &amp; audit effects</h2>
+    <ul>
+        <li>Amounts are <code>Money</code> in <code>NUMERIC(19,2)</code>. A payment's <code>amount</code> is always the Taka the payer owes; foreign figures sit in <code>charge_amount</code> / <code>settled_amount</code> with their own currency columns.</li>
+        <li>Billing itself writes no ledger entry for a gateway payment into Feriwala's revenue. Ledger effects are: wallet credit for deposit and top-up (key <code>payment:{reference}</code>), the refund wallet reversal (<code>refund_debit</code>) or wallet credit (<code>order_refund_credit</code>), and under Model B the receivable debit (<code>partner_gateway_receivable_debit</code>).</li>
+        <li>Audit actions: <code>billing.payment_settled_manually</code>, <code>billing.refund_requested</code>, <code>billing.refund_approved</code>, <code>billing.refund_rejected</code>, <code>billing.refund_processed</code>, <code>billing.fee_rule_created</code> / <code>_closed</code>, <code>billing.coupon_created</code> / <code>_withdrawn</code>, <code>billing.delivery_charge_rule_created</code> / <code>_closed</code>, <code>billing.payment_deadline_set</code>, <code>payment.gateway_configured</code>, <code>payment.gateway_enabled</code> / <code>_disabled</code>, <code>payment.gateway_connection_tested</code>, <code>payment.exchange_rates_updated</code>, <code>payment.partner_gateway_configured</code>, <code>payment.partner_gateway_disabled</code>, <code>payment.partner_gateways_availability_changed</code>.</li>
+        <li>Idempotency: <code>payments.idempotency_key</code> (unique) for recording; <code>refund:{public id}</code> for refunds; <code>payment:settle:{id}</code> lock and <code>payment:notification:{id}</code> job overlap key for settlement.</li>
+        <li>Logs: <code>payment</code> channel (90 days) for critical events; <code>payment_logs</code> table for the per-payment trail, redacted by <code>PaymentLogRedactor</code> (§42: no passwords, tokens, secrets, full credentials, unmasked personal data).</li>
+    </ul>
+    <h3>Exchange rates (D4 amended)</h3>
+    <ul>
+        <li>An administrator enters rates by hand; nothing fetches one. Stored in setting <code>payment.fx.rates</code> as Taka per one unit of USD, EUR or GBP. A rate must match <code>^\d{1,8}(\.\d{1,6})?$</code> and be above zero.</li>
+        <li>A Taka gateway is asked for the Taka amount. A gateway that cannot take Taka is asked for the equivalent in a currency it accepts at the set rate, stamped on the payment before the gateway is called, because the confirmation is checked against it (<code>expectedGatewayAmount()</code>). Quoted once per currency: a retry shows and charges the same figure.</li>
+        <li>Rounding is stated: charging rounds the foreign figure <strong>up</strong> (<code>PositiveInfinity</code>), a refund share rounds <strong>down</strong> (<code>NegativeInfinity</code>), so partial refunds can never exceed what was charged. The whole payment refunds as exactly the charge amount.</li>
+        <li>Only Taka converts into a foreign currency. Setting or clearing a rate changes which gateways the Taka checkout offers; existing payments keep their quoted rate. A Partner gateway is never converted (the Partner is paid what the customer was charged).</li>
+    </ul>
+
+    <h2>Configuration</h2>
+    <table>
+        <thead><tr><th>Key</th><th>Purpose</th></tr></thead>
+        <tbody>
+            <tr><td><code>config/payment.php</code>: <code>queue</code> (env <code>PAYMENT_QUEUE</code>, default <code>payments</code>), <code>webhook_rate_limit</code> (env <code>PAYMENT_WEBHOOK_RATE_LIMIT</code>, default 120)</td><td>Settlement queue and IPN throttle.</td></tr>
+            <tr><td><code>config/payment.php</code> <code>gateways</code></td><td>Keys: sslcommerz (enabled by default), eps, surjopay, amarpay, bkash, nagad, stripe, paypal (disabled by default). <code>enabled</code> is only the shipped default; the live switch is a setting. Credentials are never in config: they are encrypted in the settings table under separate sandbox and live keys (<code>payment.gateways.*</code>). Env <code>PAYMENT_SSLCOMMERZ_ENABLED</code> and <code>PAYMENT_SSLCOMMERZ_SANDBOX_HOST</code> exist for a local stub.</td></tr>
+            <tr><td>Setting <code>billing.payment_deadline_hours</code></td><td>Opt-in checkout window, 1 to 720 hours; stamped onto each payment at creation.</td></tr>
+            <tr><td>Setting <code>billing.gateway_charge_percent</code></td><td>Passes a gateway charge on to the payer (activation and renewal quotes).</td></tr>
+            <tr><td>Setting <code>billing.registration_fee</code></td><td>Legacy fallback when no fee rule exists.</td></tr>
+            <tr><td>Settings <code>billing.refundability.{allocation type}</code></td><td>Per-component refund rule.</td></tr>
+            <tr><td>Setting <code>payment.fx.rates</code></td><td>Exchange rates.</td></tr>
+            <tr><td>Settings <code>payment.partner_gateways.enabled</code>, <code>.providers</code></td><td>D36 switch and allow-list.</td></tr>
+            <tr><td>Settings <code>delivery.*</code> (volumetric divisor, per-box, fragile, minimum, maximum, free-delivery threshold, success-fee percent)</td><td><code>DeliveryChargeSettings</code>. Weight tiers are <code>delivery_charge_rules</code> rows; the most specific active rule (courier plus area, area, courier, general) wins and none means zero.</td></tr>
+        </tbody>
+    </table>
+
+    <h2>Rules, invariants &amp; gotchas</h2>
+    <div class="callout callout-warn"><p><strong>Gotcha: coupon <code>value</code> is not flat Taka.</strong> For a percentage coupon it is basis points (10 000 = 100%); for a <em>fixed</em> coupon it is still stored in minor units and divided by 100 in <code>Coupon::discountOn()</code>. The code calls this the one deliberate remaining boundary (D24 references it). Do not add a second place that reads <code>coupons.value</code>; go through <code>discountOn()</code>. Percentages round toward zero.</p></div>
+    <div class="callout callout-warn"><p><strong>Gotcha: a late callback is not an error.</strong> Failed and cancelled payments are still verified; a confirmed success goes to <code>reconciliation_required</code>, the quote and invoice are left alone and nothing activates. Do not "fix" this by reviving the payment.</p></div>
+    <ul>
+        <li>An invoice is created when the payment is recorded (activation, renewal, top-up), not when it settles, except order payments whose invoice is issued once paid (<code>issuesInvoiceWhenRecorded()</code>). Issuing is not granting; nothing reads an invoice to decide entitlement.</li>
+        <li>Unconfigured prices are zero and unconfigured tax is none: an unconfigured system undercharges visibly rather than invent a number (D19).</li>
+        <li>A top-up payment has <code>revenue</code> zero so a revenue report never counts a deposit as income.</li>
+        <li>A one-open-refund-per-request rule is a partial unique index, not a check in code.</li>
+        <li>Gateway fee is recorded separately and never netted off the settled amount.</li>
+        <li>EPS issues its own per-attempt id: <code>PreparePaymentAttempt</code> saves it to <code>gateway_reference</code> and freezes the payer address before the gateway is called, so an early return still matches.</li>
+        <li>Manual settlement is the single route to <code>paid</code> that skips the gateway callback; keep the permission narrow and never add another.</li>
+        <li>Settlement consequences are wrapped. If a deposit credit, activation or order confirmation fails, the payment stays paid and the problem is logged and flagged; sweeps or an admin retry (idempotently).</li>
+    </ul>
+
+    <h2 id="money-api">Money API reference</h2>
+    <p>Verified in <code>app/Support/Money/</code> and <code>app/Casts/MoneyCast.php</code>. Money is flat Taka everywhere: <code>100</code> means BDT 100 in a form, a column, an API payload, a calculation and a display. Nothing multiplies or divides by 100 to cross a boundary (D26). A repository guard test (<code>tests/Unit/Support/Money/MoneySourceGuardTest.php</code>) fails the build if new production code reintroduces <code>_minor</code> naming, poisha conversion or float money.</p>
+    <table>
+        <thead><tr><th>Class</th><th>What it does</th></tr></thead>
+        <tbody>
+            <tr><td><code>Currency</code> (enum)</td><td>BDT, USD, EUR, GBP. All scale 2. <code>base()</code> is BDT. <code>smallestUnit()</code> returns <code>"0.01"</code>. <code>symbol()</code> (BDT is the taka sign).</td></tr>
+            <tr><td><code>Money</code> (final, immutable)</td><td>Holds <code>amount</code> as an exact decimal string at the currency scale plus a <code>Currency</code>. All arithmetic is bcmath; <code>float</code> is rejected.</td></tr>
+            <tr><td><code>DecimalAmount</code></td><td>The only boundary for human or request input. <code>parse(string, ?Currency, bool $allowNegative = false)</code>; <code>parseOrNull()</code> for blank optional fields.</td></tr>
+            <tr><td><code>Rules\DecimalAmountRule</code></td><td>Laravel validation rule that runs <code>DecimalAmount::parse()</code>. The controller then parses again.</td></tr>
+            <tr><td><code>Casts\MoneyCast</code></td><td>Casts a <code>NUMERIC(19,2)</code> column to <code>Money</code>, reading currency from a sibling column (default <code>currency_code</code>; <code>MoneyCast::class.':other_column'</code> for another).</td></tr>
+            <tr><td><code>Exceptions\InvalidDecimalAmount</code>, <code>CurrencyMismatch</code></td><td>Parse refusals; mixing currencies in arithmetic or comparison.</td></tr>
+        </tbody>
+    </table>
+    <h3>Creating and reading</h3>
+    <ul>
+        <li><code>Money::fromDecimal(string|int $amount, ?Currency, RoundingMode $rounding = HalfAwayFromZero)</code>: accepts <code>^-?\d+(\.\d+)?$</code>; rounds excess precision to scale (for computed fractions); refuses more than 17 integer digits. Not for what a person typed.</li>
+        <li><code>Money::zero(?Currency)</code>; <code>toDecimal()</code> (the column and wire value); <code>format(bool $withSymbol = true)</code> (grouping done on digits, not <code>number_format</code>); <code>jsonSerialize()</code> returns <code>{amount, currency, formatted}</code>; <code>__toString()</code> is <code>format()</code>.</li>
+        <li><code>DecimalAmount::parse()</code> rules: trimmed, digits with at most one point (no thousands separator, no exponent, no look-alike digits); negative refused unless allowed; <strong>a third decimal place is refused, never rounded away</strong>; ceiling <code>MAX_AMOUNT = '10000000000'</code> (compared with <code>bccomp</code>). Errors are <code>InvalidDecimalAmount::malformed|negativeNotAllowed|excessivePrecision|overflow</code>.</li>
+    </ul>
+    <h3>Arithmetic and comparison</h3>
+    <table>
+        <thead><tr><th>Method</th><th>Notes</th></tr></thead>
+        <tbody>
+            <tr><td><code>plus</code>, <code>minus</code>, <code>negated</code>, <code>absolute</code></td><td>Same-currency only; otherwise <code>CurrencyMismatch</code>.</td></tr>
+            <tr><td><code>multipliedBy(string|int $factor, RoundingMode)</code></td><td>Working scale 12, then rounded to the currency scale with the stated mode. Factor must be an exact decimal string or int.</td></tr>
+            <tr><td><code>percentage(string|int $percent, RoundingMode)</code></td><td>Divides by 100 internally; <code>percentage('15')</code> is 15%. Every caller should state the rounding.</td></tr>
+            <tr><td><code>allocate(array $ratios)</code></td><td>Integer ratios. Each share truncated toward zero, the remainder handed out one smallest unit at a time to the largest ratios first. Shares sum back to the amount exactly: 1.00 over [1,1,1] gives 0.34, 0.33, 0.33. Throws on empty ratios or non-positive total. Keys are preserved.</td></tr>
+            <tr><td><code>isZero</code>, <code>isPositive</code>, <code>isNegative</code>, <code>equals</code>, <code>greaterThan(OrEqualTo)</code>, <code>lessThan(OrEqualTo)</code></td><td>Compared with <code>bccomp</code> at the currency scale. <code>equals</code> also checks the currency.</td></tr>
+        </tbody>
+    </table>
+    <h3>Rounding rules in use across the codebase</h3>
+    <table>
+        <thead><tr><th>Where</th><th>Rounding</th></tr></thead>
+        <tbody>
+            <tr><td>Default (<code>fromDecimal</code>, <code>multipliedBy</code>, <code>percentage</code>)</td><td>Half away from zero.</td></tr>
+            <tr><td>Exclusive tax</td><td>Half away from zero on <code>net × rate</code> (<a href="tax.html">Tax</a>).</td></tr>
+            <tr><td>Inclusive tax</td><td>Net rounded half away from zero; tax is the remainder, so net plus tax equals the gross exactly.</td></tr>
+            <tr><td>Percentage coupon, referral percentage reward</td><td>Toward zero (never a unit more generous than the rate).</td></tr>
+            <tr><td>Referral commission base discount share</td><td>Share of the discount rounded up, so the base rounds down.</td></tr>
+            <tr><td>FX charge / FX refund share</td><td>Up / down.</td></tr>
+        </tbody>
+    </table>
+    <div class="callout callout-rule"><p><strong>Rule.</strong> Form fields submit the decimal string exactly as typed (<code>resources/js/components/money-input.tsx</code>); the server renders its own <code>Money::jsonSerialize()</code> output (<code>money-amount.tsx</code>). Nothing in React parses, multiplies or divides an amount. <code>float</code>, <code>round()</code> and <code>number_format()</code> are prohibited for financial values.</p></div>
+    <p>The frozen Storefront API carries flat Taka in <code>amount</code>; its legacy <code>minor_units</code> key exists only through the compatibility adapter in <code>requirements/05-storefront-api-contract.md</code> §4.1 and must not be read or written by new internal code. Historic migrations still use <code>_minor</code> column names; <code>2026_10_05_100000_convert_monetary_storage_to_flat_taka.php</code> converted storage by multiplying by 0.01 inside Postgres.</p>
+
+    <h2>How to&hellip;</h2>
+    <h3>Add a payment purpose</h3>
+    <ol>
+        <li>Add the case and <code>label()</code> to <code>PaymentPurpose</code>; decide <code>isDeliverable()</code>, <code>paysForOrder()</code>, <code>creditsWallet()</code>, <code>isPaidByAccount()</code>, <code>issuesInvoiceWhenRecorded()</code>.</li>
+        <li>Add the arm to the total <code>match</code> in <code>SettlePayment::applyPurpose()</code> and to <code>CreditSettledPayment::typeFor()</code>; both matches have no default so the compiler will point at them.</li>
+        <li>Build a quote implementing <code>PaymentQuote</code>, record it with <code>RecordPaymentFromQuote</code>, and add a test under <code>tests/Feature/Payment</code> (see <code>PaymentPurposeTest.php</code>).</li>
+    </ol>
+    <h3>Add an allocation type</h3>
+    <ol>
+        <li>Add the case and label to <code>AllocationType</code>; set <code>isRevenue()</code>, <code>isTaxable()</code>, <code>isDeduction()</code>. Set a refund default in <code>Refundability::defaultFor()</code>.</li>
+        <li>Check <code>CommissionBase</code> (referral) if it could be a base, and the migration that constrains the column if it has a check.</li>
+    </ol>
+    <h3>Add a payment gateway</h3>
+    <ol>
+        <li>Implement the <code>PaymentGateway</code> contract under <code>app/Integrations/Payment/Gateways/</code>, declaring honest <code>GatewayCapability</code> values (a gateway with no <code>Verify</code> is never accepted by the webhook endpoint or for Partners).</li>
+        <li>Register it in <code>config/payment.php</code> with <code>enabled =&gt; false</code> (a new provider arrives disabled).</li>
+        <li>Add a label in <code>lang</code>, a test file in <code>tests/Feature/Payment</code>, and an entry in <code>PartnerGatewayProviderSupport</code> if Partners may use it. Do not put credentials in config.</li>
+    </ol>
+    <h3>Change what a fee costs</h3>
+    <p>Do not edit a row. Use Admin, Billing (<code>ManageFeeRules</code>): close the rule and open a new dated one, so past quotes still reproduce.</p>
+    <h3>Add a refund rule for a component</h3>
+    <p>Set the setting <code>billing.refundability.{allocation type}</code> to <code>never</code>, <code>before_activation</code> or <code>always</code>; defaults are in <code>Refundability::defaultFor()</code>.</p>
+
+    <h2>Testing</h2>
+    <p>Group <code>payment</code> (<code>pest --group=payment</code>) runs <code>tests/Feature/Payment/</code>; also <code>tests/Feature/Concurrency/PaymentConcurrencyTest.php</code> and <code>PartnerGatewaySettlementConcurrencyTest.php</code>, and <code>tests/Unit/Support/Money/</code>. Use your own schema (see <a href="../guide/testing.html">Testing</a>).</p>
+    <table>
+        <thead><tr><th>File(s)</th><th>Covers</th></tr></thead>
+        <tbody>
+            <tr><td><code>SettlePaymentTest</code>, <code>ManualSettlementTest</code>, <code>GatewayFlowTest</code>, <code>GatewayReturnSafetyTest</code>, <code>GatewayReconciliationTest</code>, <code>PaymentNotificationTest</code>, <code>PaymentDeadlineTest</code></td><td>Settlement, overrides, returns, IPN, sweeps.</td></tr>
+            <tr><td><code>ActivationQuoteTest</code>, <code>ActivationInvoiceTest</code>, <code>RecordPaymentTest</code>, <code>PaymentReceiptTest</code>, <code>FeeRuleTest</code>, <code>CouponTest</code>, <code>PaymentPurposeTest</code></td><td>Quotes, recording, invoices, rules.</td></tr>
+            <tr><td><code>ProcessRefundTest</code>, <code>RefundabilityTest</code></td><td>Refunds.</td></tr>
+            <tr><td><code>ExchangeRateConversionTest</code>, <code>SettlementCurrencyTest</code></td><td>FX.</td></tr>
+            <tr><td><code>PartnerGateway*Test</code> (Configuration, Checkout, Verification, ProviderSupport)</td><td>D36.</td></tr>
+            <tr><td>One file per provider (<code>Stripe</code>, <code>PayPal</code>, <code>Bkash</code>, <code>Nagad</code>, <code>Eps</code>, <code>SslCommerz</code>, <code>SurjoPay</code>, <code>AmarPay</code> plus <code>EpsSettlementTest</code>)</td><td>Drivers.</td></tr>
+            <tr><td><code>MoneyColumnConventionTest</code>, <code>tests/Unit/Support/Money/*</code></td><td>Flat-Taka guards.</td></tr>
+        </tbody>
+    </table>
+    <p>There are factories only for <code>RefundRequest</code> among billing models; other tests build payments with per-file helpers (for example <code>walletPayment()</code>). Prefix any new helper with its file's subject because Pest shares one function namespace.</p>
+
+    <h2>Related modules</h2>
+    <ul>
+        <li><a href="wallet.html">Wallet</a>: credits, refund reversals, the receivable debit.</li>
+        <li><a href="tax.html">Tax</a>: rates, rules, the engine used by every quote.</li>
+        <li><a href="package.html">Package</a>: activation, renewals, upgrades settled here.</li>
+        <li><a href="account.html">Account</a>: activation triggered by settlement.</li>
+        <li><a href="order.html">Order</a>, <a href="wholesale.html">Wholesale</a>, <a href="website.html">Website</a>: order payments, coupons, delivery charge, Partner receivables.</li>
+        <li><a href="referral.html">Referral</a>: reversal on refund.</li>
+        <li><a href="../integrations/overview.html">Integrations</a>, <a href="../guide/decisions.html">Decisions</a>.</li>
+    </ul>
+</main>
+</body>
+</html>

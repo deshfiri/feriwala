@@ -1,0 +1,471 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Account module</title>
+    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+    <script src="../assets/docs.js"></script>
+</head>
+<body>
+<main id="doc">
+    <h1>Account module</h1>
+    <p class="lead">The business account is the commercial workspace: it owns KYC, the package, payments, the wallet, orders and websites, and its status decides whether the business may trade. This module also owns the activation funnel, staff inside an account, staff-created accounts, closure and erasure. It is separate from the login identity (<code>users.identity_status</code>) and from Feriwala's own platform staff.</p>
+
+    <h2>Purpose</h2>
+    <p>Feriwala has <strong>a single account structure</strong> (§5, §44, D1). There is no customer account, no partner account and no conversion between them: a "partner" is simply a business account that trades through wholesale, dropshipping or both. Everything that looks like a type is either a <code>BusinessAccount</code> status, a package entitlement, an <code>AccountRole</code>, or the wholesale <code>AccountType</code> flag.</p>
+    <p>The module implements:</p>
+    <ul>
+        <li><strong>§5.1 – §5.4</strong> registration, verification, activation funnel and the pre-activation allow-list (<code>EnsureBusinessAccountIsActivated</code>).</li>
+        <li><strong>§5.3</strong> the twenty-two account statuses, status history, suspension and reactivation.</li>
+        <li><strong>§6</strong> identity status (lock, suspend, close a login) as a separate question from business status.</li>
+        <li><strong>§8.1 / D1</strong> staff inside an account: one owner, owner and managers invite staff, staff limit comes from the package.</li>
+        <li><strong>D18</strong> closed accounts are preserved, never reopened; <strong>D23</strong> identity versus business account; <strong>D27</strong> automatic activation once conditions are met, with a manual hold as the exception; <strong>D22</strong> activation readiness.</li>
+        <li>Account deletion requests and erasure (an account is anonymised into a tombstone, not deleted).</li>
+    </ul>
+    <p>Who uses it: the <strong>partner</strong> (owner, manager, staff) works inside the account; <strong>platform staff</strong> review, activate, suspend and create accounts from <code>/admin</code>; the <strong>system</strong> activates accounts automatically when payment settles or KYC is approved.</p>
+
+    <div class="callout callout-rule"><p><strong>Rule.</strong> The account status moves only through <code>transitionTo()</code>, and the only code that does it for commercial status is <code>ChangeAccountStatus</code>, which also writes the history row. Never assign <code>$account-&gt;status</code> directly. A login's <code>UserStatus</code> is a different enum with a different action (<code>ChangeIdentityAccess</code>).</p></div>
+
+    <h2>Where it lives</h2>
+    <table>
+        <thead><tr><th>Path</th><th>Role</th></tr></thead>
+        <tbody>
+        <tr><td><code>app/Domain/Account/Models/</code></td><td><code>BusinessAccount</code>, <code>AccountMembership</code>, <code>AccountInvitation</code>, <code>BusinessAccountStatusChange</code>, <code>AccountDeletionRequest</code>, <code>AuthenticatedSession</code>, <code>StaffContactVerification</code>, <code>UserAddress</code></td></tr>
+        <tr><td><code>app/Domain/Account/Enums/</code></td><td><code>AccountStatus</code>, <code>UserStatus</code>, <code>AccountRole</code>, <code>AccountPermission</code>, <code>AccountType</code>, <code>OnboardingStep</code>, <code>DeletionRequestStatus</code>, <code>Gender</code>, <code>AddressType</code></td></tr>
+        <tr><td><code>app/Domain/Account/Actions/</code></td><td>Status changes, activation, staff, managed accounts, deletion and erasure, identity access, mobile verification, locale, sessions</td></tr>
+        <tr><td><code>app/Domain/Account/Queries/</code></td><td><code>AccountDirectory</code>, <code>PendingActivationQuery</code>, <code>AccountDossier</code>, <code>ContactVerificationState</code>, <code>OwnDeletionRequest</code></td></tr>
+        <tr><td><code>app/Domain/Account/Policies/</code></td><td><code>BusinessAccountPolicy</code>, <code>AccountMembershipPolicy</code> (also registered for <code>AccountInvitation</code>), <code>UserPolicy</code></td></tr>
+        <tr><td><code>app/Domain/Account/*.php</code></td><td>Collaborators: <code>ActivationRequirements</code>, <code>OnboardingProgress</code>, <code>StaffAllowance</code>, <code>DeletionAuthority</code>, <code>MobileVerificationRequirement</code>, <code>VerificationCodes</code></td></tr>
+        <tr><td><code>app/Domain/Account/Data/</code>, <code>Exceptions/</code>, <code>Erasure/</code></td><td><code>AccountStatusChange</code>, <code>ErasureResult</code>, <code>AccountContext</code>, <code>LocaleChange</code>; <code>ActivationBlocked</code>, <code>StaffLimitReached</code>, <code>ResendTooSoon</code>; <code>ErasureRun</code></td></tr>
+        <tr><td><code>app/Concerns/HasPartnerNumber.php</code>, <code>app/Support/References/PartnerNumber.php</code></td><td>The <code>BJ…</code> partner number</td></tr>
+        <tr><td><code>app/Http/Controllers/Admin/</code></td><td><code>AccountController</code>, <code>ManagedAccountController</code>, <code>ActivationReviewController</code>, <code>IdentityAccessController</code>, <code>DeletionRequestController</code>, <code>AccountVerificationSettingsController</code>, <code>DashboardAccessController</code></td></tr>
+        <tr><td><code>app/Http/Controllers/Erp/</code></td><td><code>OnboardingController</code>, <code>MobileVerificationController</code>, <code>StaffController</code>, <code>StaffInvitationController</code></td></tr>
+        <tr><td><code>app/Http/Controllers/Api/Mobile/V1/{Account,Onboarding,Staff}/</code></td><td>Mobile equivalents</td></tr>
+        <tr><td><code>app/Http/Middleware/</code></td><td><code>EnsureBusinessAccountIsActivated</code> (<code>business.activated</code>), <code>EnsureIdentityHasPlatformAccess</code> (global), <code>EnsureAccountIsEntitled</code> (<code>entitled:</code>)</td></tr>
+        <tr><td><code>resources/js/pages/</code></td><td><code>onboarding/*</code>, <code>settings/staff.tsx</code>, <code>staff/invitation.tsx</code>, <code>admin/accounts/*</code>, <code>admin/activations/*</code>, <code>admin/deletions/*</code>, <code>admin/account-verification-settings.tsx</code></td></tr>
+        <tr><td><code>lang/{en,bn}/</code></td><td><code>account.php</code>, <code>accounts.php</code>, <code>activation.php</code>, <code>onboarding.php</code>, <code>managed_accounts.php</code>, <code>deletion.php</code>, <code>status.php</code></td></tr>
+        <tr><td><code>database/migrations/</code></td><td><code>2026_09_03_110000_separate_identity_from_business_account</code> (creates <code>business_accounts</code> and <code>business_account_members</code>), <code>2026_09_03_140000_create_account_invitations</code>, <code>2026_10_13_100000_create_account_deletion_requests</code>, <code>2026_10_28_100000_add_account_type_to_business_accounts</code>, <code>2026_11_18_100000_add_partner_number_to_business_accounts</code>, <code>2026_10_27_120000_create_staff_contact_verifications</code></td></tr>
+        <tr><td><code>tests/Feature/Account/</code></td><td>Behaviour proof (see Testing)</td></tr>
+        </tbody>
+    </table>
+    <p>The model class is <code>BusinessAccount</code>, not <code>Account</code>, on purpose: <code>Account</code> alone reads as "the thing I log into", which is the confusion the identity/account split ended. The UI still says "Account".</p>
+
+    <h2>Key terms</h2>
+    <dl>
+        <dt>Business account</dt>
+        <dd><code>BusinessAccount</code>: the commercial workspace. One owner (<code>owner_id</code> is unique), soft-deleted, public id is a ULID.</dd>
+        <dt>Identity</dt>
+        <dd>The login, a <code>User</code>. Its <code>identity_status</code> (<code>UserStatus</code>) answers "may this person use the platform at all". It outranks every permission and every account status.</dd>
+        <dt>Platform staff</dt>
+        <dd>A <code>User</code> with <em>no</em> <code>business_account_members</code> row, holding a <code>PlatformRole</code>. See <a href="access.html">Access</a>. They never complete KYC or pay an activation fee.</dd>
+        <dt>Owner / Manager / Staff</dt>
+        <dd><code>AccountRole</code>: the account-side roles. The UI vocabulary is Account, Staff and Permissions; the starter kit's "team" must not appear in routes, labels or messages.</dd>
+        <dt>Funnel / onboarding</dt>
+        <dd>Register, verify, KYC, package, payment, approval. The six-step stepper is <code>OnboardingStep</code>; the 22 statuses drive the system, the six steps drive what a person sees (§33.4).</dd>
+        <dt>Approval gate</dt>
+        <dd>The <code>approval_pending</code> status. Reaching it means all three activation conditions are met.</dd>
+        <dt>Activation hold</dt>
+        <dd>A named staff member's recorded decision (reason, time, who) to take one account off the automatic activation path (D27). It does not block manual activation.</dd>
+        <dt>Waived activation payment</dt>
+        <dd>An administrator's recorded decision that no activation payment is owed. No payment row and no ledger entry is created; the account stores who, when and why.</dd>
+        <dt>Account type</dt>
+        <dd><code>Conditional</code> or <code>NonConditional</code>: whether a wholesale order's product cost is funded upfront or recovered from the collected COD amount. Not a lifecycle, and not what the single-account rule forbids.</dd>
+        <dt>Partner number</dt>
+        <dd><code>partner_number</code>: <code>BJ</code> followed by eleven random digits (first digit never zero), 13 characters, unique, never reused (soft-deleted rows are checked too).</dd>
+        <dt>Managed account</dt>
+        <dd>An account opened by staff on someone's behalf (<code>CreateManagedAccount</code>); the owner sets their own password through a setup link.</dd>
+        <dt>Tombstone</dt>
+        <dd>What an erased user or account becomes: <code>ERASED-XXXXXXXX</code> (last eight characters of the public id uppercased) in <code>tombstone_reference</code>, personal fields replaced, <code>erased_at</code> set.</dd>
+        <dt>Dossier</dt>
+        <dd><code>AccountDossier</code>: the administrator's full read of one business, including internal notes. Authorised by <code>viewDossier</code>, never <code>view</code>.</dd>
+    </dl>
+
+    <h2>Data model</h2>
+    <h3>Tables owned by the module</h3>
+    <table>
+        <thead><tr><th>Table / model</th><th>Purpose and key columns</th><th>Constraints and behaviour</th></tr></thead>
+        <tbody>
+        <tr>
+            <td><code>business_accounts</code><br><code>BusinessAccount</code></td>
+            <td><code>public_id</code> (ULID), <code>partner_number</code>, <code>name</code>, <code>slug</code>, <code>owner_id</code>, <code>status</code> (<code>AccountStatus</code>, default <code>registered</code>), <code>account_type</code> (default <code>conditional</code>), <code>activated_at</code>, <code>approval_pending_at</code>, <code>activation_hold_reason</code> / <code>_held_at</code> / <code>_held_by</code>, <code>activation_payment_waived_at</code> / <code>_by</code> / <code>_waiver_reason</code>, <code>withdrawal_minimum_override</code>, <code>withdrawal_maximum_override</code>, <code>current_user_package_id</code>, <code>erased_at</code>, <code>tombstone_reference</code></td>
+            <td><code>owner_id</code> unique FK to <code>users</code> (one owner, one account). <code>slug</code> unique. <code>partner_number</code> unique, nullable column, filled by <code>HasPartnerNumber</code> on creating. Soft deletes. Route key is the <strong>public id</strong> (<code>HasPublicId::getRouteKeyName</code> wins over <code>HasSlug</code>); the slug is for display and storefront-facing paths. Casts: status and type to enums, the timestamps to immutable datetimes. Fillable: <code>name</code>, <code>slug</code>, <code>owner_id</code>, <code>status</code>, <code>account_type</code> only.</td>
+        </tr>
+        <tr>
+            <td><code>business_account_members</code><br><code>AccountMembership</code> (a <code>Pivot</code> with its own id)</td>
+            <td><code>business_account_id</code>, <code>user_id</code>, <code>role</code> (<code>AccountRole</code>)</td>
+            <td><code>user_id</code> is unique across the whole table: a person belongs to at most one business (D1). The owner is a member with role <code>owner</code>. Index on (<code>business_account_id</code>, <code>role</code>).</td>
+        </tr>
+        <tr>
+            <td><code>account_invitations</code><br><code>AccountInvitation</code></td>
+            <td><code>public_id</code>, <code>business_account_id</code>, <code>email</code>, <code>mobile</code>, <code>role</code>, <code>token</code> (64 random characters), <code>invited_by</code>, <code>expires_at</code>, <code>accepted_at</code> / <code>accepted_by</code>, <code>revoked_at</code> / <code>revoked_by</code></td>
+            <td>"Live" = not accepted, not revoked, not expired (<code>scopeLive</code> / <code>isLive()</code>). A partial unique index stops two live invitations to one address on one account (named in <code>InviteStaff</code>). Expired rows are deliberately not pruned (see <code>routes/console.php</code>). Matching a user needs the same email, plus a verified mobile when the invitation carries one.</td>
+        </tr>
+        <tr>
+            <td><code>business_account_status_history</code><br><code>BusinessAccountStatusChange</code></td>
+            <td><code>from_status</code>, <code>to_status</code>, <code>changed_by</code> (null = system), <code>reason</code>, <code>internal_note</code>, <code>user_visible_note</code>, <code>notified</code>, <code>notified_at</code>, <code>created_at</code></td>
+            <td>Append-only: the model throws on update and on delete. No <code>updated_at</code>. Ordered newest first with <code>id</code> as tie-breaker (one decision can write two rows in the same second).</td>
+        </tr>
+        <tr>
+            <td><code>account_deletion_requests</code><br><code>AccountDeletionRequest</code></td>
+            <td><code>public_id</code>, <code>user_id</code> or <code>supplier_id</code>, <code>status</code> (<code>DeletionRequestStatus</code>), <code>reason</code>, <code>requested_at</code>, <code>decided_by</code>, <code>decided_at</code>, <code>decision_note</code></td>
+            <td>Serves both Client/Partner users and Suppliers. A unique index guarantees one open request per subject (<code>RequestAccountDeletion</code> catches the violation and returns the existing one).</td>
+        </tr>
+        <tr>
+            <td><code>authenticated_sessions</code><br><code>AuthenticatedSession</code></td>
+            <td>The "where am I signed in" record behind the security screens; ended with <code>EndAuthenticatedSessions</code> (constants such as <code>ENDED_REVOKED</code>)</td>
+            <td>Not the session itself: ending a row must also kill the real session, which the action does.</td>
+        </tr>
+        <tr>
+            <td><code>staff_contact_verifications</code><br><code>StaffContactVerification</code></td>
+            <td>A staff member confirmed an email or mobile on someone's behalf: actor, reason, identity (<code>identity_type</code> / <code>identity_id</code>)</td>
+            <td>Append-only. Kept separate from the person's own <code>email_verified_at</code> / <code>mobile_verified_at</code> so "verified by staff" is visible.</td>
+        </tr>
+        <tr>
+            <td><code>user_addresses</code><br><code>UserAddress</code></td>
+            <td>Addresses held against a user (§5.2) and used for wholesale checkout snapshots (<code>toSnapshot()</code>)</td>
+            <td>Not the shared address book. Business and supplier addresses live in <code>shared_addresses</code>; see <a href="address.html">Address</a>.</td>
+        </tr>
+        </tbody>
+    </table>
+
+    <h3>Identity columns on <code>users</code></h3>
+    <p><code>app/Models/User.php</code> carries the person: <code>identity_status</code>, <code>identity_status_changed_at</code>, <code>email_verified_at</code>, <code>mobile</code> / <code>mobile_verified_at</code>, <code>country</code>, <code>referral_code</code>, <code>referred_by_user_id</code>, <code>erased_at</code>, <code>tombstone_reference</code>. Helpers used throughout the module: <code>accountMembership()</code> (one membership), <code>ownedAccount()</code>, <code>belongsToAccount()</code>, <code>accountRole()</code>, <code>hasAccountPermission()</code>, <code>hasAccountMembership()</code>.</p>
+
+    <h3>Relationships</h3>
+    <ul>
+        <li><code>BusinessAccount</code> has many <code>memberships</code>, <code>members</code> (users through the pivot), <code>staff</code> (members whose role is not owner), <code>statusHistory</code>, <code>packages</code> (<code>UserPackage</code>), <code>kycSubmissions</code>, <code>payments</code>; belongs to <code>owner</code> and <code>currentPackage</code>; has one <code>referral</code> and many <code>directReferrals</code> (<code>AccountReferral</code>, D24).</li>
+        <li>Read the package through <code>App\Domain\Package\Entitlements</code>, not through the relation: a raw relation tempts callers into their own feature checks.</li>
+    </ul>
+
+    <h2>States &amp; lifecycle</h2>
+    <h3>Business account status (<code>AccountStatus</code>)</h3>
+    <p>Twenty-two cases (§5.3), implementing <code>TransitionableState</code>. Anything not listed in <code>transitionsTo()</code> is refused. The six <code>OnboardingStep</code> values group them for display (<code>OnboardingStep::forStatus()</code>).</p>
+    <table>
+        <thead><tr><th>Status</th><th>Step</th><th>Legal next statuses</th></tr></thead>
+        <tbody>
+        <tr><td><code>registered</code></td><td>Registration</td><td>mobile_verification_pending, email_verification_pending, kyc_pending, closed</td></tr>
+        <tr><td><code>mobile_verification_pending</code></td><td>Verification</td><td>email_verification_pending, kyc_pending, closed</td></tr>
+        <tr><td><code>email_verification_pending</code></td><td>Verification</td><td>kyc_pending, closed</td></tr>
+        <tr><td><code>kyc_pending</code></td><td>KYC</td><td>kyc_submitted, closed</td></tr>
+        <tr><td><code>kyc_submitted</code></td><td>KYC</td><td>kyc_under_review, closed</td></tr>
+        <tr><td><code>kyc_under_review</code></td><td>KYC</td><td>kyc_approved, kyc_rejected, kyc_resubmission_required, closed</td></tr>
+        <tr><td><code>kyc_resubmission_required</code></td><td>KYC</td><td>kyc_submitted, kyc_rejected, closed</td></tr>
+        <tr><td><code>kyc_rejected</code></td><td>KYC</td><td>kyc_resubmission_required, closed (rejection is not the end, §7.3)</td></tr>
+        <tr><td><code>kyc_approved</code></td><td>Package</td><td>package_selection_pending, closed</td></tr>
+        <tr><td><code>package_selection_pending</code></td><td>Package</td><td>payment_pending, closed</td></tr>
+        <tr><td><code>payment_pending</code></td><td>Payment</td><td>payment_verification_pending, package_selection_pending (choose another package), closed</td></tr>
+        <tr><td><code>payment_verification_pending</code></td><td>Payment</td><td>approval_pending, payment_pending (failed or cancelled payment), closed</td></tr>
+        <tr><td><code>approval_pending</code></td><td>Approval</td><td>active, kyc_resubmission_required, suspended, closed. <strong>The only route into <code>active</code>.</strong></td></tr>
+        <tr><td><code>active</code></td><td>Approval</td><td>package_renewal_due, package_expired, low_wallet_balance, wallet_topup_required, temporarily_restricted, temporarily_disabled, suspended, closed</td></tr>
+        <tr><td><code>package_renewal_due</code></td><td>Approval</td><td>active, package_expired, payment_pending, closed</td></tr>
+        <tr><td><code>package_expired</code></td><td>Approval</td><td>payment_pending, active, temporarily_disabled, closed</td></tr>
+        <tr><td><code>low_wallet_balance</code></td><td>Approval</td><td>active, wallet_topup_required, temporarily_restricted, closed</td></tr>
+        <tr><td><code>wallet_topup_required</code></td><td>Approval</td><td>active, low_wallet_balance, temporarily_restricted, temporarily_disabled, closed</td></tr>
+        <tr><td><code>temporarily_restricted</code></td><td>Approval</td><td>active, temporarily_disabled, suspended, closed</td></tr>
+        <tr><td><code>temporarily_disabled</code></td><td>Approval</td><td>active, suspended, closed</td></tr>
+        <tr><td><code>suspended</code></td><td>Approval</td><td>active, closed</td></tr>
+        <tr><td><code>closed</code></td><td>Approval</td><td>none. Terminal (D18): preserved read-only, never reopened; a new relationship is a new account.</td></tr>
+        </tbody>
+    </table>
+    <p>Predicates worth knowing, because they differ:</p>
+    <table>
+        <thead><tr><th>Method</th><th>True for</th></tr></thead>
+        <tbody>
+        <tr><td><code>isActivated()</code></td><td>active, package_renewal_due, package_expired, low_wallet_balance, wallet_topup_required, temporarily_restricted</td></tr>
+        <tr><td><code>canTransact()</code></td><td>active, package_renewal_due, low_wallet_balance. Deliberately narrower: an expired package or a restricted account is "activated" but cannot trade (§24.3).</td></tr>
+        <tr><td><code>isOnboarding()</code></td><td>Everything that is neither activated nor temporarily_disabled, suspended or closed. Drives the pre-activation route allow-list (§5.4).</td></tr>
+        <tr><td><code>tone()</code></td><td>UI tone (success, danger, warning, info, neutral) for <code>StatusPill</code>.</td></tr>
+        </tbody>
+    </table>
+    <p>Who triggers the moves, as far as this module is concerned:</p>
+    <ul>
+        <li>Verification statuses to <code>kyc_pending</code>: <code>VerifyMobile</code>, <code>SkipMobileVerificationIfNotRequired</code>, <code>AdvanceAccountPastVerification</code> (also used after staff confirm a contact by hand).</li>
+        <li>KYC statuses: the <a href="kyc.html">KYC module</a> (<code>SubmitKyc</code>, <code>ReviewKyc</code>, <code>RequestKycResubmission</code>). Approval then also moves the account on to <code>package_selection_pending</code>.</li>
+        <li><code>payment_pending</code> onward: the Billing and Package modules; <code>AdvanceToApprovalGate</code> takes the intermediate <code>payment_verification_pending</code> step so the history shows the payment being received.</li>
+        <li><code>approval_pending</code>: <code>EvaluateActivationReadiness</code>. <code>active</code>: <code>ActivateAccount</code>.</li>
+        <li><code>suspended</code>: <code>SuspendAccount</code>; back to <code>active</code>: <code>ReactivateAccount</code>.</li>
+        <li><code>temporarily_restricted</code>: the KYC deadline sweep (<code>EnforceKycDeadline</code>), when enabled.</li>
+        <li><code>package_renewal_due</code>, <code>package_expired</code>, <code>low_wallet_balance</code>, <code>wallet_topup_required</code>: set by the Package and Wallet modules (the scheduler has <code>SweepSubscriptionLifecycle</code>; the wallet has <code>EnforceBalanceRules</code> and <code>RestoreWalletServices</code>). Not traced in detail here.</li>
+        <li><code>closed</code>: <code>EraseAccount</code> (through <code>ChangeAccountStatus</code>, only when the machine allows it from the current status).</li>
+    </ul>
+
+    <h3>Identity status (<code>UserStatus</code>)</h3>
+    <table>
+        <thead><tr><th>Status</th><th>Meaning</th><th>Legal next</th></tr></thead>
+        <tbody>
+        <tr><td><code>active</code></td><td>May sign in and use whatever roles and account allow.</td><td>locked, suspended, closed</td></tr>
+        <tr><td><code>locked</code></td><td>Security control (failed attempts, suspicious sign-in). Reversible without anyone judging the person.</td><td>active, suspended, closed</td></tr>
+        <tr><td><code>suspended</code></td><td>Administrator's decision. No access anywhere, admin included.</td><td>active, closed</td></tr>
+        <tr><td><code>closed</code></td><td>Terminal (D18).</td><td>none</td></tr>
+        </tbody>
+    </table>
+    <p><code>permitsAccess()</code> is true only for <code>active</code>. <code>EnsureIdentityHasPlatformAccess</code> asks <code>User::hasPlatformAccess()</code> on every web request, signs a refused identity out (so the suspension holds even if a route forgets the gate), and lets only <code>logout</code>, <code>locale.</code> and <code>suspended</code> through. There is deliberately no <code>admin.*</code> exemption and no <code>password.</code> route: someone suspended does not get to reset their way back in.</p>
+
+    <h3>Other enums</h3>
+    <table>
+        <thead><tr><th>Enum</th><th>Cases</th></tr></thead>
+        <tbody>
+        <tr><td><code>AccountRole</code></td><td><code>owner</code>, <code>manager</code>, <code>staff</code>. <code>invitable()</code> is manager and staff (never owner). <code>consumesStaffSeat()</code> is false for the owner.</td></tr>
+        <tr><td><code>AccountPermission</code></td><td><code>account:update</code>, <code>staff:invite</code>, <code>staff:update</code>, <code>staff:remove</code>, <code>invitation:revoke</code>, <code>referral:view</code>, <code>store:manage</code>, <code>order:view</code></td></tr>
+        <tr><td><code>AccountType</code></td><td><code>conditional</code>, <code>non_conditional</code></td></tr>
+        <tr><td><code>DeletionRequestStatus</code></td><td><code>pending</code>, <code>approved</code> (account erased), <code>rejected</code>, <code>withdrawn</code></td></tr>
+        </tbody>
+    </table>
+
+    <h2>Actions &amp; workflows</h2>
+    <h3>Actions</h3>
+    <table>
+        <thead><tr><th>Class (<code>app/Domain/Account/Actions</code>)</th><th>Purpose</th></tr></thead>
+        <tbody>
+        <tr><td><code>ChangeAccountStatus</code></td><td>The only path for a commercial status change: transition, set <code>activated_at</code> the first time an activated status is reached, write the history row, all in one transaction. Does not lock; callers lock.</td></tr>
+        <tr><td><code>EvaluateActivationReadiness</code></td><td>Keeps <code>approval_pending</code> and <code>approval_pending_at</code> honest. Under a distributed lock (<code>account:readiness:{id}</code>) and a row lock: ready and not at the gate moves it to the gate; not ready and at the gate clears the stamp (status is left for whatever reversed the requirement).</td></tr>
+        <tr><td><code>AdvanceToApprovalGate</code></td><td>Walks <code>payment_pending</code> through <code>payment_verification_pending</code> to <code>approval_pending</code>, recording each step.</td></tr>
+        <tr><td><code>ActivateAccountAutomatically</code></td><td>D27. Called when payment settles or KYC is decided. Always evaluates the gate first, skips activation if the account is held (audits <code>account.activation_held_back</code> once per hold), otherwise calls <code>ActivateAccount</code> with no approver. <strong>Never throws</strong>: a failure is logged to the <code>payment</code> channel so a settled payment is never rolled back.</td></tr>
+        <tr><td><code>ActivateAccount</code></td><td>The only route to <code>active</code>. Per-account lock <code>account:activation:{id}</code>, then a transaction with a row lock that re-checks <code>ActivationRequirements</code>, moves to the gate if needed, sets <code>active</code>, activates the pending subscription, opens the wallet, captures the deposit obligation, writes referral commissions (outbox), clears <code>approval_pending_at</code> and audits <code>account.activated</code>. Notifies the owner (<code>AccountActivated</code>) after commit.</td></tr>
+        <tr><td><code>HoldAccountActivation</code></td><td><code>hold()</code> and <code>release()</code>, each with a mandatory reason, on the same lock key as activation. Audits <code>account.activation_held</code> / <code>account.activation_hold_released</code> (sensitive). Release does not itself activate.</td></tr>
+        <tr><td><code>CompleteAccountManually</code></td><td>An administrator walks an account through the whole funnel by recorded decisions: confirms contacts (<code>VerifyContactManually</code>), approves KYC through <code>ReviewKyc</code> on a real round, waives the activation payment, then runs <code>ActivateAccount</code>. Safe to re-run. Audits <code>account.completed_manually</code> (sensitive).</td></tr>
+        <tr><td><code>SuspendAccount</code> / <code>ReactivateAccount</code></td><td>Reversible stop and restart (§5.3). Reason required; internal note and user-visible note kept apart. Audit <code>account.suspended</code> / <code>account.reactivated</code> (sensitive); notify the owner. Suspension accepts a null decider for policy-driven suspension.</td></tr>
+        <tr><td><code>ChangeAccountType</code></td><td>Admin sets conditional or non-conditional; reason required; audits <code>account.account_type_changed</code>. Only future wholesale orders are affected: each order snapshots <code>account_type</code>.</td></tr>
+        <tr><td><code>CreateManagedAccount</code></td><td>Staff opens a Client/Partner account: validates, then in one transaction creates the user (random unusable password, <code>identity_status</code> active, new referral code, optional referrer), the account at <code>registered</code>, the owner membership and the referrer attachment; audits <code>account.created_by_staff</code> (sensitive); then issues a password-setup link through <code>ManagePasswordSetup</code>.</td></tr>
+        <tr><td><code>ManagePasswordSetup</code>, <code>VerifyContactManually</code></td><td>Setup link (signed, expiring, single use, one live link at a time) and staff confirming an email or mobile with a mandatory reason, writing <code>staff_contact_verifications</code>.</td></tr>
+        <tr><td><code>InviteStaff</code>, <code>AcceptStaffInvitation</code>, <code>ManageStaff</code></td><td>Staff invitations, joining, and revoke / remove / change role. See the flow below.</td></tr>
+        <tr><td><code>ChangeIdentityAccess</code></td><td>Lock, unlock, suspend, reactivate and close a login. Reason required, nobody changes their own status, locking ends all sessions (<code>EndAuthenticatedSessions</code>) and notifies the person. Audits <code>identity.locked</code> and siblings.</td></tr>
+        <tr><td><code>SendMobileVerificationCode</code>, <code>VerifyMobile</code>, <code>SkipMobileVerificationIfNotRequired</code>, <code>ConfigureMobileVerificationRequirement</code></td><td>Mobile verification (§5.1). Codes live in Redis (<code>VerificationCodes</code>), sending is throttled (<code>ResendTooSoon</code>). The requirement is the setting <code>account.mobile_verification_required</code>; switching it off must not strand anyone, so the skip action runs lazily from the onboarding status page and the mobile verification screen.</td></tr>
+        <tr><td><code>RequestKycResubmission</code></td><td>Sends an applicant back to correct evidence; will not proceed without telling them what to fix. See <a href="kyc.html">KYC</a>.</td></tr>
+        <tr><td><code>RequestAccountDeletion</code>, <code>WithdrawAccountDeletion</code>, <code>RejectAccountDeletion</code>, <code>EraseAccount</code></td><td>Deletion requests and erasure. See the flow below.</td></tr>
+        <tr><td><code>IssueMobileAccessToken</code>, <code>ChangeLocale</code>, <code>EndAuthenticatedSessions</code></td><td>One Sanctum token per device name (re-signing in on a device replaces its token); the reference-shape Action for locale (session always, account when signed in); sign out of a device by killing both the record and the real session.</td></tr>
+        </tbody>
+    </table>
+
+    <h3>Flow: registration to activation</h3>
+    <ol>
+        <li>Registration (<code>app/Actions/Fortify/CreateNewUser.php</code>) creates the user (<code>identity_status</code> active), a <code>BusinessAccount</code> at <code>registered</code>, and an <code>owner</code> membership, and attaches a referrer when a code was typed.</li>
+        <li>Email, and mobile while <code>MobileVerificationRequirement::isRequired()</code>, are verified; the account moves to <code>kyc_pending</code>. Verification is read from the <strong>owner</strong> (<code>ActivationRequirements::ownerVerified</code>), never from whoever is signed in.</li>
+        <li>KYC is submitted, reviewed and approved (<a href="kyc.html">KYC module</a>); the account reaches <code>kyc_approved</code> then <code>package_selection_pending</code>.</li>
+        <li>The owner picks a package and pays the combined activation checkout (<code>payment_pending</code>, then the payment is verified server-side).</li>
+        <li>Each trigger (payment settlement from the IPN, the browser return, the reconciliation sweep, a KYC decision) calls <code>ActivateAccountAutomatically</code>. Three callers may race; the per-account lock plus the "already activated" check make that harmless.</li>
+        <li>If <code>ActivationRequirements::unmet()</code> is empty and the account is not held, <code>ActivateAccount</code> runs; otherwise the account waits at <code>approval_pending</code> for a reviewer at <code>/admin/activations</code>.</li>
+    </ol>
+    <p>The three conditions (§5.1, §44) are: a KYC submission with status approved; an activation payment that is settled (or a recorded waiver); the owner's email verified and mobile verified when required. Closed and suspended accounts, and already activated ones, return a single explanatory reason.</p>
+
+    <h3>Flow: reviewer actions on the approval queue</h3>
+    <ul>
+        <li><code>activations.approve</code>: manual activation (works on a held account; this is the point of a hold).</li>
+        <li><code>activations.request-resubmission</code>: <code>RequestKycResubmission</code>.</li>
+        <li><code>activations.suspend</code>: declines an applicant at the gate (uses <code>account.reject</code>, see Permissions).</li>
+        <li><code>activations.hold</code>: <code>HoldAccountActivation::hold</code> or <code>release</code>. Not a fourth outcome; it decides nothing, it moves the decision back to a person.</li>
+    </ul>
+
+    <h3>Flow: staff inside an account</h3>
+    <ol>
+        <li>An owner or manager with the permission calls <code>InviteStaff</code>. It refuses role <code>owner</code>, self-invitation, existing members; locks the account row; checks <code>StaffAllowance::hasRoom()</code>; creates the invitation (14 days, <code>InviteStaff::EXPIRES_AFTER_DAYS</code>); audits <code>account.staff_invited</code>; and sends the email after commit.</li>
+        <li><code>StaffAllowance</code>: limit is <code>PackageFeature::StaffLimit</code> through <code>Entitlements</code> (null means unlimited, zero means no staff at all). A <strong>live invitation occupies a seat</strong>, so ten invitations cannot be sent against two seats. The owner does not consume a seat.</li>
+        <li>The invitee opens <code>staff/invitation/{token}</code> signed in. <code>AcceptStaffInvitation</code> locks the invitation, checks it is live, addressed to this user, that the user has no membership yet (D1), and re-checks room (the package may have been downgraded since). It creates the membership, stamps <code>accepted_at</code>/<code>accepted_by</code> and audits <code>account.staff_joined</code>.</li>
+        <li><code>ManageStaff</code> revokes invitations (<code>account.staff_invitation_revoked</code>), removes staff (<code>account.staff_removed</code>) and changes roles (<code>account.staff_role_changed</code>). It refuses on the owner and refuses granting <code>owner</code>.</li>
+    </ol>
+
+    <h3>Flow: deletion and erasure</h3>
+    <ol>
+        <li>A person (or a Supplier) asks: <code>RequestAccountDeletion</code> (reason of at least 5 characters, idempotent) writes the request, audits <code>account.deletion_requested</code> and announces it to the staff queue (<code>StaffQueue::AccountDeletion</code>, or <code>SupplierDeletion</code>). They may withdraw while pending.</li>
+        <li>Staff with <code>account.delete</code> (or <code>supplier.delete</code>) decide at <code>/admin/deletions</code>. <code>DeletionAuthority</code>: nobody deletes their own account; platform staff can only be deleted by a Super Admin.</li>
+        <li><code>EraseAccount::handle</code> needs a reason (5+ characters) and a typed confirmation (the user's email, or the Supplier's reference), refuses to erase the last active Super Admin, and runs in one transaction under a row lock. Files are collected first and deleted <em>after</em> commit through <code>ManagedStorage</code>; a file that cannot be removed is reported, never allowed to undo the erasure.</li>
+        <li>What goes: sessions, passkeys, tokens, notifications, saved addresses, invitations, carts, SMS logs, API credentials and webhook secrets, KYC typed values and files, payout methods and shared addresses. What is replaced: names and contact details inside records that must stay (orders, withdrawals, websites). What stays untouched: amounts, identifiers, statuses and their history, ledger, payments, refunds, stock movements and the audit log. Where the database refuses a change (guard triggers) the table is reported as retained with the reason.</li>
+        <li>The login becomes a tombstone (<code>identity_status</code> closed, <code>erased_at</code>, <code>tombstone_reference</code>, email <code>erased-…@deleted.invalid</code>), websites are closed through their own machine, and the business account is moved to <code>closed</code> through <code>ChangeAccountStatus</code>. One audit entry, <code>account.erased</code> (sensitive), records counts and table names with no personal data. <code>preview()</code> reports what would happen inside a rolled-back transaction.</li>
+    </ol>
+
+    <h2>Entry points</h2>
+    <h3>Partner web (<code>auth</code>, then <code>business.activated</code> unless stated)</h3>
+    <table>
+        <thead><tr><th>Name</th><th>Method and URL</th><th>Controller</th><th>Notes</th></tr></thead>
+        <tbody>
+        <tr><td><code>onboarding.status</code></td><td>GET <code>/onboarding</code></td><td><code>Erp\OnboardingController@status</code></td><td>The stepper; reachable before and after activation</td></tr>
+        <tr><td><code>verification.mobile</code>, <code>.send</code>, <code>.verify</code></td><td>GET <code>/verification/mobile</code>; POST <code>/verification/mobile/code</code>; POST <code>/verification/mobile</code></td><td><code>Erp\MobileVerificationController</code></td><td>Opening the page sends nothing; a code goes out only when asked for</td></tr>
+        <tr><td><code>staff.invitation.show</code>, <code>.accept</code></td><td>GET/POST <code>/staff/invitation/{token}</code></td><td><code>Erp\StaffInvitationController</code></td><td>Middleware <code>auth</code>, <code>noindex</code> only: an invitee has no activated business</td></tr>
+        <tr><td><code>staff.index</code>, <code>staff.invitations.store</code>, <code>.destroy</code>, <code>staff.update</code>, <code>staff.destroy</code></td><td>GET <code>/settings/staff</code>; POST <code>/settings/staff/invitations</code>; DELETE <code>/settings/staff/invitations/{invitation}</code>; PATCH/DELETE <code>/settings/staff/{staff}</code></td><td><code>Erp\StaffController</code></td><td>Inside <code>entitled:staff_limit</code> (<code>routes/settings.php</code>). No account segment: the account comes from the membership; staff are addressed by public id</td></tr>
+        <tr><td><code>profile.edit</code>, <code>profile.update</code></td><td><code>/settings/profile</code></td><td><code>Settings\ProfileController</code></td><td></td></tr>
+        <tr><td><code>security.*</code> (not verified)</td><td><code>/settings/security</code>, <code>/settings/security/sessions</code></td><td><code>SecurityController</code></td><td>Sessions list and sign-out of other devices</td></tr>
+        <tr><td><code>settings/account-deletion</code></td><td>POST (<code>throttle</code>) and DELETE</td><td><code>Settings\AccountDeletionController</code></td><td>Request and withdraw</td></tr>
+        </tbody>
+    </table>
+
+    <h3>Admin web (<code>auth</code>, <code>noindex</code>, <code>two-factor</code>; prefix <code>/admin</code>, names <code>admin.*</code>)</h3>
+    <table>
+        <thead><tr><th>Name</th><th>Method and URL</th><th>Controller@method</th></tr></thead>
+        <tbody>
+        <tr><td><code>accounts.index</code></td><td>GET <code>/admin/accounts</code></td><td><code>AccountController@index</code></td></tr>
+        <tr><td><code>accounts.create</code>, <code>accounts.store</code></td><td>GET/POST <code>/admin/accounts</code></td><td><code>ManagedAccountController</code></td></tr>
+        <tr><td><code>accounts.show</code></td><td>GET <code>/admin/accounts/{account}</code></td><td><code>AccountController@show</code> (<code>viewDossier</code>)</td></tr>
+        <tr><td><code>accounts.complete-manually</code></td><td>POST <code>/admin/accounts/{account}/complete-manually</code></td><td><code>AccountController@completeManually</code></td></tr>
+        <tr><td><code>accounts.suspend</code>, <code>accounts.reactivate</code></td><td>POST <code>/admin/accounts/{account}/suspend</code>, <code>/reactivate</code></td><td><code>AccountController</code></td></tr>
+        <tr><td><code>accounts.setup-link.store</code>, <code>.destroy</code></td><td>POST/DELETE <code>/admin/accounts/{account}/setup-link</code></td><td><code>ManagedAccountController</code></td></tr>
+        <tr><td><code>accounts.verify-contact</code></td><td>POST <code>/admin/accounts/{account}/verify-contact</code></td><td><code>ManagedAccountController@verifyContact</code></td></tr>
+        <tr><td><code>accounts.account-type.update</code></td><td>POST <code>/admin/accounts/{account}/account-type</code></td><td><code>ManagedAccountController@changeAccountType</code></td></tr>
+        <tr><td><code>accounts.open-dashboard</code></td><td>GET <code>/admin/accounts/{account}/open-dashboard</code> (<code>signed</code>)</td><td><code>DashboardAccessController@partner</code>; the way back, <code>impersonation.stop</code>, sits outside the group on purpose</td></tr>
+        <tr><td><code>accounts.assign-package</code></td><td>POST <code>/admin/accounts/{account}/package</code></td><td><code>PackageAssignmentController</code></td></tr>
+        <tr><td><code>activations.index</code>, <code>.show</code>, <code>.approve</code>, <code>.request-resubmission</code>, <code>.suspend</code>, <code>.hold</code></td><td><code>/admin/activations</code>, <code>/admin/activations/{account}[/approve|/request-resubmission|/suspend|/hold]</code></td><td><code>ActivationReviewController</code></td></tr>
+        <tr><td><code>identities.lock</code>, <code>identities.unlock</code> (names inferred from <code>routes/web.php</code>)</td><td>POST/DELETE <code>/admin/identities/{user}/lock</code></td><td><code>IdentityAccessController</code></td></tr>
+        <tr><td><code>deletions.index</code>, <code>.show</code>, <code>.approve</code> (<code>RequirePassword</code>), <code>.reject</code></td><td><code>/admin/deletions[/{deletionRequest}[/approve|/reject]]</code></td><td><code>DeletionRequestController</code></td></tr>
+        </tbody>
+    </table>
+    <p>Reasons are required on the security-sensitive routes listed under <code>required_for</code> in <code>config/reasons.php</code> (suspend, reactivate, verify-contact, complete-manually, KYC upload on behalf, setup links, <code>admin.staff.*</code>, <code>admin.identities.*</code>); elsewhere <code>DefaultReasonUnlessSecurity</code> fills in "No reason given.".</p>
+
+    <h3>Mobile API (<code>/api/mobile/v1</code>, names <code>mobile.v1.*</code>; Sanctum)</h3>
+    <table>
+        <thead><tr><th>Route file</th><th>Endpoints (path relative to <code>/api/mobile/v1</code>)</th></tr></thead>
+        <tbody>
+        <tr><td><code>routes/mobile/account.php</code></td><td><code>profile</code> (GET, PATCH); <code>verification/email/resend</code>, <code>verification/mobile</code> (GET), <code>verification/mobile/code</code>, <code>verification/mobile</code> (POST), each throttled; <code>security</code> (show, <code>password</code>, <code>sessions</code>, <code>two-factor/*</code>); <code>account-deletion</code> (GET, POST, DELETE); <code>notifications</code>; <code>locale</code></td></tr>
+        <tr><td><code>routes/mobile/onboarding.php</code></td><td><code>onboarding</code> (status), then inside <code>mobile.activated</code>: <code>dashboard</code>, <code>referrals</code></td></tr>
+        <tr><td><code>routes/mobile/activation.php</code></td><td><code>checkout</code> (show, pay, <code>coupon</code>, <code>payment</code>, <code>payment/verify</code>); names <code>activation.checkout.*</code>, <code>activation.payment.*</code></td></tr>
+        <tr><td><code>routes/mobile/staff.php</code></td><td><code>staff/invitation/{token}</code> (show, accept; accept throttled 10/min); inside <code>mobile.activated</code> and <code>entitled:staff_limit</code>: <code>staff</code> (list), <code>staff/invitations</code>, <code>staff/{staff}</code></td></tr>
+        <tr><td><code>routes/mobile.php</code></td><td><code>auth/login</code>, <code>auth/two-factor-challenge</code>, then signed in: <code>auth/me</code>, <code>auth/logout</code>, <code>auth/logout-all</code>, <code>auth/devices</code>, <code>auth/devices/{reference}</code></td></tr>
+        </tbody>
+    </table>
+    <p>Mobile mirrors the web: the pre-activation areas are registered outside the <code>mobile.activated</code> group and everything else inside it, the inverse of the web allow-list. Full contract: <a href="../api/mobile-api.html">Mobile API</a>.</p>
+
+    <h3>Scheduled and queued</h3>
+    <p>This module owns no scheduled task. Neither does it prune expired invitations (deliberate; see the comment in <code>routes/console.php</code>). The KYC deadline sweep that can restrict an account is in <a href="kyc.html">KYC</a>. <code>AccountActivated</code>, <code>AccountSuspended</code>, <code>AccountReactivated</code>, <code>StaffInvitation</code> and the <code>Identity*</code> notifications live in <code>app/Notifications/Account</code>.</p>
+
+    <h2>Permissions &amp; scoping</h2>
+    <h3>Platform permissions (module <code>account</code>)</h3>
+    <p>Catalogue entries: <code>view</code>, <code>create</code>, <code>edit</code>, <code>approve</code>, <code>reject</code>, <code>verify</code>, <code>export</code>, <code>archive</code>, <code>view_sensitive_data</code>, <code>suspend</code>, <code>reactivate</code>, <code>delete</code>, <code>manage_settings</code>. <code>BusinessAccountPolicy</code> maps them:</p>
+    <table>
+        <thead><tr><th>Policy method</th><th>Needs</th><th>Notes</th></tr></thead>
+        <tbody>
+        <tr><td><code>viewAny</code></td><td><code>account.view</code></td><td></td></tr>
+        <tr><td><code>view</code></td><td>membership, or <code>account.view</code></td><td>For the account holder. <strong>Never guards an admin screen.</strong></td></tr>
+        <tr><td><code>viewDossier</code></td><td><code>account.view</code>, and not a member</td><td>Membership is a <em>refusal</em> (§7.2)</td></tr>
+        <tr><td><code>approveActivation</code>, <code>requestKycResubmission</code></td><td><code>account.approve</code>, not a member</td><td></td></tr>
+        <tr><td><code>suspend</code> (the queue)</td><td><code>account.reject</code>, not a member</td><td>Declining an applicant who never traded</td></tr>
+        <tr><td><code>suspendTrading</code></td><td><code>account.suspend</code>, not a member</td><td>Stopping a live business; sensitive</td></tr>
+        <tr><td><code>reactivate</code></td><td><code>account.reactivate</code>, not a member</td><td>Separately grantable; default roles hold both</td></tr>
+        <tr><td><code>create</code></td><td><code>account.create</code></td><td>Opening an account on someone's behalf</td></tr>
+        <tr><td><code>manageIdentity</code></td><td><code>account.edit</code>, not a member</td><td>Account type, setup links</td></tr>
+        <tr><td><code>verifyContact</code></td><td><code>account.verify</code>, not a member</td><td></td></tr>
+        <tr><td><code>completeManually</code></td><td><code>approveActivation</code> and <code>verifyContact</code></td><td>No looser third door</td></tr>
+        <tr><td><code>uploadKycDocument</code></td><td><code>kyc.edit</code>, not a member</td><td></td></tr>
+        <tr><td><code>verifyKycOnTheSpot</code></td><td>upload permission and <code>kyc.approve</code></td><td></td></tr>
+        <tr><td><code>openDashboard</code></td><td><code>account.view_sensitive_data</code>, not a member</td><td>Not in the Admin role's grants by default (see <a href="access.html">Access</a>)</td></tr>
+        </tbody>
+    </table>
+    <p><code>UserPolicy</code> covers identities: <code>lock</code> and <code>manageStaffAccess</code> refuse self-action and refuse a Super Admin subject (a Super Admin actor never reaches the method because <code>Gate::before</code> answers first); <code>lock</code> needs <code>account.edit</code>, <code>assignRole</code> and <code>manageStaffAccess</code> need <code>access.edit</code>.</p>
+
+    <h3>Account-side permissions (<code>AccountRole</code>)</h3>
+    <table>
+        <thead><tr><th>Role</th><th>Holds</th></tr></thead>
+        <tbody>
+        <tr><td><code>owner</code></td><td>Every <code>AccountPermission</code>. Not removable or demotable through staff management, whatever the caller holds.</td></tr>
+        <tr><td><code>manager</code></td><td><code>staff:invite</code>, <code>staff:update</code>, <code>staff:remove</code>, <code>invitation:revoke</code>, <code>order:view</code>. Connecting a store (<code>store:manage</code>) stays the owner's (D29).</td></tr>
+        <tr><td><code>staff</code></td><td>Nothing account-level.</td></tr>
+        </tbody>
+    </table>
+    <p><code>AccountMembershipPolicy</code> asks <code>User::hasAccountPermission($account, …)</code>, which returns false for any account the user is not a member of (it never falls through to their own role), and refuses everything when the package grants no staff (<code>StaffAllowance::allowsStaff()</code>). The owner is refused in the policy <em>and</em> in <code>ManageStaff</code>.</p>
+
+    <h3>Self-scoping</h3>
+    <ul>
+        <li>Partner routes carry no account identifier: the account is resolved from the signed-in user's membership. Staff are addressed by public id and looked up inside the caller's account.</li>
+        <li><code>EnsureBusinessAccountIsActivated</code> is an <strong>allow-list</strong> of route-name prefixes (<code>onboarding.</code>, <code>profile.</code>, <code>kyc.</code>, <code>packages.</code>, <code>subscription.</code>, <code>checkout.</code>, <code>security.</code>, <code>user-password.</code>, <code>well-known.</code>, <code>staff.invitation.</code>, <code>locale.</code>, <code>notifications.</code>, <code>logout</code>, <code>password.</code>, <code>verification.</code>, and a placeholder <code>support.</code>). A new ERP route is closed by default. An unactivated member is redirected to <code>onboarding.status</code> (a 403 would blame someone who has steps left); a user with no account at all (invitee or platform staff) is sent to their home route instead.</li>
+        <li>Administration never uses <code>business.activated</code>. It is identity plus permission plus a policy on each action, so platform staff need no business.</li>
+    </ul>
+    <div class="callout callout-warn"><p><strong>Gotcha.</strong> <code>HandleInertiaRequests</code> shares an <code>account</code> prop: the <em>viewer's</em> own account. A page prop with the same name silently overwrites it for the whole shell. The admin account screen returns its subject as <code>business</code> for this reason. Check <code>share()</code> before naming a page prop. Also gate "my business" navigation on <code>account</code> being present, not only on permissions (<code>.ai/rules/account-access.md</code>).</p></div>
+
+    <h2>Money, ledger &amp; audit effects</h2>
+    <ul>
+        <li><strong>Money:</strong> the account stores two optional decimal override columns, <code>withdrawal_minimum_override</code> and <code>withdrawal_maximum_override</code>, read by the Withdrawal module. This module does no money arithmetic. The deposit obligation captured on activation is a <code>Wallet</code> concern (<code>CaptureDepositObligation</code>).</li>
+        <li><strong>Ledger:</strong> activation opens the wallet (<code>OpenWallet</code>, idempotent, empty: every balance starts at zero and moves only through the ledger) inside the activation transaction. A waived activation payment writes <strong>no</strong> payment row and <strong>no</strong> ledger entry because no money moved. Erasure keeps every ledger, payment, refund, withdrawal and stock record.</li>
+        <li><strong>Idempotency:</strong> activation is idempotent by construction (lock, re-check, "already active" short-circuit); the settlement callbacks that trigger it are retried by design.</li>
+        <li><strong>Audit actions written here:</strong> <code>account.activated</code>, <code>account.activation_held</code>, <code>account.activation_hold_released</code>, <code>account.activation_held_back</code> (system), <code>account.completed_manually</code>, <code>account.suspended</code>, <code>account.reactivated</code>, <code>account.account_type_changed</code>, <code>account.created_by_staff</code>, <code>account.staff_invited</code>, <code>account.staff_joined</code>, <code>account.staff_invitation_revoked</code>, <code>account.staff_removed</code>, <code>account.staff_role_changed</code>, <code>account.deletion_requested</code>, <code>account.erased</code>, <code>account.mobile_verification_requirement_changed</code>, <code>identity.locked</code> and the other <code>identity.*</code> moves. Most of the staff-decision ones are marked sensitive. Status moves also leave their own history row, which is not a substitute for the audit entry.</li>
+    </ul>
+
+    <h2>Configuration</h2>
+    <table>
+        <thead><tr><th>Key</th><th>Where</th><th>Effect</th></tr></thead>
+        <tbody>
+        <tr><td><code>account.mobile_verification_required</code></td><td><code>settings</code> table (Boolean, group <code>account</code>)</td><td>Whether registering owners must confirm a mobile number. On by default (§5.1). Changed from <code>admin/account-verification-settings</code> through <code>ConfigureMobileVerificationRequirement</code> (needs <code>account.manage_settings</code>).</td></tr>
+        <tr><td><code>InviteStaff::EXPIRES_AFTER_DAYS</code></td><td>Code constant (14)</td><td>Invitation lifetime</td></tr>
+        <tr><td>Package feature <code>staff_limit</code></td><td><a href="package.html">Package</a> module</td><td>Seats; read through <code>Entitlements</code></td></tr>
+        <tr><td><code>kyc.deadline_days</code>, <code>kyc.deadline_warning_days</code>, <code>kyc.overdue_restricts_active_account</code></td><td><code>settings</code></td><td>Can move an active account to <code>temporarily_restricted</code>; see <a href="kyc.html">KYC</a></td></tr>
+        <tr><td>Lock keys</td><td><code>DistributedLock</code> (Redis lock database)</td><td><code>account:activation:{id}</code> (30 s TTL, 10 s wait), <code>account:readiness:{id}</code> (15 s TTL, 10 s wait)</td></tr>
+        </tbody>
+    </table>
+
+    <h2>Rules, invariants &amp; gotchas</h2>
+    <ul>
+        <li><strong>One owner, one account, one membership per person</strong> (D1), enforced by unique indexes on <code>owner_id</code> and on <code>business_account_members.user_id</code>. An invitee who already works somewhere is refused; there is no account switcher.</li>
+        <li><strong>Solo accounts see no staff concept</strong> (<code>BusinessAccount::isSolo()</code>): no switcher, no members list, no "team".</li>
+        <li><strong>Identity versus business</strong> (D23): <code>UserStatus</code> gates everything including admin; <code>AccountStatus</code> gates trading only. A closed login's business is not automatically closed by <code>ChangeIdentityAccess</code> (only <code>EraseAccount</code> moves both).</li>
+        <li><strong><code>closed</code> is terminal</strong> (D18). Suspension is reversible and must not be used as a quiet substitute for closure.</li>
+        <li><strong>Reactivation is not activation.</strong> <code>ReactivateAccount</code> only returns a suspended account to <code>active</code>; it opens no wallet, starts no subscription, calculates no commission. It refuses any account that is not suspended.</li>
+        <li><strong>Manual activation still works on a held account</strong>; a hold stops only the automatic path (D27).</li>
+        <li><strong>The subscription term comes from what was bought</strong> (<code>$subscription-&gt;terms()</code>), not from the live package row, so editing <code>validity_days</code> between purchase and approval cannot shorten a paid year. The term starts at activation, not purchase.</li>
+        <li><strong>Notifications are sent after the transaction commits</strong> (activation, suspension, invitation). A queued mail for a change that rolled back is worse than a late one.</li>
+        <li><strong>Nobody changes their own identity status</strong>; the refusal is in the action because <code>Gate::before</code> would pass a Super Admin straight over a policy.</li>
+        <li><strong>Erasure is anonymisation.</strong> The audit log and ledger cannot be changed by it. Tables where a database guard refuses an update are reported as retained.</li>
+        <li><strong>Partner numbers are never reissued</strong> and are not a route key; the URL identifier is the ULID public id (non-negotiable 8).</li>
+    </ul>
+
+    <h2>How to&hellip;</h2>
+    <h3>Add an <code>AccountStatus</code></h3>
+    <ol>
+        <li>Add the case in <code>app/Domain/Account/Enums/AccountStatus.php</code>, its <code>transitionsTo()</code> row, and every other row that should lead to it. Decide <code>tone()</code>, and whether it belongs in <code>isActivated()</code>, <code>canTransact()</code> or neither.</li>
+        <li>Map it in <code>OnboardingStep::forStatus()</code> if it is part of the funnel (otherwise it falls into <code>Approval</code>).</li>
+        <li>Add the label under the <code>account</code> group in <code>lang/en/status.php</code> and <code>lang/bn/status.php</code> (<code>HasTranslatedLabel</code>). Check the column width: <code>status</code> is a 40-character string.</li>
+        <li>Make the move through <code>ChangeAccountStatus</code>; add a test in <code>tests/Feature/Account/</code>. Update the allow-list implications if the new status should be restricted to onboarding.</li>
+    </ol>
+    <h3>Add an account-level permission</h3>
+    <ol>
+        <li>Add a case to <code>AccountPermission</code>.</li>
+        <li>Grant it in <code>AccountRole::permissions()</code> (owner gets all automatically).</li>
+        <li>Check it through <code>User::hasAccountPermission()</code> in a policy (see <code>AccountMembershipPolicy::allows</code> or <code>SharedAddressPolicy</code>). Platform permissions are different: see <a href="access.html">Access</a>.</li>
+    </ol>
+    <h3>Add a new admin action on an account</h3>
+    <ol>
+        <li>Write an Action that locks the account row, changes state through <code>ChangeAccountStatus</code> where status changes, and writes an <code>AuditEntry</code> with <code>module: 'account'</code> and <code>accountId</code>.</li>
+        <li>Add a method to <code>BusinessAccountPolicy</code> that treats membership as a refusal and asks a catalogue permission via <code>PermissionCatalogue::name()</code>.</li>
+        <li>Add the route in the <code>admin.</code> group of <code>routes/web.php</code> (before <code>accounts/{account}</code> if it is a literal segment). If the reason must be required, add the route name to <code>required_for</code> in <code>config/reasons.php</code>. Add <code>RequirePassword</code> for destructive actions.</li>
+        <li>Use <code>Gate::authorize('viewDossier', …)</code> for any screen that shows reviewer-written material, never <code>view</code>.</li>
+    </ol>
+    <h3>Add a staff-limited feature to a package</h3>
+    <ol>
+        <li>Seat logic is in <code>StaffAllowance</code>; the limit itself is a package feature (<code>PackageFeature::StaffLimit</code>). Change package data in the <a href="package.html">Package module</a>, not here.</li>
+        <li>Gate new routes with <code>entitled:staff_limit</code> inside <code>business.activated</code>, never on an admin route.</li>
+    </ol>
+    <h3>Change what is erased</h3>
+    <ol>
+        <li>Edit <code>EraseAccount::userSteps</code>, <code>accountSteps</code>, <code>caseSteps</code> or <code>supplierSteps</code> using <code>$run-&gt;purge()</code>, <code>blank()</code>, <code>update()</code>, <code>collectFiles()</code>, <code>retain()</code>.</li>
+        <li>Collect file paths <em>before</em> deleting the rows that name them.</li>
+        <li>Extend <code>tests/Feature/Account/AccountErasureTest.php</code>.</li>
+    </ol>
+
+    <h2>Testing</h2>
+    <table>
+        <thead><tr><th>File (<code>tests/Feature/Account/</code>)</th><th>Covers</th></tr></thead>
+        <tbody>
+        <tr><td><code>ActivationReadinessTest</code>, <code>AutomaticActivationTest</code></td><td>Gate position, the three conditions, D27 hold, never-throws</td></tr>
+        <tr><td><code>ManualAccountCompletionTest</code></td><td><code>CompleteAccountManually</code></td></tr>
+        <tr><td><code>AccountSuspensionTest</code></td><td>Suspend and reactivate</td></tr>
+        <tr><td><code>StaffTest</code></td><td>Invite, accept, limits, owner protection</td></tr>
+        <tr><td><code>IdentityLockTest</code></td><td><code>ChangeIdentityAccess</code>, identity gate</td></tr>
+        <tr><td><code>PreActivationAccessTest</code>, <code>RouteAccessMatrixTest</code></td><td>The §5.4 allow-list; every allow-list prefix must match a real route</td></tr>
+        <tr><td><code>AdminAccountDetailTest</code>, <code>ActivationReviewScreenTest</code></td><td><code>viewDossier</code>: an owner is refused their own admin dossier</td></tr>
+        <tr><td><code>AccountDirectoryTest</code>, <code>DashboardAccessTest</code></td><td>Directory query, open-dashboard</td></tr>
+        <tr><td><code>AccountDeletionRequestTest</code>, <code>AccountErasureTest</code></td><td>Requests, authority, erasure</td></tr>
+        <tr><td><code>PartnerNumberTest</code></td><td>Format and uniqueness</td></tr>
+        </tbody>
+    </table>
+    <p>Run a slice in its own schema, one suite at a time (see <a href="../guide/testing.html">Testing</a>): <code>vendor/bin/pest tests/Feature/Account</code>. There is no Pest group for <code>Feature/Account</code> in <code>tests/Pest.php</code>, so use the path. Factories: <code>BusinessAccountFactory</code> and <code>AccountInvitationFactory</code> (<code>Database\Factories</code>); models declare them through <code>newFactory()</code> because domain models sit deeper than Laravel's guess. Seed <code>RolesAndPermissionsSeeder</code> in any test that checks platform permissions.</p>
+
+    <h2>Related modules</h2>
+    <div class="cards">
+        <a class="card" href="access.html"><h3>Access</h3><p>Platform roles and permissions.</p></a>
+        <a class="card" href="kyc.html"><h3>KYC</h3><p>The step that most often holds an account.</p></a>
+        <a class="card" href="package.html"><h3>Package</h3><p>Subscription, entitlements, staff limit.</p></a>
+        <a class="card" href="wallet.html"><h3>Wallet</h3><p>Opened on activation.</p></a>
+        <a class="card" href="billing.html"><h3>Billing</h3><p>The activation payment.</p></a>
+        <a class="card" href="referral.html"><h3>Referral</h3><p>Commissions triggered by activation.</p></a>
+        <a class="card" href="audit.html"><h3>Audit</h3><p>Where every decision is recorded.</p></a>
+        <a class="card" href="supplier.html"><h3>Supplier</h3><p>The separate Supplier account domain.</p></a>
+    </div>
+</main>
+</body>
+</html>

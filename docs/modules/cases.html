@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Cases module</title>
+    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+    <script src="../assets/docs.js"></script>
+</head>
+<body>
+<main id="doc">
+    <h1>Cases module</h1>
+    <p class="lead">The shared read side and evidence handling for returns, exchanges and damages (D35). <code>app/Domain/Cases</code> does not own the case workflows themselves: those live in <code>app/Domain/Order</code> (returns and exchanges) and <code>app/Domain/Damage</code>. It owns the evidence files, the "what is the next step" rule, and the queries that give staff and Partners one consistent view of any kind of case.</p>
+
+    <h2>Purpose</h2>
+    <p>A <em>case</em> is a return, an exchange or a damage. Returns and exchanges share the table <code>order_returns</code> (<code>case_type</code> = return | exchange, <code>workflow_version</code> = 2); a damage is its own record in <code>order_damages</code>. This module gives them one workspace: a unified staff queue, one timeline shape, one financial summary, one link builder, one evidence mechanism, and one definition of the next action and the permission it needs.</p>
+    <p>Users: platform staff (queue, case workspace, adding evidence), Partners (their own Returns &amp; Exchanges list and detail, drafts and evidence on their own requests) and the system. Implements D35 and spec §18.2, §19.1, §26.3, §31.3. The actions that move a case (approve, inspect, settle, finalize) are documented on <a href="order.html">Order</a> and <a href="damage.html">Damage</a>; notifications on <a href="notification.html">Notification</a>.</p>
+
+    <h2>Where it lives</h2>
+    <table>
+        <thead><tr><th>Path</th><th>Role</th></tr></thead>
+        <tbody>
+        <tr><td><code>app/Domain/Cases/Models/CaseEvidence.php</code></td><td>One file of evidence (table <code>case_evidence</code>).</td></tr>
+        <tr><td><code>app/Domain/Cases/Enums/EvidencePurpose.php</code></td><td>request, receipt, inspection, responsibility_review.</td></tr>
+        <tr><td><code>app/Domain/Cases/Actions/</code></td><td><code>StoreCaseEvidence</code>, <code>AttachDraftEvidence</code>, <code>DiscardDraftEvidence</code>.</td></tr>
+        <tr><td><code>app/Domain/Cases/Policies/CaseEvidencePolicy.php</code></td><td>Who may open or delete evidence.</td></tr>
+        <tr><td><code>app/Domain/Cases/Exceptions/CaseEvidenceRefused.php</code></td><td>Typed refusals with HTTP status and stable code.</td></tr>
+        <tr><td><code>app/Domain/Cases/CaseNextAction.php</code></td><td>The single next step per kind and stage, and its permission.</td></tr>
+        <tr><td><code>app/Domain/Cases/Queries/</code></td><td><code>CaseQueue</code>, <code>CaseTimeline</code>, <code>CaseFinancials</code>, <code>CaseLinks</code>, <code>CaseEstimate</code>, <code>AdminCasePayload</code>, <code>PartnerCasePayload</code>, <code>EvidencePayload</code>, <code>ProductImage</code>.</td></tr>
+        <tr><td><code>app/Http/Controllers/CaseEvidenceController.php</code></td><td>Draft upload, draft removal, signed serving.</td></tr>
+        <tr><td><code>app/Http/Controllers/Admin/CaseController.php</code>, <code>ReturnCaseActionController.php</code>, <code>DamageCaseActionController.php</code></td><td>Staff queue, case pages and one route per step.</td></tr>
+        <tr><td><code>app/Http/Controllers/Erp/CaseController.php</code>, <code>DamageController.php</code></td><td>Partner screens.</td></tr>
+        <tr><td><code>app/Http/Controllers/Concerns/RunsCaseActions.php</code></td><td>Shared controller helper (not read in detail).</td></tr>
+        <tr><td><code>app/Notifications/Cases/CaseOutcome.php</code>, <code>app/Notifications/Staff/CaseStepRequired.php</code></td><td>The two case notifications.</td></tr>
+        <tr><td><code>config/case_evidence.php</code></td><td>Evidence limits and accepted types.</td></tr>
+        <tr><td><code>resources/js/pages/cases/</code>, <code>resources/js/pages/admin/cases/</code></td><td>Partner (<code>index</code>, <code>create</code>, <code>show</code>) and staff (<code>index</code>, <code>show</code>) screens.</td></tr>
+        <tr><td><code>lang/en/cases.php</code> (and <code>bn</code>)</td><td>Wording, including <code>cases.next.*</code> action labels.</td></tr>
+        <tr><td><code>database/migrations/2026_11_17_100000_add_case_evidence.php</code>, <code>2026_11_18_100000_allow_erasing_case_evidence_text.php</code></td><td>Evidence table, guards and the erasure carve-out.</td></tr>
+        <tr><td><code>tests/Feature/Cases/</code></td><td>See Testing.</td></tr>
+        </tbody>
+    </table>
+
+    <h2>Key terms</h2>
+    <dl>
+        <dt>Case</dt>
+        <dd>A return, an exchange or a damage. A "kind" string is <code>return</code>, <code>exchange</code> or <code>damage</code>.</dd>
+        <dt>Workflow version</dt>
+        <dd><code>order_returns.workflow_version</code>: 1 for a return placed before D35 (finishes on the old screens with its old rules), 2 for the case workflow. <code>CaseNextAction</code> returns null for a version-1 return.</dd>
+        <dt>Draft evidence</dt>
+        <dd>A Partner's attachment while still writing a request: belongs to the order and uploader, not on any case, removable.</dd>
+        <dt>Submitted evidence</dt>
+        <dd>Evidence attached to a case. History: never deleted, never moved.</dd>
+        <dt>Responsible party / bearer</dt>
+        <dd>Who bears a cost, Partner or Banij. A case begins as the Partner's and only staff, with a reason, can say Banij.</dd>
+        <dt>Next action</dt>
+        <dd>The one step a case is waiting for, with the permission it needs.</dd>
+    </dl>
+
+    <h2>Data model</h2>
+    <p>The only table this module owns is <code>case_evidence</code> (<code>CaseEvidence</code>). It sits over the shared <code>stored_files</code> table (managed storage), which holds the file itself, privately.</p>
+    <table>
+        <thead><tr><th>Column</th><th>Notes</th></tr></thead>
+        <tbody>
+        <tr><td><code>public_id</code></td><td>ULID; used in URLs.</td></tr>
+        <tr><td><code>stored_file_id</code></td><td>Unique, restrict-on-delete FK to <code>stored_files</code>. Becomes null once, on account erasure (<code>file_erased_at</code> is stamped in the same statement).</td></tr>
+        <tr><td><code>business_account_id</code>, <code>order_id</code></td><td>The owning Partner account (the only scope a Partner is read through) and the order.</td></tr>
+        <tr><td><code>order_return_id</code>, <code>order_damage_id</code></td><td>The case, once submitted. At most one is set.</td></tr>
+        <tr><td><code>uploader_type</code> (<code>partner</code>|<code>staff</code>), <code>uploader_id</code></td><td>Who put it there.</td></tr>
+        <tr><td><code>purpose</code></td><td><code>EvidencePurpose</code>.</td></tr>
+        <tr><td><code>display_name</code> (120), <code>note</code> (500)</td><td>Cleaned original name; optional note.</td></tr>
+        <tr><td><code>status</code></td><td><code>draft</code> or <code>submitted</code>.</td></tr>
+        <tr><td><code>uploaded_at</code>, <code>submitted_at</code></td><td>Submitted rows must be dated.</td></tr>
+        </tbody>
+    </table>
+    <p>Database constraints and triggers: status, uploader and purpose value CHECKs; a row belongs to at most one case; a row is on a case exactly when it is submitted; only a Partner drafts; a locked-columns trigger on identity columns; and <code>feriwala_case_evidence_is_history()</code> refusing deletion of submitted rows and changes to their status, case links or submit time. The migration <code>2026_11_18_100000</code> replaces the old column lock with one narrow, one-way guard for account erasure: <code>display_name</code> may only become <code>[redacted]</code>, <code>note</code> may only become null or <code>[redacted]</code>, neither can change again once redacted, and the file may be detached once. Nothing else is unlocked.</p>
+    <p>The cases themselves: see <a href="order.html">Order</a> (<code>order_returns</code>, <code>order_return_items</code>, <code>order_return_charges</code>, responsibility changes, history) and <a href="damage.html">Damage</a> (<code>order_damages</code> and related tables). Earlier reference-only evidence on <code>order_returns.evidence</code> and <code>order_damages.evidence</code> is left as written and shown through <code>EvidencePayload::legacy()</code>.</p>
+
+    <h2>States &amp; lifecycle</h2>
+    <p>Evidence has two states, <code>draft</code> → <code>submitted</code> (one way). The case statuses are owned elsewhere; this module only reads them.</p>
+    <h3>Return and exchange (<code>ReturnStatus</code>, version 2)</h3>
+    <pre><code>requested -> approved -> waiting_for_parcel -> parcel_received -> under_inspection
+          -> inspection_approved -> settlement_pending -> completed
+early exits: rejected (refusing the request), inspection_rejected (refusing the goods),
+             cancelled (only while nothing has come back)</code></pre>
+    <p>Approving writes <code>approved</code> and <code>waiting_for_parcel</code> as two history rows so no stage is skipped. A refused case is asked for again as a new one. Nothing moves before inspection approves the goods: no stock, refund, charge or ledger entry.</p>
+    <h3>Damage (<code>DamageStatus</code>, per D35)</h3>
+    <p>reported → (awaiting_receipt | received | under_inspection) → received → under_inspection → liability_review → approved → financial_posting_pending → finalized → dispatch_requested → dispatched → received_by_partner, with rejected from any stage before the decision. An inspection that finds nothing damaged ends the case with no loss. Case values used by <code>CaseNextAction</code> are listed below; the enum itself is on the Damage page.</p>
+    <h3>Next action per stage (<code>CaseNextAction::for()</code>)</h3>
+    <table>
+        <thead><tr><th>Kind</th><th>Status</th><th>Key (<code>cases.next.*</code>)</th><th>Permission</th></tr></thead>
+        <tbody>
+        <tr><td>return / exchange</td><td><code>requested</code></td><td><code>review</code></td><td><code>return.review</code> or <code>exchange.review</code></td></tr>
+        <tr><td>return / exchange</td><td><code>waiting_for_parcel</code></td><td><code>receive_parcel</code></td><td><code>return.receive</code></td></tr>
+        <tr><td>return / exchange</td><td><code>parcel_received</code></td><td><code>start_inspection</code></td><td><code>return.inspect</code></td></tr>
+        <tr><td>return / exchange</td><td><code>under_inspection</code></td><td><code>inspect</code></td><td><code>return.inspect</code></td></tr>
+        <tr><td>return / exchange</td><td><code>inspection_approved</code></td><td><code>settle</code></td><td><code>return.refund</code></td></tr>
+        <tr><td>return / exchange</td><td><code>settlement_pending</code></td><td><code>finish_refund</code></td><td><code>return.refund</code></td></tr>
+        <tr><td>damage</td><td><code>reported</code>, <code>awaiting_receipt</code></td><td><code>receive_parcel</code></td><td><code>damage.inspect</code></td></tr>
+        <tr><td>damage</td><td><code>received</code></td><td><code>start_inspection</code></td><td><code>damage.inspect</code></td></tr>
+        <tr><td>damage</td><td><code>under_inspection</code></td><td><code>inspect</code></td><td><code>damage.inspect</code></td></tr>
+        <tr><td>damage</td><td><code>liability_review</code></td><td><code>assign_liability</code></td><td><code>damage.assign_liability</code></td></tr>
+        <tr><td>damage</td><td><code>financial_posting_pending</code></td><td><code>finalize</code></td><td><code>damage.finalize</code></td></tr>
+        <tr><td>damage</td><td><code>dispatch_requested</code></td><td><code>dispatch</code></td><td><code>damage.dispatch</code></td></tr>
+        <tr><td>damage</td><td><code>dispatched</code></td><td><code>confirm_receipt</code></td><td><code>damage.dispatch</code></td></tr>
+        </tbody>
+    </table>
+    <p>Other statuses return null. This drives the queue's "required action" column, the case header and the buttons, so none of them offers a step the server would refuse. It is a convenience: every action route re-checks permission and stage itself.</p>
+
+    <h2>Actions &amp; workflows</h2>
+    <table>
+        <thead><tr><th>Class</th><th>Purpose</th></tr></thead>
+        <tbody>
+        <tr><td><code>StoreCaseEvidence::draft()</code></td><td>A Partner's unsent attachment for a request on an order. Requires the actor's account to own the order, the order to have a website, and <code>manage</code> on that website. Capped at <code>case_evidence.max_per_case</code> drafts per uploader per order.</td></tr>
+        <tr><td><code>StoreCaseEvidence::onCase()</code></td><td>Staff evidence on an existing return, exchange or damage, submitted at once. Only the staff purposes (receipt, inspection, responsibility_review) are allowed. Permission by purpose: receipt = receive, inspection = inspect, anything else = review, for a return or exchange (an exchange has no parcel permissions of its own, so the return's apply); for a damage, responsibility_review = <code>damage.assign_liability</code>, else <code>damage.inspect</code>. Cap: twice the per-case maximum. Audit <code>order_return.evidence_added</code> or <code>damage.evidence_added</code> with the case reference and purpose only, nothing about the file.</td></tr>
+        <tr><td><code>AttachDraftEvidence</code></td><td>Called inside the transaction that opens the case. Takes only the sender's own drafts for this case's own order and account that are still drafts; anything else refuses everything with <code>notYourDraft</code>. Sets the case link, <code>submitted</code> and <code>submitted_at</code>.</td></tr>
+        <tr><td><code>DiscardDraftEvidence</code></td><td>Uploader only, draft only. Deletes the row and its stored file.</td></tr>
+        </tbody>
+    </table>
+    <h3>Evidence upload flow</h3>
+    <ol>
+        <li>The file goes through <code>StoreManagedFile</code> into the <code>case-evidence</code> area as a <strong>private</strong> file. The type is read from the file's own bytes (JPG, PNG, WebP, PDF per <code>config('case_evidence.mime_types')</code>), never the browser's claim. The size limit is the smaller of <code>case_evidence.max_bytes</code> and the server's <code>upload_max_filesize</code>/<code>post_max_size</code>.</li>
+        <li>A <code>UnacceptableFile</code> becomes <code>CaseEvidenceRefused::tooLarge</code> or <code>typeNotAccepted</code>.</li>
+        <li>The row is written with a cleaned display name and a note truncated to 500 characters.</li>
+        <li>Serving: <code>CaseEvidenceController::show()</code> is reached only through a <strong>signed</strong>, short-lived link (<code>cases.evidence.show</code>, <code>signed</code> middleware, <code>case_evidence.link_minutes</code>). It authorizes <code>view</code> per request, reads the bytes off the disk, 404s for an erased file, and answers with <code>no-store</code>, <code>nosniff</code>, <code>noindex</code> and a locked-down CSP. A signature only proves the ERP issued the link, not that the holder may use it.</li>
+    </ol>
+    <h3>Read-side queries</h3>
+    <table>
+        <thead><tr><th>Class</th><th>What it does</th></tr></thead>
+        <tbody>
+        <tr><td><code>CaseQueue</code></td><td>Returns, exchanges and damages in one queue, ordered by "needs somebody" then newest, with filtering and paging in the database. A kind is in the set only if the viewer holds its view permission, and the tab counts come from the same set. Rows carry references, Partner, store, product and quantity, never a customer's name, number or address.</td></tr>
+        <tr><td><code>CaseTimeline</code></td><td>One timeline merging status history, responsibility history, charges and evidence added. Staff see reasons, internal notes and names; a Partner sees only public notes, by kind of party, never by name and never the reason behind a responsibility decision.</td></tr>
+        <tr><td><code>CaseFinancials</code></td><td>Server-computed money rows, totals and ledger links. Staff see every charge, bearer and reversal; a Partner sees only their own effects, and a Banij-borne row is shown as covered with no amount. The browser only displays.</td></tr>
+        <tr><td><code>CaseLinks</code></td><td>Builds every link between an Order, case, Exchange Order and neighbouring exchanges, for staff (<code>order.view</code> to reach an order, the case's view permission to reach a case) or for the Partner (own account only). A link is null where it would be refused, and the reference is still shown.</td></tr>
+        <tr><td><code>CaseEstimate</code></td><td>Estimate before a request: return charge is half the original delivery charge, an exchange adds one new delivery and the exact price difference. From frozen snapshots and the delivery-charge service, never browser input. Final bearer is decided after inspection.</td></tr>
+        <tr><td><code>AdminCasePayload</code>, <code>PartnerCasePayload</code></td><td>The full staff workspace (only next steps this person may take; the server's own confirmation of what will happen before a money, stock or responsibility step) and the Partner's plain-language view (no warehouse, stock figure, disposition, staff note or staff name).</td></tr>
+        <tr><td><code>EvidencePayload</code>, <code>ProductImage</code></td><td>Evidence rows with signed links (never a path or disk); the catalogue image beside a product, if it still exists.</td></tr>
+        </tbody>
+    </table>
+
+    <h2>Entry points</h2>
+    <h3>Shared (any signed-in person; the policy decides)</h3>
+    <table>
+        <thead><tr><th>Name</th><th>Method / URL</th><th>Handler</th><th>Middleware</th></tr></thead>
+        <tbody>
+        <tr><td><code>cases.evidence.store</code></td><td>POST <code>/cases/evidence</code></td><td>CaseEvidenceController@store (JSON; body: <code>order</code> public id, <code>file</code>, optional <code>note</code>)</td><td><code>auth</code>, <code>noindex</code>, <code>throttle:store-actions</code>. Resolves the order only within the actor's own account; otherwise 404.</td></tr>
+        <tr><td><code>cases.evidence.destroy</code></td><td>DELETE <code>/cases/evidence/{evidence}</code></td><td>@destroy</td><td><code>auth</code>, <code>noindex</code>; policy <code>delete</code></td></tr>
+        <tr><td><code>cases.evidence.show</code></td><td>GET <code>/cases/evidence/{evidence}</code></td><td>@show (<code>?download=1</code> for attachment)</td><td><code>signed</code>; policy <code>view</code></td></tr>
+        </tbody>
+    </table>
+    <h3>Partner (ERP)</h3>
+    <table>
+        <thead><tr><th>Name</th><th>Method / URL</th><th>Handler</th></tr></thead>
+        <tbody>
+        <tr><td><code>cases.index</code></td><td>GET <code>/cases</code></td><td>Erp\CaseController@index</td></tr>
+        <tr><td><code>cases.create</code></td><td>GET <code>/cases/request/{order}</code></td><td>@create</td></tr>
+        <tr><td><code>cases.estimate</code></td><td>POST <code>/cases/request/{order}/estimate</code></td><td>@estimate (throttle <code>store-actions</code>)</td></tr>
+        <tr><td><code>cases.store</code></td><td>POST <code>/cases/request/{order}</code></td><td>@store (throttle <code>store-actions</code>)</td></tr>
+        <tr><td><code>cases.show</code></td><td>GET <code>/cases/{case}</code></td><td>@show</td></tr>
+        <tr><td><code>cases.cancel</code></td><td>POST <code>/cases/{case}/cancellation</code></td><td>@cancel</td></tr>
+        <tr><td><code>damages.index</code>, <code>.create</code>, <code>.store</code>, <code>.show</code>, <code>.delivery.store</code>, <code>.receipt.store</code></td><td>under <code>/my-damages</code></td><td>Erp\DamageController</td></tr>
+        </tbody>
+    </table>
+    <p>These are inside the ERP group (<code>auth</code>, <code>business.activated</code>). The Storefront API's <code>orders.return-requests.store</code> (scope <code>returns:write</code>) also opens a return on a customer's behalf; see <a href="order.html">Order</a>.</p>
+    <h3>Staff (admin; <code>/admin</code> prefix, <code>admin.</code> names)</h3>
+    <table>
+        <thead><tr><th>Name</th><th>URL</th><th>Handler</th></tr></thead>
+        <tbody>
+        <tr><td><code>admin.cases.index</code></td><td>GET <code>/admin/cases</code> (filter <code>?type=return|exchange|damage</code>)</td><td>Admin\CaseController@index</td></tr>
+        <tr><td><code>admin.cases.returns.show</code>, <code>admin.cases.damages.show</code></td><td>GET <code>/admin/cases/returns/{return}</code>, <code>/admin/cases/damages/{damage}</code></td><td>@showReturn, @showDamage</td></tr>
+        <tr><td><code>admin.cases.returns.*</code></td><td>POST under <code>/admin/cases/returns/{return}/</code>: <code>approval</code>, <code>rejection</code>, <code>parcel</code>, <code>inspection-start</code>, <code>inspection-approval</code>, <code>inspection-rejection</code>, <code>responsibility</code>, <code>settlement</code>, <code>collection</code>, <code>damages</code>, <code>evidence</code></td><td>ReturnCaseActionController (approve, reject, receiveParcel, startInspection, approveInspection, rejectInspection, changeResponsibility, settle, recordCollection, openDamage, addEvidence)</td></tr>
+        <tr><td><code>admin.cases.damages.*</code></td><td>POST under <code>/admin/cases/damages/{damage}/</code>: <code>parcel</code>, <code>inspection-start</code>, <code>inspection</code>, <code>rejection</code>, <code>liability</code>, <code>finalization</code>, <code>responsibility</code>, <code>dispatch</code>, <code>receipt</code>, <code>outstanding/{charge}</code>, <code>evidence</code></td><td>DamageCaseActionController</td></tr>
+        <tr><td><code>admin.returns.*</code></td><td>Legacy desk for version-1 returns (<code>show</code>, approval, rejection, receipt, refund, refund decision, refund settlement behind <code>RequirePassword</code>)</td><td>Admin\OrderReturnController. <code>admin.returns.index</code> redirects to the unified queue.</td></tr>
+        </tbody>
+    </table>
+    <p>Mobile and scheduled entry points: none specific to cases were verified in this module.</p>
+
+    <h2>Permissions &amp; scoping</h2>
+    <table>
+        <thead><tr><th>Module</th><th>Actions in the catalogue (<code>PermissionCatalogue</code>)</th></tr></thead>
+        <tbody>
+        <tr><td><code>return</code></td><td>view, create, review, receive, inspect, refund, export</td></tr>
+        <tr><td><code>exchange</code></td><td>view, create, review (its parcel, inspection and settlement are the return's permissions)</td></tr>
+        <tr><td><code>damage</code></td><td>view, inspect, assign_liability, finalize, dispatch, view_self, request_delivery</td></tr>
+        </tbody>
+    </table>
+    <p>One verb per job, so the person who decides who bears a loss cannot post it unless they also hold the right to post.</p>
+    <ul>
+        <li><strong>A Partner never holds these.</strong> The ordered <code>Gate::before</code> refuses every <code>return.</code>, <code>exchange.</code> and <code>damage.</code> ability to a business identity. A Partner reaches cases through their <em>own account</em> (a query scope, not a permission), needs the right to read orders to read a case and the right to manage the store to ask for one. Another Partner's case, damage, order or evidence is a 404.</li>
+        <li><strong>A Partner can</strong> request a return or exchange, report a damage, withdraw an unactioned request, add evidence to their own request, ask for a held damaged item to be delivered, and mark it received. They cannot say who is responsible, send an amount, change a status or finalize.</li>
+        <li><strong>Evidence policy</strong> (<code>CaseEvidencePolicy</code>): a draft is its uploader's alone (not colleagues, not staff). Submitted evidence is openable by someone in the owning account who holds the account permission <code>ViewOrders</code>, or by staff holding <code>damage.view</code> (damage) or <code>exchange.view</code>/<code>return.view</code> (by case type). Delete is the uploader's, draft only. The check runs against the signed-in person on every request.</li>
+        <li><strong>Staff queue visibility</strong>: a kind appears only with its view permission; badge counts never reveal how many cases of a hidden kind exist.</li>
+    </ul>
+
+    <h2>Money, ledger &amp; audit effects</h2>
+    <p>This module computes and displays money; it does not post it. Posting is in the Order module (<code>PostReturnCharge</code>, <code>ReverseReturnCharge</code>, <code>StartReturnSettlement</code>, <code>ChangeReturnResponsibility</code>) and the Damage module. The rules, from D35:</p>
+    <table>
+        <thead><tr><th>Charge</th><th>Partner bears</th><th>Banij bears</th></tr></thead>
+        <tbody>
+        <tr><td>Original delivery</td><td>History; never charged again</td><td>-</td></tr>
+        <tr><td>Return charge</td><td>Half the original delivery charge (rounded half away from zero to the poisha, e.g. 75.00 gives 37.50), debited from the wallet at settlement</td><td>Recorded in accounting only</td></tr>
+        <tr><td>Exchange delivery</td><td>One new delivery</td><td>Accounting only</td></tr>
+        <tr><td>Damage loss</td><td>Up to snapshotted suggested selling price x damaged quantity</td><td>Accounting only</td></tr>
+        <tr><td>Damaged-item delivery</td><td>Always the Partner's (they ask for it)</td><td>Never</td></tr>
+        </tbody>
+    </table>
+    <ul>
+        <li>A debit goes through <code>WalletService</code> (platform credit first, then withdrawable), writes an immutable ledger entry in the same transaction, and never forces a balance negative: an uncoverable charge is an <strong>outstanding liability</strong> collected when the money is there. A reversal credits exactly the kinds of money the debit took, via a new credit pointing at the entry it answers.</li>
+        <li>Idempotency: every financial effect has a key naming the case, kind and attribution revision, unique on the charge row, wallet transaction and ledger entry. Changing responsibility reverses a charge and posts it again to the new party: one compensating pair per charge, never an edit.</li>
+        <li>A refund is opened only by settlement after inspection approved, worked out from the order's immutable snapshots plus staff-approved adjustments (with a reason), never from a screen's figure. A dearer exchange's extra amount is recorded (who, how), never taken by the system.</li>
+        <li>Audit: evidence uploads audit with case reference and purpose only. The case-moving actions write their own audit rows (modules <code>return</code>, <code>exchange</code>, <code>damage</code>).</li>
+    </ul>
+
+    <h2>Configuration</h2>
+    <table>
+        <thead><tr><th>Key (env)</th><th>Default</th><th>Meaning</th></tr></thead>
+        <tbody>
+        <tr><td><code>case_evidence.max_bytes</code> (<code>CASE_EVIDENCE_MAX_BYTES</code>)</td><td>8 MB</td><td>Largest single file; held down to what PHP will accept.</td></tr>
+        <tr><td><code>case_evidence.max_per_case</code> (<code>CASE_EVIDENCE_MAX_PER_CASE</code>)</td><td>10</td><td>Drafts per uploader per order; a case holds up to twice this.</td></tr>
+        <tr><td><code>case_evidence.link_minutes</code> (<code>CASE_EVIDENCE_LINK_MINUTES</code>)</td><td>10</td><td>Signed link lifetime.</td></tr>
+        <tr><td><code>case_evidence.mime_types</code></td><td>jpeg, png, webp, pdf</td><td>Accepted types by sniffed MIME, mapped to extension.</td></tr>
+        </tbody>
+    </table>
+
+    <h2>Rules, invariants &amp; gotchas</h2>
+    <div class="callout callout-rule"><p><strong>Cross-links go through <code>CaseLinks</code>.</strong> Every link between an Order, case, Exchange Order and neighbouring exchanges is built by <code>CaseLinks</code> (url null when the reader may not open it). Never hand-build these URLs in a payload (<code>.ai/rules/cases.md</code>).</p></div>
+    <div class="callout callout-rule"><p><strong><code>case_evidence</code> is immutable by trigger, with one narrow exception.</strong> Migration <code>2026_11_18</code>: <code>display_name</code> to <code>[redacted]</code>, <code>note</code> to null or <code>[redacted]</code>, and the file detached once with <code>file_erased_at</code>. Nothing else may be unlocked for erasure.</p></div>
+    <div class="callout callout-rule"><p><strong>Nothing moves before inspection.</strong> No stock, refund, charge or ledger entry until a person has inspected and approved the goods (for a damage, until it is inspected and responsibility decided). A request, an approval and a parcel arriving are only statuses.</p></div>
+    <ul>
+        <li><strong>Sent evidence cannot be removed by anyone.</strong> A mistaken upload is answered with a new file and a note.</li>
+        <li><strong>Buttons are not the boundary.</strong> <code>CaseNextAction</code> and the payloads decide what to show; each action re-checks permission and stage.</li>
+        <li><strong>No customer data on lists.</strong> Queue rows, notifications and audit rows carry references and public ids, never names, numbers, addresses, evidence names or paths.</li>
+        <li><strong>Case notifications</strong> come from the models' <code>moveTo()</code>, after commit, through <code>AnnounceCaseEvent</code>. Never add a second sender in an action.</li>
+        <li><strong>Not supported, and says so:</strong> damage or return stock movement for a Supplier-supplied line (the report action refuses; staff see a warning); email, SMS or push for cases (in-app only); notifications go to the account owner only.</li>
+        <li>An earlier return (<code>workflow_version</code> 1) is not in <code>CaseNextAction</code> and finishes on the legacy desk.</li>
+    </ul>
+
+    <h2>How to...</h2>
+    <h3>Add a new evidence purpose</h3>
+    <ol>
+        <li>Add the case to <code>EvidencePurpose</code> (and to <code>forStaff()</code> if staff add it) and a label under the <code>case_evidence_purpose</code> group in <code>lang/*</code>.</li>
+        <li>Widen the <code>case_evidence_purpose_known</code> CHECK in a new migration.</li>
+        <li>Map it to a permission in <code>StoreCaseEvidence::requiredPermission()</code>.</li>
+        <li>Add tests (<code>AdminCaseWorkspaceTest</code> style) for allowed and refused staff.</li>
+    </ol>
+    <h3>Add a stage's next action</h3>
+    <ol>
+        <li>Add the status to the <code>match</code> in <code>CaseNextAction::for()</code> with the key and the permission it needs.</li>
+        <li>Add the label under <code>cases.next.{key}</code> in <code>lang/en/cases.php</code> and <code>lang/bn/cases.php</code> (<code>CaseTranslationsTest</code> guards the pair).</li>
+        <li>Add the route and action (see Order/Damage); the action must re-check permission and stage.</li>
+    </ol>
+    <h3>Show a new field on the staff or Partner case page</h3>
+    <ol>
+        <li>Add it to <code>AdminCasePayload</code> or <code>PartnerCasePayload</code>. Money comes from <code>CaseFinancials</code> as the server's own <code>Money</code> output; do not compute in React.</li>
+        <li>Check the Partner payload for leakage (staff note, warehouse, Banij amount) and add a test in <code>PartnerCaseScreensTest</code>.</li>
+    </ol>
+    <h3>Change the evidence limits</h3>
+    <ol>
+        <li>Set the env variables or edit <code>config/case_evidence.php</code>. The effective size limit is also bounded by PHP's upload settings.</li>
+    </ol>
+
+    <h2>Testing</h2>
+    <pre><code>psql -c 'CREATE SCHEMA IF NOT EXISTS testing_mine'
+DB_SEARCH_PATH=testing_mine vendor/bin/pest tests/Feature/Cases</code></pre>
+    <table>
+        <thead><tr><th>File</th><th>Covers (by name)</th></tr></thead>
+        <tbody>
+        <tr><td><code>tests/Feature/Cases/AdminCaseWorkspaceTest.php</code></td><td>Staff queue and workspace.</td></tr>
+        <tr><td><code>PartnerCaseScreensTest.php</code>, <code>PartnerDamageReportTest.php</code></td><td>Partner screens and reporting.</td></tr>
+        <tr><td><code>CaseNotificationsTest.php</code></td><td>Case notifications.</td></tr>
+        <tr><td><code>CaseErasureTest.php</code></td><td>Account erasure and evidence redaction.</td></tr>
+        <tr><td><code>CaseTranslationsTest.php</code></td><td>Language pairs.</td></tr>
+        <tr><td><code>ExchangeLinksTest.php</code></td><td>Cross-links.</td></tr>
+        <tr><td><code>tests/Feature/Orders/ReturnCaseWorkflowTest.php</code>, <code>ExchangeCaseTest.php</code>, <code>OrderReturnTest.php</code></td><td>The workflows themselves.</td></tr>
+        <tr><td><code>tests/Feature/Concurrency/ReturnConcurrencyTest.php</code></td><td>Double-click and race safety.</td></tr>
+        </tbody>
+    </table>
+    <p>There is no Pest group for <code>Cases</code> in <code>tests/Pest.php</code>; run by path. Return, exchange and damage fixtures are shared helpers declared in <code>tests/Pest.php</code> (see its comment on the return/exchange/damage screens) and <code>legacyReturnFlow()</code> for version-1 returns. Prefix any new helper to avoid global-namespace collisions.</p>
+
+    <h2>Related modules</h2>
+    <ul>
+        <li><a href="order.html">Order</a> - return and exchange actions, charges, refund link.</li>
+        <li><a href="damage.html">Damage</a> - the damage workflow.</li>
+        <li><a href="notification.html">Notification</a> - <code>AnnounceCaseEvent</code>.</li>
+        <li><a href="wallet.html">Wallet</a> - debits, reversals, outstanding liabilities.</li>
+        <li><a href="storage.html">Storage</a> - managed private files behind evidence.</li>
+        <li><a href="access.html">Access</a> - permission catalogue and the business-identity gate.</li>
+    </ul>
+</main>
+</body>
+</html>

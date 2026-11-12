@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>HTTP layers</title>
+    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+    <script src="../assets/docs.js"></script>
+</head>
+<body>
+<main id="doc">
+    <h1>HTTP layers</h1>
+    <p class="lead">How a URL becomes a response: the route files and their groups, route naming, the middleware aliases, controllers per layer, form requests, policies, API versions, webhooks, rate limiters, the API docs, Wayfinder, and the data Inertia shares with every page.</p>
+
+    <h2>Route files</h2>
+    <table>
+        <thead><tr><th>File</th><th>Loaded by</th><th>Contents</th></tr></thead>
+        <tbody>
+            <tr><td><code>routes/web.php</code></td><td><code>bootstrap/app.php</code> <code>withRouting(web: ...)</code></td><td>Home redirect, locale switch, the ERP (business panel) at the root, <code>/admin/*</code>, payment/store/courier webhooks, gateway browser returns. At its end it <code>require</code>s <code>settings.php</code> and <code>supplier.php</code>.</td></tr>
+            <tr><td><code>routes/settings.php</code></td><td>required from <code>web.php</code></td><td>Profile, security, subscription, invoices, receipts, staff (the account's own settings).</td></tr>
+            <tr><td><code>routes/supplier.php</code></td><td>required from <code>web.php</code></td><td>The Supplier portal, wholly separate (<code>supplier</code> prefix and name, <code>supplier</code> guard).</td></tr>
+            <tr><td><code>routes/api.php</code></td><td><code>withRouting(api: ...)</code> (prefix <code>/api</code>)</td><td><code>storefront/v1/*</code>, <code>mobile/v1/*</code> (mounts <code>routes/mobile.php</code>), <code>internal/tls/authorize</code>.</td></tr>
+            <tr><td><code>routes/mobile.php</code> + <code>routes/mobile/**</code></td><td>mounted from <code>api.php</code></td><td>One file per module; <code>guest/</code>, <code>supplier/</code>, <code>supplier/guest/</code> subfolders; <code>admin/</code> is globbed but no files exist in it today.</td></tr>
+            <tr><td><code>routes/channels.php</code></td><td><code>withRouting(channels: ...)</code></td><td>Private broadcast channels <code>notifications.user.{publicId}</code> (guard <code>web</code>) and <code>notifications.supplier.{publicId}</code> (guard <code>supplier</code>), keyed by public id and pinned to one guard.</td></tr>
+            <tr><td><code>routes/console.php</code></td><td><code>withRouting(commands: ...)</code></td><td>Scheduled tasks and closures. See <a href="commands.html">Commands</a>.</td></tr>
+        </tbody>
+    </table>
+    <p>Health: <code>/up</code> (framework), <code>/api/mobile/v1/health</code>, <code>/api/storefront/v1/health</code>. Fortify (<code>config/fortify.php</code>, prefix empty, guard <code>web</code>, username <code>email</code>, features: registration, email verification, password reset, two-factor, passkeys) registers the login/register/reset routes.</p>
+
+    <h2><code>routes/web.php</code> structure</h2>
+    <table>
+        <thead><tr><th>Group (middleware)</th><th>What is in it</th></tr></thead>
+        <tbody>
+            <tr><td>None</td><td><code>GET /</code> redirects to <code>login</code> (<code>home</code>); <code>PUT locale</code> (<code>locale.update</code>), open to guests so the login page can be read in Bangla.</td></tr>
+            <tr><td><code>auth</code>, <code>verified</code>, <code>business.activated</code></td><td><code>GET dashboard</code> (<code>dashboard</code>). Only activated business accounts ever reach it (<code>.ai/rules/controllers.md</code>).</td></tr>
+            <tr><td><code>auth</code>, <code>noindex</code></td><td>Routes that must work for people with no activated business: notifications read state, case evidence (signed, re-authorized links), staff invitation accept (<code>staff.invitation.*</code>).</td></tr>
+            <tr><td><code>auth</code>, <code>business.activated</code> (then <code>noindex</code>)</td><td>The business ERP: onboarding, mobile verification, KYC, package selection, activation checkout, wholesale catalog/cart/checkout/orders, wallet and top-up, addresses, payout methods, withdrawals, websites and their orders, store orders, external stores, customers, cases (returns, exchanges, damages), referrals, allocated stock.</td></tr>
+            <tr><td><code>auth</code>, <code>noindex</code>, <code>two-factor</code>; prefix <code>admin</code>, name <code>admin.</code></td><td>Platform administration: dashboard, activity log, roles/permissions, platform staff, accounts and activations, KYC review, packages, billing and gateways, wallets, catalog, inventory, suppliers, orders, shipments, websites, settings screens. Sensitive routes add <code>RequirePassword</code> (<code>password.confirm</code> flow).</td></tr>
+            <tr><td>Webhooks</td><td>Four named routes, see below. Outside any auth group.</td></tr>
+            <tr><td><code>Route::withoutMiddleware('web')</code> + <code>throttle:payment-returns</code></td><td>The payer's browser being posted back from a gateway (see below).</td></tr>
+        </tbody>
+    </table>
+    <div class="callout callout-warn"><p><strong>Gotcha: the funnel gate is an allow-list.</strong> <code>business.activated</code> (<code>EnsureBusinessAccountIsActivated</code>) keeps an unactivated account inside onboarding. It permits only route names that start with one of <code>ALLOWED_ROUTE_PREFIXES</code> (<code>onboarding.</code>, <code>profile.</code>, <code>kyc.</code>, <code>packages.</code>, <code>subscription.</code>, <code>checkout.</code>, <code>security.</code>, <code>user-password.</code>, <code>well-known.</code>, <code>staff.invitation.</code>, <code>locale.</code>, <code>notifications.</code>, <code>logout</code>, <code>password.</code>, <code>verification.</code>). A new ERP route is closed by default; if it must be reachable before activation, <strong>name it under an allowed prefix</strong>, and a test asserts every prefix matches a real route. A person with no business account at all is redirected to their own home (<code>HomeRoute</code>) instead of the stepper.</p></div>
+
+    <h2>Route name conventions</h2>
+    <ul>
+        <li><strong>ERP:</strong> <code>&lt;area&gt;.&lt;resource&gt;.&lt;action&gt;</code> with no prefix: <code>wallet.show</code>, <code>wallet.top-up.create</code>, <code>kyc.create</code>, <code>wholesale.orders.*</code>, <code>websites.*</code>, <code>cases.returns.*</code>, <code>subscription.renew.pay</code>. Area names are the gate's allow-list keys.</li>
+        <li><strong>Admin:</strong> every route is <code>admin.&lt;area&gt;.&lt;action&gt;</code> (<code>admin.activity-log.index</code>, <code>admin.roles.store</code>, <code>admin.catalog.*</code>, <code>admin.inventory.*</code>). The <code>admin.</code> prefix is load-bearing: <code>DefaultReasonUnlessSecurity</code> and <code>config/reasons.php</code> match on it, and the catalog/inventory 403 pages in <code>bootstrap/app.php</code> match <code>admin.catalog.*</code> and <code>admin.inventory.*</code>.</li>
+        <li><strong>Supplier:</strong> <code>supplier.&lt;area&gt;.&lt;action&gt;</code>. <code>bootstrap/app.php</code> uses <code>routeIs('supplier.*')</code> to send a guest to <code>supplier.login</code> and a signed-in Supplier to <code>supplier.dashboard</code>.</li>
+        <li><strong>Mobile:</strong> <code>mobile.v1.&lt;module&gt;.&lt;action&gt;</code> (suppliers <code>mobile.v1.supplier.&lt;module&gt;...</code>). The name also decides the Swagger tag.</li>
+        <li><strong>Storefront:</strong> <code>storefront.v1.&lt;resource&gt;.&lt;action&gt;</code>.</li>
+        <li><strong>Webhooks:</strong> <code>webhooks.payment</code>, <code>webhooks.partner-payment</code>, <code>webhooks.stores</code>, <code>webhooks.courier.steadfast</code>.</li>
+        <li>Standard resource verbs: <code>index</code>, <code>show</code>, <code>create</code>, <code>store</code>, <code>edit</code>, <code>update</code>, <code>destroy</code>. Register literal segments (<code>roles/create</code>, <code>products/facets</code>) <em>before</em> wildcard ones (<code>roles/{role}</code>) so the literal wins.</li>
+        <li>Parameters are public ULIDs or slugs, never database ids (<code>HasPublicId</code>, <code>HasSlug</code>). ERP URLs carry no account segment.</li>
+    </ul>
+
+    <h2>Middleware aliases (<code>bootstrap/app.php</code>)</h2>
+    <table>
+        <thead><tr><th>Alias / class</th><th>Applies to</th><th>Does</th></tr></thead>
+        <tbody>
+            <tr><td><code>noindex</code> <code>PreventSearchIndexing</code></td><td>Authenticated ERP/admin/supplier groups</td><td><code>X-Robots-Tag</code> noindex, nofollow, noarchive, nosnippet (&sect;34.2). Not global: the public landing and storefronts must stay indexable.</td></tr>
+            <tr><td><code>business.activated</code></td><td>Business ERP</td><td>The &sect;5.4 funnel gate described above.</td></tr>
+            <tr><td><code>entitled:&lt;feature&gt;</code> <code>EnsureAccountIsEntitled</code></td><td>Inside <code>business.activated</code> (e.g. <code>entitled:staff_limit</code>)</td><td>Did this account buy the package feature? Never on admin routes.</td></tr>
+            <tr><td><code>two-factor</code> <code>RequireTwoFactorForSensitiveRoles</code></td><td>Admin group</td><td>Redirects holders of sensitive platform roles to 2FA enrolment (a redirect, not a 403).</td></tr>
+            <tr><td><code>supplier.operational</code></td><td>Per route inside <code>auth:supplier</code></td><td>Only an approved, un-suspended Supplier reaches operational routes; a Draft or Suspended Supplier still sees <code>supplier.dashboard</code>.</td></tr>
+            <tr><td><code>storefront.log</code>, <code>.auth</code>, <code>.host</code>, <code>.rate</code>, <code>.scope</code>, <code>.idempotent</code></td><td>Storefront API</td><td>Logged, authenticated (signature), host-checked, rate-limited, scoped, idempotent: in that order.</td></tr>
+            <tr><td><code>mobile.locale</code>, <code>.access</code>, <code>.activated</code>, <code>.operational</code>, <code>.two-factor</code>, <code>.password</code>, <code>.reason</code></td><td>Mobile API</td><td>Mobile counterparts of <code>SetLocale</code>, the identity gate, the funnel gate, supplier gate, 2FA, <code>RequirePassword</code> (<code>current_password</code> in the body) and the default reason.</td></tr>
+        </tbody>
+    </table>
+    <p>Global, in the <code>web</code> group (not aliases): <code>ApplyConfiguredSessionLifetime</code> (prepended), <code>HandleAppearance</code>, <code>DefaultReasonUnlessSecurity</code>, <code>EnsureIdentityHasPlatformAccess</code>, <code>SetLocale</code>, <code>TrackAuthenticatedSession</code>, <code>HandleInertiaRequests</code>, <code>AddLinkHeadersForPreloadedAssets</code>. The identity gate is global on purpose: a gate that has to be remembered per route group is one somebody forgets. Laravel's own aliases are used too: <code>auth</code>, <code>auth:supplier</code>, <code>auth:sanctum</code>, <code>verified</code>, <code>signed</code>, <code>throttle:...</code>, and <code>Illuminate\Auth\Middleware\RequirePassword</code> by class.</p>
+    <p>Other <code>bootstrap/app.php</code> settings: guests are redirected to <code>login</code> or <code>supplier.login</code> (<code>redirectGuestsTo</code>); signed-in users hitting a guest route go to <code>dashboard</code> or <code>supplier.dashboard</code> (<code>redirectUsersTo</code>); cookies <code>appearance</code> and <code>sidebar_state</code> are exempt from encryption; JSON is rendered for <code>api/*</code> and any request that expects JSON.</p>
+
+    <h2>Controllers per layer</h2>
+    <table>
+        <thead><tr><th>Folder</th><th>Audience</th><th>Notes</th></tr></thead>
+        <tbody>
+            <tr><td><code>app/Http/Controllers/Erp</code></td><td>Business panel (41 files)</td><td>Self-scoped via <code>ResolvesBusinessAccount</code>; returns Inertia pages.</td></tr>
+            <tr><td><code>app/Http/Controllers/Admin</code></td><td>Platform staff (95 files)</td><td>Authorize with a permission or policy; admin screens about an account authorize <code>viewDossier</code>, not <code>view</code>.</td></tr>
+            <tr><td><code>app/Http/Controllers/Supplier</code></td><td>Supplier portal</td><td>Own <code>Auth/</code> controllers; guard <code>supplier</code>.</td></tr>
+            <tr><td><code>app/Http/Controllers/Settings</code></td><td>Profile, security, account deletion</td><td>Used from <code>routes/settings.php</code>.</td></tr>
+            <tr><td><code>app/Http/Controllers/Api/Mobile/V1</code></td><td>Mobile app</td><td>Extend <code>MobileController</code>; one folder per module.</td></tr>
+            <tr><td><code>app/Http/Controllers/Api/Storefront/V1</code></td><td>Storefront API</td><td><code>Category</code>, <code>Checkout</code>, <code>Connection</code>, <code>Customer</code>, <code>DeliveryArea</code>, <code>Inventory</code>, <code>Order</code>, <code>Product</code>, <code>Return</code>, <code>Site</code>, plus <code>StorefrontController</code> base.</td></tr>
+            <tr><td><code>app/Http/Controllers/Api/Internal</code></td><td>Caddy certificate pre-issue check</td><td><code>AuthorizeCertificateController</code>; not part of the storefront contract.</td></tr>
+            <tr><td><code>app/Http/Controllers/Webhook</code></td><td>Gateways, stores, courier</td><td><code>PaymentWebhookController</code>, <code>ExternalStoreWebhookController</code>, <code>SteadfastWebhookController</code>, <code>GatewayReturnController</code>.</td></tr>
+            <tr><td><code>app/Http/Controllers/Public</code></td><td>Reserved</td><td>Empty (<code>.gitkeep</code>): the public site is only the login screen.</td></tr>
+            <tr><td>Root of <code>Controllers/</code></td><td>Shared</td><td><code>DashboardController</code>, <code>LocaleController</code>, <code>BankLookupController</code>, <code>LocationLookupController</code>, <code>CaseEvidenceController</code>, base <code>Controller</code>; <code>Concerns/RunsCaseActions</code>.</td></tr>
+        </tbody>
+    </table>
+    <p>A controller validates, authorizes, delegates to an Action and responds. See <a href="architecture.html">Architecture</a> for the lifecycle and <a href="conventions.html">Conventions</a> for the money-parsing rule.</p>
+
+    <h2>Form requests, policies and Gates</h2>
+    <h3>Form Requests</h3>
+    <p>Under <code>app/Http/Requests</code>, grouped by area: <code>Account</code>, <code>Catalog</code>, <code>ContentLibrary</code>, <code>Kyc</code>, <code>Package</code>, <code>Settings</code>, <code>Mobile/**</code>. The codebase is mixed: many controllers validate inline with <code>$request-&gt;validate()</code> (for example <code>Erp\WalletTopUpController</code>), the newer or larger forms use Form Requests. Follow the sibling controller. In either style, money fields use <code>DecimalAmountRule</code> and are parsed once with <code>DecimalAmount::parse()</code>.</p>
+    <h3>Policies and permissions</h3>
+    <ul>
+        <li>Policies live with their domain (<code>app/Domain/&lt;Module&gt;/Policies</code>) and are registered in <code>App\Providers\AuthorizationServiceProvider</code> with <code>Gate::policy(Model::class, Policy::class)</code>.</li>
+        <li>Permissions are named <code>&lt;module&gt;.&lt;action&gt;</code> from <code>App\Domain\Access\PermissionCatalogue</code> (<code>PermissionModule</code> x <code>PermissionAction</code>). <code>PermissionCatalogue::name($module, $action)</code> throws for a pair that is not in the catalogue matrix, so add it there first. Custom, database-backed roles and permissions are managed by <code>ManageCustomRole</code> and <code>ManageCustomPermission</code>.</li>
+        <li><code>Gate::before</code> in <code>AuthorizationServiceProvider</code> implements the Super Admin override, and refuses anything that is not a <code>User</code> (a <code>Supplier</code> holds no platform permission).</li>
+        <li>Some policies expose static helpers (<code>CatalogPolicy::canCreate($user)</code>, <code>CatalogPolicy::authorize()</code>) used by controllers and form requests alike.</li>
+        <li>Sensitive actions (&sect;32.2) go through <code>App\Domain\Access\SensitiveActionGuard</code> with <code>SensitiveActionRequest</code>.</li>
+        <li><strong>Reasons.</strong> <code>DefaultReasonUnlessSecurity</code> fills "No reason given." on <code>admin.*</code> (and a few partner) routes except those in <code>config/reasons.php</code>'s <code>required_for</code> (who can do what, sign-ins, suspensions, manual money moves). The mobile counterpart is <code>mobile.reason</code>.</li>
+    </ul>
+
+    <h2>API versioning</h2>
+    <table>
+        <thead><tr><th>API</th><th>Base path</th><th>Auth</th><th>Stability</th></tr></thead>
+        <tbody>
+            <tr><td>Mobile</td><td><code>/api/mobile/v1</code></td><td>Sanctum bearer token, device-bound</td><td>Versioned in the path. See <a href="../api/mobile-api.html">Mobile API</a>.</td></tr>
+            <tr><td>Storefront</td><td><code>/api/storefront/v1</code></td><td>Signed requests per website credential (key id, timestamp, nonce, signature)</td><td><strong>Frozen at v1.</strong> Non-breaking additions may ship; anything breaking needs v2 and approval. Contract: <code>requirements/05-storefront-api-contract.md</code>. See <a href="../api/storefront-api.html">Storefront API</a>.</td></tr>
+        </tbody>
+    </table>
+
+    <h2>Webhook controllers</h2>
+    <table>
+        <thead><tr><th>Route name</th><th>Method and URL</th><th>Controller</th><th>Authenticated by</th><th>Throttle</th></tr></thead>
+        <tbody>
+            <tr><td><code>webhooks.payment</code></td><td>POST <code>webhooks/payment/{gateway}</code></td><td><code>PaymentWebhookController</code></td><td>Gateway signature (where the provider signs); otherwise verified by asking the provider</td><td><code>payment-webhooks</code></td></tr>
+            <tr><td><code>webhooks.partner-payment</code></td><td>POST <code>webhooks/payment/{gateway}/{payment}</code></td><td>same</td><td>Signature with the payment's frozen Partner credentials version (D36)</td><td><code>payment-webhooks</code></td></tr>
+            <tr><td><code>webhooks.stores</code></td><td>POST <code>webhooks/stores/{store}</code></td><td><code>ExternalStoreWebhookController</code></td><td>Signature over the raw body under that store's secret (D29)</td><td><code>store-webhooks</code></td></tr>
+            <tr><td><code>webhooks.courier.steadfast</code></td><td>POST <code>webhooks/courier/steadfast</code></td><td><code>SteadfastWebhookController</code></td><td>Bearer token compared whole, in constant time, before the body is read</td><td><code>240,1</code></td></tr>
+            <tr><td><code>checkout.return.receive</code>, <code>checkout.cancelled.receive</code>, <code>checkout.failed.receive</code>, <code>wholesale.orders.payment.{return,cancelled,failed}.receive</code>, <code>website-orders.payment.{return,cancelled,failed}</code></td><td>POST (website-order ones also GET)</td><td><code>GatewayReturnController</code></td><td>Valid signature or an identifier already held; runs <em>without</em> the <code>web</code> group (no session, no CSRF)</td><td><code>payment-returns</code></td></tr>
+        </tbody>
+    </table>
+    <div class="callout callout-rule"><p><strong>Rule.</strong> Webhooks acknowledge fast and settle later in a queued job; they never decide anything about money from the notification body, and they answer identically for every non-signature outcome. CSRF exemptions are in <code>bootstrap/app.php</code>: <code>webhooks/payment/*</code>, <code>webhooks/stores/*</code>, <code>webhooks/courier/*</code>.</p></div>
+
+    <h2>Rate limiters</h2>
+    <p>Defined with <code>RateLimiter::for()</code> in the service providers; all others in the routes are inline <code>throttle:N,M</code>.</p>
+    <table>
+        <thead><tr><th>Name</th><th>Defined in</th><th>Limit and key</th><th>Used on</th></tr></thead>
+        <tbody>
+            <tr><td><code>mobile</code></td><td><code>ApiServiceProvider</code></td><td><code>config('mobile.rate_limit_per_minute', 120)</code> (env <code>MOBILE_API_RATE_LIMIT</code>) per minute, by user id, else IP</td><td>All mobile routes</td></tr>
+            <tr><td><code>mobile-two-factor</code></td><td><code>ApiServiceProvider</code></td><td>5 per minute, keyed on a hash of the <code>challenge_token</code></td><td>Mobile 2FA challenge</td></tr>
+            <tr><td><code>payment-webhooks</code></td><td><code>PaymentServiceProvider</code></td><td><code>config('payment.webhook_rate_limit', 120)</code> per minute, by gateway and IP</td><td><code>webhooks.payment</code>, <code>webhooks.partner-payment</code></td></tr>
+            <tr><td><code>payment-returns</code></td><td><code>PaymentServiceProvider</code></td><td><code>config('payment.return_rate_limit', 30)</code> per minute, by IP</td><td>Gateway browser returns</td></tr>
+            <tr><td><code>store-webhooks</code></td><td><code>StoreServiceProvider</code></td><td><code>config('stores.webhook_rate_limit', 240)</code> per minute, by store and IP</td><td><code>webhooks.stores</code></td></tr>
+            <tr><td><code>store-actions</code></td><td><code>StoreServiceProvider</code></td><td>6 per minute, by user id, else IP ("Sync now", "Test connection")</td><td>External store actions, case evidence upload</td></tr>
+            <tr><td><code>tls-ask</code></td><td><code>WebsiteServiceProvider</code></td><td><code>config('website.tls.ask_rate_limit', 120)</code> per minute, by IP</td><td><code>internal.tls.authorize</code></td></tr>
+            <tr><td><code>two-factor</code></td><td><code>FortifyServiceProvider</code></td><td>5 per minute, by <code>login.id</code> in the session</td><td>Web 2FA challenge</td></tr>
+            <tr><td><code>passkeys</code></td><td><code>FortifyServiceProvider</code></td><td>10 per minute, by credential id (or session id) and IP</td><td>Passkey login</td></tr>
+            <tr><td><code>storefront.rate:read|write|other</code></td><td><code>LimitStorefrontRate</code> middleware</td><td>Per credential and per website budget per class, from <code>config('website.api.rate_limits.&lt;class&gt;')</code></td><td>Storefront API</td></tr>
+            <tr><td>Login</td><td><code>App\Support\Security\LoginThrottle</code></td><td>Counts failed attempts only (no <code>login</code> limiter on purpose; <code>fortify.limiters.login</code> is null)</td><td>Web and mobile sign-in</td></tr>
+        </tbody>
+    </table>
+    <p>Inline limits seen in the route files: <code>throttle:6,1</code> (password change, Steadfast token/test), <code>throttle:5,1</code> (account deletion request), <code>throttle:10,1</code> and <code>throttle:20,1</code> (Steadfast booking and sync), plus per-route mobile registration/password limits (<code>throttle:10,1,mobile-register</code>, <code>throttle:5,1,mobile-password-forgot</code> ...).</p>
+
+    <h2>API documentation (Scramble)</h2>
+    <p><code>App\Providers\ApiServiceProvider</code> configures two OpenAPI documents generated from the routes, Form Requests, API Resources and controller PHPDoc, so they cannot drift from the code:</p>
+    <table>
+        <thead><tr><th>URL</th><th>What</th></tr></thead>
+        <tbody>
+            <tr><td><code>/docs/mobile</code></td><td>Swagger UI for the mobile API (view <code>docs.swagger</code>, route name <code>docs.swagger</code>)</td></tr>
+            <tr><td><code>/docs/storefront</code></td><td>Swagger UI for the storefront API</td></tr>
+            <tr><td><code>/docs/mobile.json</code>, <code>/docs/storefront.json</code></td><td>Raw OpenAPI 3.1 documents</td></tr>
+            <tr><td><code>/docs/mobile/scramble</code>, <code>/docs/storefront/scramble</code></td><td>Scramble's own UI</td></tr>
+        </tbody>
+    </table>
+    <ul>
+        <li>The intro text of each document is <code>docs/api/mobile.md</code> and <code>docs/api/storefront.md</code>.</li>
+        <li>Access: the <code>viewApiDocs</code> Gate. Open when <code>config('scramble.public')</code> (env <code>API_DOCS_PUBLIC</code>) is true; otherwise only a Super Admin or System Administrator (<code>RestrictedDocsAccess</code>). Per the config comment it is also open locally.</li>
+        <li>Tags come from the route name: <code>mobile.v1.wallet.transactions.show</code> is "Wallet"; <code>mobile.v1.admin.orders.index</code> is "Admin &middot; Orders"; <code>mobile.v1.supplier.*</code> likewise. Naming a route is how it is filed (<code>ApiServiceProvider::tagFor()</code>).</li>
+        <li><code>config/scramble.php</code> <code>api_path</code> is <code>api/mobile/v1</code> for the default document; the storefront document is registered with <code>Scramble::registerApi('storefront', ...)</code>.</li>
+    </ul>
+
+    <h2>Wayfinder-generated route helpers</h2>
+    <p>Wayfinder turns Laravel routes into typed TypeScript. The output directories <code>resources/js/actions</code> (per controller), <code>resources/js/routes</code> (per named route) and <code>resources/js/wayfinder</code> are <strong>generated and git-ignored</strong>; the Vite plugin (<code>wayfinder({ formVariants: true })</code> in <code>vite.config.ts</code>) regenerates them during <code>npm run dev</code>.</p>
+<pre><code>php artisan wayfinder:generate --with-form</code></pre>
+    <div class="callout callout-warn"><p><strong>Gotcha.</strong> Always pass <code>--with-form</code>. A bare <code>wayfinder:generate</code> omits the <code>.form</code> helpers that dozens of pages call (<code>login().form</code>) and breaks <code>tsc --noEmit</code> in ~40 unrelated files with <code>Property 'form' does not exist</code> (<code>.ai/rules/actions.md</code>). A new route is invisible to the front end until you regenerate. If the dev server is not running and a page imports a route that is not generated, TypeScript fails, not PHP.</p></div>
+    <p>Usage: <code>import { show } from '@/routes/wallet'</code> or <code>import WalletTopUpController from '@/actions/App/Http/Controllers/Erp/WalletTopUpController'</code>. Controller actions are also generated, so renaming or moving a controller changes its import path. See <a href="frontend.html">Frontend</a>.</p>
+
+    <h2>Inertia shared props (<code>HandleInertiaRequests</code>)</h2>
+    <p>Every Inertia response carries these props. They resolve the <em>one identity the route asked for</em>: on a supplier route <code>auth.user</code> is null and only the supplier is shared; otherwise only the <code>web</code> user. A browser can hold both sessions, but a page never carries the other person's profile.</p>
+    <table>
+        <thead><tr><th>Prop</th><th>Value</th></tr></thead>
+        <tbody>
+            <tr><td><code>name</code></td><td><code>config('app.name')</code></td></tr>
+            <tr><td><code>branding</code></td><td>Logo and icon addresses, accent colours (<code>Branding::toArray()</code>), never a storage path.</td></tr>
+            <tr><td><code>auth.user</code></td><td>The signed-in <code>User</code> (null on supplier routes).</td></tr>
+            <tr><td><code>supplierAccount</code></td><td>Business name, reference, status, status label, <code>operational</code>, unread count, only for a Supplier.</td></tr>
+            <tr><td><code>impersonation</code></td><td><code>{kind, name}</code> while an admin views a partner or supplier dashboard.</td></tr>
+            <tr><td><code>sidebarOpen</code></td><td>From the <code>sidebar_state</code> cookie.</td></tr>
+            <tr><td><code>account</code></td><td><strong>The viewer's own</strong> business account (<code>AccountContext::forUser</code>); null for staff without one. Not a list, so no one builds a switcher.</td></tr>
+            <tr><td><code>locale</code></td><td><code>{current, direction, available}</code>.</td></tr>
+            <tr><td><code>translations</code></td><td>Lazy closure; the active locale's <code>lang/&lt;locale&gt;/*.php</code> tree merged over English.</td></tr>
+            <tr><td><code>permissions</code></td><td>A short <code>{ 'module.action': bool }</code> map for navigation, from <code>NAVIGATION_ABILITIES</code>.</td></tr>
+            <tr><td><code>notifications</code>, <code>unreadNotificationCount</code></td><td>Header bell, lazy.</td></tr>
+            <tr><td><code>realtimeChannel</code></td><td>The private channel name this person may listen on.</td></tr>
+        </tbody>
+    </table>
+    <p>Closures are lazy: they run once per full page load and are skipped on partial reloads that do not ask for them.</p>
+    <div class="callout callout-warn"><p><strong>Gotcha: a page prop must not shadow a shared prop.</strong> Page props are merged over shared ones, so a page that returns its own <code>account</code> silently overwrites the viewer's account for the whole shell (<code>.ai/rules/account-access.md</code>). The admin account detail screen returns its subject as <code>business</code> for exactly this reason; when it was <code>account</code>, the sidebar named the business being looked at and the "My business" group appeared for platform staff. Nothing failed; it just lied. Before naming a page prop, check <code>HandleInertiaRequests::share()</code> (<code>name</code>, <code>branding</code>, <code>auth</code>, <code>supplierAccount</code>, <code>impersonation</code>, <code>sidebarOpen</code>, <code>account</code>, <code>locale</code>, <code>translations</code>, <code>permissions</code>, <code>notifications</code>, <code>unreadNotificationCount</code>, <code>realtimeChannel</code>, and Inertia's own <code>errors</code>/flash).</p></div>
+    <div class="callout callout-warn"><p><strong>Gotcha: a navigation link needs its ability shipped.</strong> <code>permissions</code> is an explicit list, not the user's whole permission set (161 entries would ship the access model to every browser). A link gated on a key that is not in <code>NAVIGATION_ABILITIES</code> reads <code>undefined</code> and silently never appears, even for a Super Admin who can open the page by URL. Add the entry when you add the nav link; <code>tests/Feature/Ui/NavigationPermissionsTest.php</code> fails if one is missing.</p></div>
+
+    <h2>How to add a page-backed route</h2>
+    <ol>
+        <li>Add the Action in <code>app/Domain/&lt;Module&gt;/Actions</code>, and a Policy method or permission.</li>
+        <li>Add the controller method in the right folder (<code>Erp</code>, <code>Admin</code>, <code>Supplier</code>), validating (parse money with <code>DecimalAmount</code>), authorizing and delegating.</li>
+        <li>Register the route in the right group in <code>routes/web.php</code>, named by the conventions above. ERP route that must work before activation: name it under an allowed prefix.</li>
+        <li>Regenerate Wayfinder (<code>php artisan wayfinder:generate --with-form</code> or <code>npm run dev</code>).</li>
+        <li>Add the page under <code>resources/js/pages/&lt;area&gt;/</code>, import the typed route, add <code>lang/en</code> and <code>lang/bn</code> lines, and the nav entry plus its <code>NAVIGATION_ABILITIES</code> row if it is a menu item.</li>
+        <li>Add a feature test (authorization failure included) and run <code>vendor/bin/pest &lt;file&gt;</code> in its own schema.</li>
+    </ol>
+    <p>See also: <a href="architecture.html">Architecture</a>, <a href="frontend.html">Frontend</a>, <a href="../api/mobile-api.html">Mobile API</a>, <a href="../integrations/overview.html">Integrations</a>.</p>
+</main>
+</body>
+</html>

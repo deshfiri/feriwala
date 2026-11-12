@@ -78,7 +78,7 @@ services:
                 'php',
                 'artisan',
                 'queue:work',
-                '--queue=payments,sync,notifications,sms,reports,maintenance',
+                '--queue=payments,webhooks,sms,default,sync,notifications,reports,maintenance',
                 '--tries=3',
                 '--max-time=3600',
             ]

@@ -18,16 +18,16 @@ use App\Domain\Website\Data\IssuedCredential;
  */
 class StorefrontEnvironmentBlock
 {
-    public const BASE_URL = 'BANIJ_ERP_BASE_URL';
+    public const BASE_URL = 'ERP_BASE_URL';
 
-    public const KEY_ID = 'BANIJ_CREDENTIAL_KEY_ID';
+    public const KEY_ID = 'STORE_ID';
 
-    public const SECRET = 'BANIJ_CREDENTIAL_SECRET';
+    public const SECRET = 'STORE_TOKEN';
 
     public static function for(IssuedCredential $issued, string $erpOrigin): string
     {
         return implode("\n", [
-            '# Banij Storefront — ERP credential (server-side only; never commit)',
+            '# Feriwala storefront connection (server-side only; never commit this)',
             self::BASE_URL.'='.self::origin($erpOrigin),
             self::KEY_ID.'='.$issued->credential->key_id,
             self::SECRET.'='.$issued->secret,
