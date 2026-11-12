@@ -172,7 +172,7 @@ class PlaceWebsiteOrder
             throw WebsiteOrderRefused::keyReused();
         }
 
-        $quote = $this->pricing->quote($website, $submission->items);
+        $quote = $this->pricing->quote($website, $submission->items, null, $submission->sellerDiscount);
 
         if (! $quote->matches($submission->claimedUnitPrices, $submission->claimedTotals)) {
             throw WebsiteOrderRefused::priceMismatch(
@@ -375,6 +375,14 @@ class PlaceWebsiteOrder
             }
 
             if ($terms->refusalFor($line->unitPrice) !== null) {
+                throw WebsiteOrderRefused::priceOutsideRules($line->sku);
+            }
+
+            // A discount may not take what the customer pays for the line under
+            // the platform's minimum selling price for it.
+            if ($line->discount->isPositive()
+                && $terms->minimum !== null
+                && $line->subtotal->minus($line->discount)->lessThan($terms->minimum->multipliedBy($line->quantity))) {
                 throw WebsiteOrderRefused::priceOutsideRules($line->sku);
             }
         }

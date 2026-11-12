@@ -79,6 +79,7 @@ beforeEach(function () {
         PackageFeature::DropshippingEnabled->value => '1',
         PackageFeature::ProductPublishLimit->value => null,
     ]);
+    $this->chain = addressTestLocationChain();
     $this->partner = $this->account->owner;
     $this->website = Website::factory()->forAccount($this->account)->active()->create(['name' => 'Alpha shop']);
     $this->selection = partnerOrderTestSelection($this->website);
@@ -110,8 +111,11 @@ function partnerOrderTestBody(array $overrides = []): array
         'token' => (string) Str::uuid(),
         'customer_name' => 'Ayesha Rahman',
         'customer_phone' => '01712-345678',
+        'division_id' => test()->chain['division']->id,
+        'district_id' => test()->chain['district']->id,
+        'upazila_id' => test()->chain['upazila']->id,
+        'union_id' => test()->chain['union']->id,
         'line1' => 'House 12, Road 3',
-        'city' => 'Dhaka',
         'items' => [['sku' => test()->selection->product->sku, 'quantity' => 2]],
     ], $overrides);
 }
@@ -147,7 +151,11 @@ describe('placing the order', function () {
             ->and($order->website_id)->toBe($this->website->id)
             ->and($order->total->toDecimal())->toBe('5260.00')
             ->and($order->customer['mobile'])->toBe('+8801712345678')
-            ->and($order->shipping_address['city'])->toBe('Dhaka')
+            ->and($order->shipping_address['city'])->toBe('Test Upazila')
+            ->and($order->shipping_address['district'])->toBe('Test District')
+            ->and($order->shipping_address['division'])->toBe('Test Division')
+            ->and($order->shipping_address['union'])->toBe('Test Union')
+            ->and($order->shipping_address['line1'])->toBe('House 12, Road 3')
             ->and($order->items()->count())->toBe(1)
             ->and($order->items()->sole()->stock_reservation_id)->not->toBeNull();
     });
@@ -159,6 +167,42 @@ describe('placing the order', function () {
         ]))->assertRedirect();
 
         expect(partnerOrderTestOrders()->sole()->total->toDecimal())->toBe('5260.00');
+    });
+
+    it('takes a seller\'s discount off the goods, shared exactly across the lines, and leaves delivery as the platform sets it', function () {
+        $second = partnerOrderTestSelection($this->website);
+        websiteTestOwnsSelection($second, 20);
+
+        $this->actingAs($this->partner)->post(route('store-orders.store'), partnerOrderTestBody([
+            'discount' => '100.01',
+            'items' => [
+                ['sku' => $this->selection->product->sku, 'quantity' => 2],
+                ['sku' => $second->product->sku, 'quantity' => 1],
+            ],
+        ]))->assertSessionHasNoErrors();
+
+        $order = partnerOrderTestOrders()->sole()->load('items', 'payment');
+
+        // 2 × 2600 + 1 × 2600 = 7800.00, less 100.01, plus the platform's 60.00 delivery.
+        expect($order->subtotal->toDecimal())->toBe('7800.00')
+            ->and($order->discount->toDecimal())->toBe('100.01')
+            ->and($order->delivery->toDecimal())->toBe('60.00')
+            ->and($order->total->toDecimal())->toBe('7759.99')
+            ->and($order->payment->amount->toDecimal())->toBe('7759.99')
+            ->and($order->items->reduce(fn ($sum, $item) => bcadd($sum, $item->discount->toDecimal(), 2), '0.00'))->toBe('100.01')
+            ->and($order->items->reduce(fn ($sum, $item) => bcadd($sum, $item->line_total->toDecimal(), 2), '0.00'))->toBe('7699.99');
+    });
+
+    it('refuses a discount that is as much as the goods, and makes no order', function () {
+        $this->actingAs($this->partner)->post(route('store-orders.store'), partnerOrderTestBody([
+            'discount' => '5200.00',
+        ]))->assertSessionHasErrors('discount');
+
+        $this->actingAs($this->partner)->post(route('store-orders.store'), partnerOrderTestBody([
+            'discount' => 'abc',
+        ]))->assertSessionHasErrors('discount');
+
+        expect(partnerOrderTestOrders()->count())->toBe(0);
     });
 
     it('is one order however many times the same form is sent', function () {
@@ -186,10 +230,20 @@ describe('placing the order', function () {
         expect(partnerOrderTestOrders()->count())->toBe(0);
     });
 
+    it('refuses a district that is not inside the chosen division, and makes no order', function () {
+        $other = addressTestLocationChain();
+
+        $this->actingAs($this->partner)->post(route('store-orders.store'), partnerOrderTestBody([
+            'district_id' => $other['district']->id,
+        ]))->assertSessionHasErrors('district_id');
+
+        expect(partnerOrderTestOrders()->count())->toBe(0);
+    });
+
     it('needs the customer, an address and at least one product', function () {
         $this->actingAs($this->partner)->post(route('store-orders.store'), [
             'storefront' => $this->website->public_id, 'token' => (string) Str::uuid(),
-        ])->assertSessionHasErrors(['customer_name', 'customer_phone', 'line1', 'city', 'items']);
+        ])->assertSessionHasErrors(['customer_name', 'customer_phone', 'division_id', 'district_id', 'upazila_id', 'line1', 'items']);
     });
 });
 
@@ -208,6 +262,22 @@ describe('what the form is told', function () {
             ->assertJsonPath('data.subtotal.amount', '5200.00')
             ->assertJsonPath('data.delivery.amount', '60.00')
             ->assertJsonPath('data.total.amount', '5260.00');
+    });
+
+    it('quotes with the discount taken off', function () {
+        $this->actingAs($this->partner)->postJson(route('store-orders.quote'), [
+            'storefront' => $this->website->public_id,
+            'items' => [['sku' => $this->selection->product->sku, 'quantity' => 2]],
+            'discount' => '200.00',
+        ])->assertOk()
+            ->assertJsonPath('data.discount.amount', '200.00')
+            ->assertJsonPath('data.total.amount', '5060.00');
+
+        $this->actingAs($this->partner)->postJson(route('store-orders.quote'), [
+            'storefront' => $this->website->public_id,
+            'items' => [['sku' => $this->selection->product->sku, 'quantity' => 2]],
+            'discount' => '9999.00',
+        ])->assertUnprocessable()->assertJsonValidationErrors('discount');
     });
 
     it('puts the same button on the Partner\'s main Orders list', function () {

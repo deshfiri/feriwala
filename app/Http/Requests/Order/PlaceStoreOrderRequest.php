@@ -2,11 +2,13 @@
 
 namespace App\Http\Requests\Order;
 
+use App\Support\Money\Rules\DecimalAmountRule;
 use Illuminate\Foundation\Http\FormRequest;
 
 /**
  * A Partner taking an order for their own customer. Shape only: the website is
- * found inside the Partner's own account, and every price is the ERP's.
+ * found inside the Partner's own account, the delivery place is checked against
+ * the location directory, and every price is the ERP's.
  */
 class PlaceStoreOrderRequest extends FormRequest
 {
@@ -16,7 +18,7 @@ class PlaceStoreOrderRequest extends FormRequest
     }
 
     /**
-     * @return array<string, array<int, string>>
+     * @return array<string, array<int, mixed>>
      */
     public function rules(): array
     {
@@ -26,12 +28,14 @@ class PlaceStoreOrderRequest extends FormRequest
             'customer_name' => ['required', 'string', 'max:160'],
             'customer_phone' => ['required', 'string', 'max:32'],
             'customer_email' => ['nullable', 'email', 'max:254'],
+            'division_id' => ['required', 'integer'],
+            'district_id' => ['required', 'integer'],
+            'upazila_id' => ['required', 'integer'],
+            'union_id' => ['nullable', 'integer'],
             'line1' => ['required', 'string', 'max:255'],
-            'line2' => ['nullable', 'string', 'max:255'],
-            'city' => ['required', 'string', 'max:120'],
-            'district' => ['nullable', 'string', 'max:120'],
             'postcode' => ['nullable', 'string', 'max:20'],
             'note' => ['nullable', 'string', 'max:1000'],
+            'discount' => ['nullable', new DecimalAmountRule],
             'items' => ['required', 'array', 'min:1', 'max:100'],
             'items.*.sku' => ['required', 'string', 'max:64'],
             'items.*.quantity' => ['required', 'integer', 'min:1', 'max:10000'],

@@ -13,6 +13,7 @@ use App\Domain\Website\Data\WebsiteCustomerDetails;
 use App\Domain\Website\Models\Website;
 use App\Models\User;
 use App\Support\Localization\MobileNumber;
+use App\Support\Money\Money;
 use Illuminate\Support\Str;
 
 /**
@@ -44,9 +45,9 @@ class PlaceOrderOnBehalf
      *
      * @throws WebsiteOrderRefused
      */
-    public function quote(Website $website, array $items): WebsiteOrderQuote
+    public function quote(Website $website, array $items, ?Money $discount = null): WebsiteOrderQuote
     {
-        return $this->pricing->quote($website, $this->normalised($items));
+        return $this->pricing->quote($website, $this->normalised($items), null, $discount);
     }
 
     /**
@@ -65,6 +66,7 @@ class PlaceOrderOnBehalf
         array $items,
         string $idempotencyKey,
         ?string $note = null,
+        ?Money $discount = null,
     ): array {
         $mobile = $this->mobiles->normalise($customer['mobile']);
 
@@ -73,7 +75,7 @@ class PlaceOrderOnBehalf
         }
 
         $items = $this->normalised($items);
-        $quote = $this->pricing->quote($website, $items);
+        $quote = $this->pricing->quote($website, $items, null, $discount);
 
         // The figures come from the ERP's own quote, so the claim the intake
         // checks is the price the Partner was shown a moment ago.
@@ -100,6 +102,7 @@ class PlaceOrderOnBehalf
             ],
             paymentMethod: 'cod',
             customerNote: $note,
+            sellerDiscount: $quote->discount->isPositive() ? $quote->discount : null,
         );
 
         [$order, $placed] = $this->orders->handle($website, $submission);

@@ -1,11 +1,15 @@
 import { useForm, useHttp } from '@inertiajs/react';
 import { Plus, Trash2 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
+import LocationPicker from '@/components/address-book/location-picker';
+import type { LocationChain } from '@/components/address-book/location-picker';
 import NativeSelect from '@/components/forms/native-select';
 import Textarea from '@/components/forms/textarea';
 import InputError from '@/components/input-error';
 import MoneyAmount from '@/components/money-amount';
+import MoneyInput from '@/components/money-input';
+import ProductSearchSelect from '@/components/product-search-select';
 import { Button } from '@/components/ui/button';
 import {
     Dialog,
@@ -19,8 +23,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useTranslation } from '@/hooks/use-translation';
 import type { Money } from '@/lib/money';
-
-type ProductOption = { sku: string; label: string; price: Money };
+import { children, divisions } from '@/routes/locations';
 
 type Quote = {
     lines: {
@@ -31,12 +34,13 @@ type Quote = {
         line_total: Money;
     }[];
     subtotal: Money;
+    discount: Money;
     delivery: Money;
     tax: Money;
     total: Money;
 };
 
-type Line = { sku: string; quantity: string };
+type Line = { sku: string; label: string | null; quantity: string };
 
 export type NewStoreOrderUrls = {
     products: string;
@@ -44,15 +48,25 @@ export type NewStoreOrderUrls = {
     store: string;
 };
 
-const emptyLine = (): Line => ({ sku: '', quantity: '1' });
+const emptyLine = (): Line => ({ sku: '', label: null, quantity: '1' });
+
+const divisionsUrl = divisions.url();
+
+// Stable on purpose: the location picker refetches whenever this changes.
+const childrenUrl = (
+    parentType: 'division' | 'district' | 'upazila',
+    parentSourceId: string,
+) => children.url([parentType, parentSourceId]);
 
 /**
  * A Partner takes an order for their own customer, in a popup.
  *
- * The price is never worked out here: every change to the lines asks the server
- * for a quote and shows exactly what it answers (§36.1). The order is cash on
- * delivery, and a double click is one order because the form carries a single
- * token for its whole life.
+ * The delivery place is picked Division, then District, then Upazila, then
+ * Union, each list opening once the one before it is chosen. Products are found
+ * by typing. The price is never worked out here: every change to the lines asks
+ * the server for a quote and shows exactly what it answers (§36.1). The order is
+ * cash on delivery, and a double click is one order because the form carries a
+ * single token for its whole life.
  */
 export default function NewStoreOrderDialog({
     open,
@@ -68,11 +82,8 @@ export default function NewStoreOrderDialog({
     const { t } = useTranslation();
     const [token, setToken] = useState(() => crypto.randomUUID());
     const [lines, setLines] = useState<Line[]>([emptyLine()]);
-    const [search, setSearch] = useState('');
-    const [options, setOptions] = useState<ProductOption[]>([]);
-    const [known, setKnown] = useState<Record<string, string>>({});
-    const [loadingProducts, setLoadingProducts] = useState(false);
     const [quote, setQuote] = useState<Quote | null>(null);
+    const [place, setPlace] = useState<LocationChain | null>(null);
 
     const form = useForm({
         storefront: storefronts.length === 1 ? storefronts[0].value : '',
@@ -80,22 +91,30 @@ export default function NewStoreOrderDialog({
         customer_name: '',
         customer_phone: '',
         customer_email: '',
+        division_id: '',
+        district_id: '',
+        upazila_id: '',
+        union_id: '',
         line1: '',
-        city: '',
-        district: '',
         postcode: '',
         note: '',
+        discount: '',
         items: [] as { sku: string; quantity: number }[],
     });
 
     const quoting = useHttp<
-        { storefront: string; items: { sku: string; quantity: number }[] },
+        {
+            storefront: string;
+            discount: string;
+            items: { sku: string; quantity: number }[];
+        },
         { data: Quote }
-    >({ storefront: '', items: [] });
+    >({ storefront: '', discount: '', items: [] });
 
     const errors = form.errors as Record<string, string | undefined>;
     const quoteErrors = quoting.errors as Record<string, string | undefined>;
     const storefront = form.data.storefront;
+    const discountText = form.data.discount.trim();
 
     const picked = useMemo(
         () =>
@@ -109,43 +128,11 @@ export default function NewStoreOrderDialog({
     );
     const pickedKey = JSON.stringify(picked);
 
-    // The picker: this storefront's products, narrowed by the search box.
-    useEffect(() => {
-        if (!open || storefront === '') {
-            return;
-        }
-
-        const timer = window.setTimeout(async () => {
-            setLoadingProducts(true);
-
-            try {
-                const response = await fetch(
-                    `${urls.products}?${new URLSearchParams({ storefront, search })}`,
-                    {
-                        headers: { Accept: 'application/json' },
-                        credentials: 'same-origin',
-                    },
-                );
-                const body = (await response.json()) as {
-                    data: ProductOption[];
-                };
-
-                setOptions(body.data);
-                setKnown((previous) => ({
-                    ...previous,
-                    ...Object.fromEntries(
-                        body.data.map((option) => [option.sku, option.label]),
-                    ),
-                }));
-            } catch {
-                setOptions([]);
-            } finally {
-                setLoadingProducts(false);
-            }
-        }, 250);
-
-        return () => window.clearTimeout(timer);
-    }, [open, storefront, search, urls.products]);
+    const searchUrl = useCallback(
+        (term: string) =>
+            `${urls.products}?${new URLSearchParams({ storefront, search: term })}`,
+        [urls.products, storefront],
+    );
 
     // The price: asked of the server whenever what is being bought changes.
     useEffect(() => {
@@ -153,7 +140,11 @@ export default function NewStoreOrderDialog({
             return;
         }
 
-        quoting.transform(() => ({ storefront, items: picked }));
+        quoting.transform(() => ({
+            storefront,
+            discount: discountText,
+            items: picked,
+        }));
 
         const timer = window.setTimeout(async () => {
             try {
@@ -166,23 +157,9 @@ export default function NewStoreOrderDialog({
 
         return () => window.clearTimeout(timer);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [open, storefront, pickedKey]);
+    }, [open, storefront, pickedKey, discountText]);
 
     const shownQuote = picked.length === 0 ? null : quote;
-
-    const choices = useMemo(() => {
-        const merged = new Map(
-            options.map((option) => [option.sku, option.label]),
-        );
-
-        for (const line of lines) {
-            if (line.sku !== '' && !merged.has(line.sku)) {
-                merged.set(line.sku, known[line.sku] ?? line.sku);
-            }
-        }
-
-        return [...merged.entries()];
-    }, [options, lines, known]);
 
     const setLine = (index: number, patch: Partial<Line>) =>
         setLines((previous) =>
@@ -198,8 +175,8 @@ export default function NewStoreOrderDialog({
             form.reset();
             form.clearErrors();
             setLines([emptyLine()]);
-            setSearch('');
             setQuote(null);
+            setPlace(null);
             setToken(crypto.randomUUID());
         }
     };
@@ -210,6 +187,10 @@ export default function NewStoreOrderDialog({
         form.transform((data) => ({
             ...data,
             token,
+            division_id: place?.division?.id ?? '',
+            district_id: place?.district?.id ?? '',
+            upazila_id: place?.upazila?.id ?? '',
+            union_id: place?.union?.id ?? '',
             items: picked,
         }));
 
@@ -244,6 +225,12 @@ export default function NewStoreOrderDialog({
             <InputError message={errors[name]} />
         </div>
     );
+
+    const placeError =
+        errors.division_id ??
+        errors.district_id ??
+        errors.upazila_id ??
+        errors.union_id;
 
     return (
         <Dialog open={open} onOpenChange={close}>
@@ -325,16 +312,31 @@ export default function NewStoreOrderDialog({
                             <legend className="text-sm font-medium">
                                 {t('store_orders.create.address')}
                             </legend>
-                            {field('line1', t('store_orders.create.line1'), {
-                                required: true,
-                            })}
-                            <div className="grid gap-3 sm:grid-cols-3">
-                                {field('city', t('store_orders.create.city'), {
-                                    required: true,
-                                })}
+                            <LocationPicker
+                                divisionsUrl={divisionsUrl}
+                                childrenUrl={childrenUrl}
+                                onChange={setPlace}
+                                errors={{
+                                    division_id: errors.division_id,
+                                    district_id: errors.district_id,
+                                    upazila_id: errors.upazila_id,
+                                    union_id: errors.union_id,
+                                }}
+                            />
+                            {placeError &&
+                                !errors.division_id &&
+                                !errors.district_id &&
+                                !errors.upazila_id &&
+                                !errors.union_id && (
+                                    <InputError message={placeError} />
+                                )}
+                            <div className="grid gap-3 sm:grid-cols-[1fr_10rem]">
                                 {field(
-                                    'district',
-                                    t('store_orders.create.district'),
+                                    'line1',
+                                    t('store_orders.create.line1'),
+                                    {
+                                        required: true,
+                                    },
                                 )}
                                 {field(
                                     'postcode',
@@ -348,57 +350,33 @@ export default function NewStoreOrderDialog({
                                 {t('store_orders.create.items')}
                             </legend>
 
-                            <Input
-                                value={search}
-                                onChange={(event) =>
-                                    setSearch(event.target.value)
-                                }
-                                placeholder={t(
-                                    'store_orders.create.product_search',
-                                )}
-                                aria-label={t(
-                                    'store_orders.create.product_search',
-                                )}
-                                disabled={storefront === ''}
-                            />
-
-                            {storefront !== '' &&
-                                !loadingProducts &&
-                                options.length === 0 && (
-                                    <p className="text-muted-foreground text-xs">
-                                        {t('store_orders.create.no_products')}
-                                    </p>
-                                )}
-
                             <ul className="space-y-2">
                                 {lines.map((line, index) => (
                                     <li
                                         key={index}
-                                        className="grid grid-cols-[1fr_6rem_auto] items-center gap-2"
+                                        className="grid grid-cols-[1fr_6rem_auto] items-start gap-2"
                                     >
-                                        <NativeSelect
+                                        <ProductSearchSelect
                                             value={line.sku}
-                                            onChange={(event) =>
-                                                setLine(index, {
-                                                    sku: event.target.value,
-                                                })
-                                            }
+                                            selectedLabel={line.label}
+                                            searchUrl={searchUrl}
                                             disabled={storefront === ''}
-                                            aria-label={t(
+                                            ariaLabel={t(
                                                 'store_orders.create.product',
                                             )}
-                                        >
-                                            <option value="">
-                                                {t(
-                                                    'store_orders.create.product_placeholder',
-                                                )}
-                                            </option>
-                                            {choices.map(([sku, label]) => (
-                                                <option key={sku} value={sku}>
-                                                    {label} ({sku})
-                                                </option>
-                                            ))}
-                                        </NativeSelect>
+                                            onSelect={(option) =>
+                                                setLine(index, {
+                                                    sku: option.sku,
+                                                    label: option.label,
+                                                })
+                                            }
+                                            onClear={() =>
+                                                setLine(index, {
+                                                    sku: '',
+                                                    label: null,
+                                                })
+                                            }
+                                        />
                                         <Input
                                             type="number"
                                             min={1}
@@ -460,6 +438,20 @@ export default function NewStoreOrderDialog({
                             />
                         </fieldset>
 
+                        <MoneyInput
+                            id="new-order-discount"
+                            name="discount"
+                            label={t('store_orders.create.discount_label')}
+                            value={form.data.discount}
+                            onChange={(value) =>
+                                form.setData('discount', value)
+                            }
+                            helpText={t('store_orders.create.discount_help')}
+                            error={errors.discount ?? quoteErrors.discount}
+                            disabled={storefront === ''}
+                            className="sm:max-w-xs"
+                        />
+
                         {shownQuote ? (
                             <dl className="bg-surface-subtle space-y-1 rounded-lg p-3 text-sm">
                                 <div className="flex justify-between">
@@ -472,6 +464,19 @@ export default function NewStoreOrderDialog({
                                         />
                                     </dd>
                                 </div>
+                                {shownQuote.discount.amount !== '0.00' && (
+                                    <div className="flex justify-between">
+                                        <dt className="text-muted-foreground">
+                                            {t('store_orders.create.discount')}
+                                        </dt>
+                                        <dd>
+                                            <MoneyAmount
+                                                amount={shownQuote.discount}
+                                                direction="debit"
+                                            />
+                                        </dd>
+                                    </div>
+                                )}
                                 <div className="flex justify-between">
                                     <dt className="text-muted-foreground">
                                         {t('store_orders.create.delivery')}
@@ -541,7 +546,8 @@ export default function NewStoreOrderDialog({
                                 disabled={
                                     form.processing ||
                                     storefront === '' ||
-                                    picked.length === 0
+                                    picked.length === 0 ||
+                                    place?.upazila == null
                                 }
                                 data-test="place-store-order"
                             >

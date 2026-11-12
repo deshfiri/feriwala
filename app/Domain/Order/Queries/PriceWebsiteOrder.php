@@ -54,26 +54,43 @@ class PriceWebsiteOrder
 
     /**
      * @param  array<int, array{sku: string, quantity: int}>  $items
+     * @param  Money|null  $discount  a seller's discount on the goods, shared across the lines; none for a storefront's own order
      *
      * @throws WebsiteOrderRefused
      */
-    public function quote(Website $website, array $items, ?CarbonImmutable $at = null): WebsiteOrderQuote
+    public function quote(Website $website, array $items, ?CarbonImmutable $at = null, ?Money $discount = null): WebsiteOrderQuote
     {
         $at ??= CarbonImmutable::now();
         $account = $website->businessAccount;
         $currency = Currency::tryFrom($website->currency_code) ?? Currency::BDT;
 
         $lines = [];
-        $charges = [];
         $subtotal = Money::zero($currency);
 
         foreach (array_values($items) as $item) {
             $line = $this->line($website, $item['sku'], $item['quantity'], $currency, $at);
 
             $lines[] = $line;
-            $charges[] = $line->tax;
             $subtotal = $subtotal->plus($line->subtotal);
         }
+
+        // A discount the seller gives: shared across the lines exactly, and each
+        // line is taxed on what is left of it.
+        $discount ??= Money::zero($currency);
+
+        if ($discount->isPositive()) {
+            if ($discount->currency !== $currency || ! $discount->lessThan($subtotal)) {
+                throw WebsiteOrderRefused::discountTooLarge();
+            }
+
+            $shares = $this->shareDiscount($discount, array_map(fn (WebsiteOrderLine $line) => $line->subtotal, $lines));
+
+            foreach ($lines as $position => $line) {
+                $lines[$position] = $shares[$position]->isZero() ? $line : $this->discounted($line, $shares[$position], $at);
+            }
+        }
+
+        $charges = array_map(fn (WebsiteOrderLine $line) => $line->tax, $lines);
 
         $delivery = $lines === []
             ? Money::zero($currency)
@@ -89,7 +106,6 @@ class PriceWebsiteOrder
         $charges[] = $deliveryTax;
 
         $tax = TaxBreakdown::of($charges, $currency);
-        $discount = Money::zero($currency);
 
         return new WebsiteOrderQuote(
             lines: $lines,
@@ -156,6 +172,62 @@ class PriceWebsiteOrder
             discount: Money::zero($currency),
             tax: $charge,
         );
+    }
+
+    /**
+     * The line with its share of the order discount taken off, and its tax
+     * worked out again on what is left.
+     *
+     * @throws WebsiteOrderRefused
+     */
+    protected function discounted(WebsiteOrderLine $line, Money $share, CarbonImmutable $at): WebsiteOrderLine
+    {
+        $net = $line->subtotal->minus($share);
+
+        if (! $net->isPositive()) {
+            throw WebsiteOrderRefused::discountTooLarge();
+        }
+
+        return new WebsiteOrderLine(
+            selection: $line->selection,
+            product: $line->product,
+            variant: $line->variant,
+            sku: $line->sku,
+            quantity: $line->quantity,
+            unitPrice: $line->unitPrice,
+            subtotal: $line->subtotal,
+            discount: $share,
+            tax: $this->tax->chargeGoods(
+                amount: $net,
+                productSku: $line->product->sku,
+                categorySlugs: $this->categorySlugs($line->product),
+                at: $at,
+            ),
+        );
+    }
+
+    /**
+     * An amount shared across the lines in proportion to what each costs, with
+     * the shares adding back to it exactly ({@see Money::allocate()}).
+     *
+     * @param  array<int, Money>  $lineTotals
+     * @return array<int, Money>
+     */
+    protected function shareDiscount(Money $discount, array $lineTotals): array
+    {
+        $weights = array_map(fn (Money $total) => (int) bcdiv($total->toDecimal(), $total->currency->smallestUnit(), 0), $lineTotals);
+
+        // Money::allocate multiplies the amount by each weight: past what an
+        // integer holds, weigh in coarser parts of the subtotal instead.
+        $sum = array_sum($weights);
+        $units = (int) bcdiv($discount->toDecimal(), $discount->currency->smallestUnit(), 0);
+
+        if ($units > intdiv(PHP_INT_MAX, max(1, $sum))) {
+            $step = intdiv($sum, 1_000_000) + 1;
+            $weights = array_map(fn (int $weight) => intdiv($weight, $step), $weights);
+        }
+
+        return array_values($discount->allocate($weights));
     }
 
     /**

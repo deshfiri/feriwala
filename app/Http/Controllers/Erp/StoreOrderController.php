@@ -8,6 +8,7 @@ use App\Domain\Cases\Queries\CaseLinks;
 use App\Domain\Cases\Queries\PartnerCasePayload;
 use App\Domain\Courier\Queries\StoreOrderCourierPanel;
 use App\Domain\Damage\Queries\DamageReportEligibility;
+use App\Domain\Location\Queries\DeliveryLocationSnapshot;
 use App\Domain\Order\Actions\CancelStoreOrder;
 use App\Domain\Order\Actions\ConfirmCodOrder;
 use App\Domain\Order\Actions\PlaceOrderOnBehalf;
@@ -28,6 +29,10 @@ use App\Domain\Website\Models\WebsiteProduct;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Order\PlaceStoreOrderRequest;
 use App\Models\User;
+use App\Support\Money\Currency;
+use App\Support\Money\DecimalAmount;
+use App\Support\Money\Money;
+use App\Support\Money\Rules\DecimalAmountRule;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -61,6 +66,7 @@ class StoreOrderController extends Controller
         protected ConfirmCodOrder $codConfirmation,
         protected SendCodConfirmationCode $codes,
         protected CreatableStorefronts $creatable,
+        protected DeliveryLocationSnapshot $places,
     ) {}
 
     public function index(Request $request): Response
@@ -190,14 +196,17 @@ class StoreOrderController extends Controller
             'items' => ['required', 'array', 'min:1', 'max:100'],
             'items.*.sku' => ['required', 'string', 'max:64'],
             'items.*.quantity' => ['required', 'integer', 'min:1', 'max:10000'],
+            'discount' => ['nullable', new DecimalAmountRule],
         ]);
 
         $website = $this->managedWebsite($request, $validated['storefront']);
 
         try {
-            $quote = $this->place->quote($website, $validated['items']);
+            $quote = $this->place->quote($website, $validated['items'], $this->discountFrom($website, $validated['discount'] ?? null));
         } catch (WebsiteOrderRefused $refused) {
-            throw ValidationException::withMessages(['items' => $refused->getMessage()]);
+            throw ValidationException::withMessages([
+                ($refused->errorCode === 'discount_too_large' ? 'discount' : 'items') => $refused->getMessage(),
+            ]);
         }
 
         return new JsonResponse(['data' => [
@@ -209,6 +218,7 @@ class StoreOrderController extends Controller
                 'line_total' => $line->total()->jsonSerialize(),
             ], $quote->lines),
             'subtotal' => $quote->subtotal->jsonSerialize(),
+            'discount' => $quote->discount->jsonSerialize(),
             'delivery' => $quote->delivery->jsonSerialize(),
             'tax' => $quote->tax->addedTotal()->jsonSerialize(),
             'total' => $quote->total->jsonSerialize(),
@@ -227,6 +237,19 @@ class StoreOrderController extends Controller
         $validated = $request->validated();
         $website = $this->managedWebsite($request, $validated['storefront']);
 
+        $shipping = $this->places->for(
+            (int) $validated['division_id'],
+            (int) $validated['district_id'],
+            (int) $validated['upazila_id'],
+            isset($validated['union_id']) ? (int) $validated['union_id'] : null,
+            $validated['line1'],
+            $validated['postcode'] ?? null,
+        );
+
+        if ($shipping === null) {
+            throw ValidationException::withMessages(['district_id' => __('store_orders.create.bad_location')]);
+        }
+
         try {
             [$order] = $this->place->handle(
                 $website,
@@ -236,21 +259,19 @@ class StoreOrderController extends Controller
                     'mobile' => $validated['customer_phone'],
                     'email' => $validated['customer_email'] ?? null,
                 ],
-                [
-                    'line1' => $validated['line1'],
-                    'line2' => $validated['line2'] ?? null,
-                    'city' => $validated['city'],
-                    'district' => $validated['district'] ?? null,
-                    'postcode' => $validated['postcode'] ?? null,
-                    'country' => 'BD',
-                ],
+                $shipping,
                 $validated['items'],
                 $validated['token'],
                 $validated['note'] ?? null,
+                $this->discountFrom($website, $validated['discount'] ?? null),
             );
         } catch (WebsiteOrderRefused $refused) {
             throw ValidationException::withMessages([
-                $refused->errorCode === 'invalid_mobile_number' ? 'customer_phone' : 'items' => $refused->getMessage(),
+                match ($refused->errorCode) {
+                    'invalid_mobile_number' => 'customer_phone',
+                    'discount_too_large' => 'discount',
+                    default => 'items',
+                } => $refused->getMessage(),
             ]);
         }
 
@@ -374,6 +395,18 @@ class StoreOrderController extends Controller
         abort_unless($user instanceof User && Gate::forUser($user)->allows('manage', $website), 403);
 
         return $website;
+    }
+
+    /**
+     * The seller's discount as money in the storefront's currency, or null when none was entered.
+     */
+    protected function discountFrom(Website $website, mixed $entered): ?Money
+    {
+        if (! is_string($entered) || trim($entered) === '') {
+            return null;
+        }
+
+        return DecimalAmount::parse(trim($entered), Currency::tryFrom($website->currency_code) ?? Currency::BDT);
     }
 
     /**

@@ -37,6 +37,8 @@ readonly class WebsiteOrderSubmission
         public ?string $returnUrl = null,
         public ?string $couponCode = null,
         public ?string $customerNote = null,
+        /** A discount the seller gives when taking the order for a customer; a storefront's own order has none. */
+        public ?Money $sellerDiscount = null,
     ) {}
 
     public function isCashOnDelivery(): bool

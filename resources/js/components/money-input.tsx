@@ -21,6 +21,8 @@ export default function MoneyInput({
     name,
     label,
     defaultValue,
+    value,
+    onChange,
     required,
     disabled,
     error,
@@ -33,6 +35,9 @@ export default function MoneyInput({
     name: string;
     label: string;
     defaultValue?: string;
+    /** Controlled use, for a form that holds the typed text in state: pass both `value` and `onChange`. */
+    value?: string;
+    onChange?: (value: string) => void;
     required?: boolean;
     disabled?: boolean;
     error?: string;
@@ -63,7 +68,13 @@ export default function MoneyInput({
                     // same string through the exact decimal boundary.
                     pattern="^\d+(\.\d{1,2})?$"
                     placeholder="0.00"
-                    defaultValue={defaultValue}
+                    {...(value !== undefined
+                        ? {
+                              value,
+                              onChange: (event) =>
+                                  onChange?.(event.target.value),
+                          }
+                        : { defaultValue })}
                     required={required}
                     disabled={disabled}
                     aria-invalid={error ? true : undefined}

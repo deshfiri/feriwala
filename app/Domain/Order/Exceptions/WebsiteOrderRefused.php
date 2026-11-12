@@ -69,6 +69,11 @@ class WebsiteOrderRefused extends RuntimeException
         ]);
     }
 
+    public static function discountTooLarge(): self
+    {
+        return new self(422, 'discount_too_large', 'The discount must be less than the price of the goods.');
+    }
+
     public static function priceOutsideRules(string $sku): self
     {
         return new self(422, 'price_outside_rules', 'That product is not on sale at its current price on this website.', ['sku' => $sku]);

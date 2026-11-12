@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import InputError from '@/components/input-error';
 import { Label } from '@/components/ui/label';
 import { useTranslation } from '@/hooks/use-translation';
@@ -58,8 +58,11 @@ export default function LocationPicker({
     errors,
     divisionsUrl,
     childrenUrl,
+    onChange,
 }: {
     initial?: LocationChain;
+    /** Told the whole chain whenever any level changes, for forms that hold it in state rather than posting the selects. */
+    onChange?: (chain: LocationChain) => void;
     errors?: Partial<
         Record<
             'division_id' | 'district_id' | 'upazila_id' | 'union_id',
@@ -90,6 +93,16 @@ export default function LocationPicker({
     const [union, setUnion] = useState<LocationOption | null>(
         initial?.union ?? null,
     );
+
+    const notify = useRef(onChange);
+
+    useEffect(() => {
+        notify.current = onChange;
+    });
+
+    useEffect(() => {
+        notify.current?.({ division, district, upazila, union });
+    }, [division, district, upazila, union]);
 
     useEffect(() => {
         void fetchOptions(divisionsUrl).then(setDivisions);
