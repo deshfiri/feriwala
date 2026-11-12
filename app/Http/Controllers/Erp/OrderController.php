@@ -9,6 +9,7 @@ use App\Domain\ExternalStore\ExternalOrderStatusDisplay;
 use App\Domain\ExternalStore\Models\ExternalOrder;
 use App\Domain\ExternalStore\Models\ExternalOrderItem;
 use App\Domain\Order\Queries\BusinessOrderIndex;
+use App\Domain\Order\Queries\CreatableStorefronts;
 use App\Domain\Order\Queries\OrderTimeline;
 use App\Http\Controllers\Controller;
 use App\Models\User;
@@ -36,6 +37,7 @@ class OrderController extends Controller
     public function __construct(
         protected BusinessOrderIndex $orders,
         protected OrderTimeline $timeline,
+        protected CreatableStorefronts $creatable,
     ) {}
 
     public function index(Request $request): Response
@@ -53,6 +55,9 @@ class OrderController extends Controller
                     'label' => __('orders.unified.sources.'.$source),
                 ], BusinessOrderIndex::SOURCES),
             ],
+            // The "New order" popup: only the storefronts this person may take an order on.
+            'creatable_storefronts' => $request->user() instanceof User ? $this->creatable->for($request->user(), $account->id) : [],
+            'create_urls' => $this->creatable->urls(),
         ]);
     }
 

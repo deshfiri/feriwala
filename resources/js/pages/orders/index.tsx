@@ -1,8 +1,11 @@
 import { Head, Link } from '@inertiajs/react';
-import { Download, ShoppingBag } from 'lucide-react';
+import { Download, Plus, ShoppingBag } from 'lucide-react';
+import { useState } from 'react';
 import DataTable from '@/components/data-table/data-table';
 import NativeSelect from '@/components/forms/native-select';
 import MoneyAmount from '@/components/money-amount';
+import NewStoreOrderDialog from '@/components/new-store-order-dialog';
+import type { NewStoreOrderUrls } from '@/components/new-store-order-dialog';
 import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
 import EmptyState from '@/components/states/empty-state';
@@ -38,6 +41,9 @@ type Props = {
         statuses: Option[];
         payments: Option[];
     };
+    /** The storefronts this person may take an order on; empty makes the popup say why there is none. */
+    creatable_storefronts: Option[];
+    create_urls: NewStoreOrderUrls;
 };
 
 /**
@@ -47,8 +53,15 @@ type Props = {
  * business's own orders. Each row keeps its source and opens on the detail
  * screen of its own kind.
  */
-export default function OrdersIndex({ orders, filters, options }: Props) {
+export default function OrdersIndex({
+    orders,
+    filters,
+    options,
+    creatable_storefronts,
+    create_urls,
+}: Props) {
     const { t, locale } = useTranslation();
+    const [creating, setCreating] = useState(false);
     const { setFilter } = useTableQuery({ only: ['orders', 'filters'] });
 
     const when = (value: string) => new Date(value).toLocaleString(locale);
@@ -231,13 +244,34 @@ export default function OrdersIndex({ orders, filters, options }: Props) {
                     title={t('orders.unified.title')}
                     description={t('orders.unified.description')}
                     actions={
-                        <Button variant="outline" size="sm" asChild>
-                            <a href={ordersExport({ query: exportQuery }).url}>
-                                <Download aria-hidden="true" />
-                                {t('orders.unified.export')}
-                            </a>
-                        </Button>
+                        <div className="flex flex-wrap gap-2">
+                            <Button
+                                size="sm"
+                                onClick={() => setCreating(true)}
+                                data-test="new-store-order"
+                            >
+                                <Plus aria-hidden="true" />
+                                {t('store_orders.create.button')}
+                            </Button>
+                            <Button variant="outline" size="sm" asChild>
+                                <a
+                                    href={
+                                        ordersExport({ query: exportQuery }).url
+                                    }
+                                >
+                                    <Download aria-hidden="true" />
+                                    {t('orders.unified.export')}
+                                </a>
+                            </Button>
+                        </div>
                     }
+                />
+
+                <NewStoreOrderDialog
+                    open={creating}
+                    onOpenChange={setCreating}
+                    storefronts={creatable_storefronts}
+                    urls={create_urls}
                 />
 
                 <DataTable

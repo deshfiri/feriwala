@@ -605,7 +605,13 @@ Route::middleware(['auth', 'business.activated'])->group(function () {
          */
         // A Partner's Store Orders: their storefronts' orders, read-only apart from cancelling a Pending one.
         Route::get('store-orders', [ErpStoreOrderController::class, 'index'])->name('store-orders.index');
+        // Taking an order for the Partner's own customer: the picker, the ERP's price, then the order itself.
+        Route::get('store-orders/products', [ErpStoreOrderController::class, 'products'])->name('store-orders.products');
+        Route::post('store-orders/quote', [ErpStoreOrderController::class, 'quote'])->name('store-orders.quote');
+        Route::post('store-orders', [ErpStoreOrderController::class, 'store'])->name('store-orders.store');
         Route::get('store-orders/{order}', [ErpStoreOrderController::class, 'show'])->name('store-orders.show');
+        Route::post('store-orders/{order}/confirmation', [ErpStoreOrderController::class, 'confirm'])->name('store-orders.confirm');
+        Route::post('store-orders/{order}/confirmation-code', [ErpStoreOrderController::class, 'resendCode'])->name('store-orders.resend-code');
         Route::post('store-orders/{order}/cancellation', [ErpStoreOrderController::class, 'cancel'])->name('store-orders.cancel');
 
         /*

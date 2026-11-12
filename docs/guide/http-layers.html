@@ -157,7 +157,7 @@
     <ul>
         <li>The intro text of each document is <code>docs/api/mobile.md</code> and <code>docs/api/storefront.md</code>.</li>
         <li>Access: the <code>viewApiDocs</code> Gate. Open when <code>config('scramble.public')</code> (env <code>API_DOCS_PUBLIC</code>) is true; otherwise only a Super Admin or System Administrator (<code>RestrictedDocsAccess</code>). Per the config comment it is also open locally.</li>
-        <li>Tags come from the route name: <code>mobile.v1.wallet.transactions.show</code> is "Wallet"; <code>mobile.v1.admin.orders.index</code> is "Admin &middot; Orders"; <code>mobile.v1.supplier.*</code> likewise. Naming a route is how it is filed (<code>ApiServiceProvider::tagFor()</code>).</li>
+        <li>Tags come from the route name: <code>mobile.v1.wallet.transactions.show</code> is "Wallet"; <code>mobile.v1.admin.orders.index</code> is "Admin &middot; Orders"; <code>mobile.v1.supplier.*</code> and <code>mobile.v1.wholesale.*</code> (Cart, Checkout, Orders) likewise. Naming a route is how it is filed (<code>ApiServiceProvider::tagFor()</code>).</li>
         <li><code>config/scramble.php</code> <code>api_path</code> is <code>api/mobile/v1</code> for the default document; the storefront document is registered with <code>Scramble::registerApi('storefront', ...)</code>.</li>
     </ul>
 

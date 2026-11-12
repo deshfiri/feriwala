@@ -45,6 +45,8 @@ type Props = {
         cancel: boolean;
         request_case?: boolean;
         report_damage?: boolean;
+        /** A cash-on-delivery order waiting for the customer's code, on a storefront this person runs. */
+        confirm_with_code?: boolean;
     };
     /** Where the page's links and forms go; `advance` is absent for a Partner, who has no such button. */
     urls: {
@@ -53,6 +55,8 @@ type Props = {
         advance: string | null;
         request_case?: string;
         report_damage?: string;
+        confirm?: string;
+        resend_code?: string;
     };
     /** The returns and exchanges asked for on this order: a Partner's own, never the platform's view. */
     cases?: PartnerCaseRow[];
@@ -81,7 +85,25 @@ export default function StoreOrderShow({
     const { t } = useTranslation();
     const cancelForm = useForm({ reason: '' });
     const actionForm = useForm({ note: '' });
+    const codeForm = useForm({ code: '' });
     const cancelUrl = urls.cancel;
+
+    const confirmWithCode = (event: FormEvent) => {
+        event.preventDefault();
+
+        if (urls.confirm) {
+            codeForm.post(urls.confirm, {
+                preserveScroll: true,
+                onSuccess: () => codeForm.reset(),
+            });
+        }
+    };
+
+    const resendCode = () => {
+        if (urls.resend_code) {
+            codeForm.post(urls.resend_code, { preserveScroll: true });
+        }
+    };
 
     const advance = (event: FormEvent) => {
         event.preventDefault();
@@ -243,6 +265,68 @@ export default function StoreOrderShow({
                     </div>
 
                     <div className="space-y-4">
+                        {can.confirm_with_code && urls.confirm && (
+                            <SectionCard
+                                title={t('store_orders.create.confirm_title')}
+                                description={t(
+                                    'store_orders.create.confirm_help',
+                                )}
+                            >
+                                <form
+                                    onSubmit={confirmWithCode}
+                                    className="space-y-2"
+                                >
+                                    <Input
+                                        value={codeForm.data.code}
+                                        onChange={(event) =>
+                                            codeForm.setData(
+                                                'code',
+                                                event.target.value,
+                                            )
+                                        }
+                                        inputMode="numeric"
+                                        autoComplete="one-time-code"
+                                        maxLength={16}
+                                        aria-label={t(
+                                            'store_orders.create.code',
+                                        )}
+                                        placeholder={t(
+                                            'store_orders.create.code',
+                                        )}
+                                        data-test="confirmation-code"
+                                    />
+                                    <InputError
+                                        message={codeForm.errors.code}
+                                    />
+                                    <div className="flex flex-wrap gap-2">
+                                        <Button
+                                            type="submit"
+                                            size="sm"
+                                            disabled={
+                                                codeForm.processing ||
+                                                codeForm.data.code === ''
+                                            }
+                                        >
+                                            {t('store_orders.create.confirm')}
+                                        </Button>
+                                        {urls.resend_code && (
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                variant="outline"
+                                                onClick={resendCode}
+                                                disabled={codeForm.processing}
+                                            >
+                                                {t(
+                                                    'store_orders.create.resend',
+                                                )}
+                                            </Button>
+                                        )}
+                                    </div>
+                                </form>
+                            </SectionCard>
+                        )}
+
                         {can.advance && timeline.next_action && (
                             <SectionCard title={t('store_orders.next_step')}>
                                 <form onSubmit={advance} className="space-y-3">

@@ -41,7 +41,8 @@ class PaymentLogController extends Controller
 
     public function __construct(
         protected PaymentLogRedactor $redactor,
-    ) {}
+    ) {
+    }
 
     public function index(Request $request): Response
     {
@@ -54,36 +55,36 @@ class PaymentLogController extends Controller
 
         $payments = Payment::query()
             ->with(['businessAccount:id,name', 'invoice:id,payment_id,number,public_id'])
-            ->when($request->string('search')->toString(), fn (Builder $query, string $search) => $query
-                ->where(fn (Builder $inner) => $inner
+            ->when($request->string('search')->toString(), fn(Builder $query, string $search) => $query
+                ->where(fn(Builder $inner) => $inner
                     ->where('reference', 'ilike', "%{$search}%")
                     ->orWhere('gateway_reference', 'ilike', "%{$search}%")
-                    ->orWhereHas('businessAccount', fn (Builder $account) => $account
+                    ->orWhereHas('businessAccount', fn(Builder $account) => $account
                         ->where('name', 'ilike', "%{$search}%"))))
             // "Needs a person" is its own filter rather than one status among
             // twenty: it is the only one where money is sitting unresolved.
-            ->when($status === 'reconciliation', fn (Builder $query) => $query
+            ->when($status === 'reconciliation', fn(Builder $query) => $query
                 ->where('status', PaymentStatus::ReconciliationRequired))
             ->when(
                 $status !== '' && $status !== 'reconciliation' && PaymentStatus::tryFrom($status) !== null,
-                fn (Builder $query) => $query->where('status', $status),
+                fn(Builder $query) => $query->where('status', $status),
             )
-            ->when($gateway !== '', fn (Builder $query) => $query->where('gateway', $gateway))
+            ->when($gateway !== '', fn(Builder $query) => $query->where('gateway', $gateway))
             ->when(
                 in_array($request->string('sort')->toString(), self::SORTABLE, true),
-                fn (Builder $query) => $query->reorder(
+                fn(Builder $query) => $query->reorder(
                     $request->string('sort')->toString(),
                     $request->string('direction')->toString() === 'asc' ? 'asc' : 'desc',
                 ),
-                fn (Builder $query) => $query->orderByDesc('id'),
+                fn(Builder $query) => $query->orderByDesc('id'),
             )
             ->paginate(self::PER_PAGE)
             ->withQueryString()
-            ->through(fn (Payment $payment) => $this->summary($payment));
+            ->through(fn(Payment $payment) => $this->summary($payment));
 
         return Inertia::render('admin/payments/index', [
             'payments' => $payments,
-            'statuses' => array_map(fn (PaymentStatus $case) => [
+            'statuses' => array_map(fn(PaymentStatus $case) => [
                 'value' => $case->value,
                 'label' => $case->label(),
             ], PaymentStatus::cases()),
@@ -154,7 +155,7 @@ class PaymentLogController extends Controller
 
         // Confirming the password brings the person back here, to the form —
         // not to the endpoint, which only takes a submission.
-        if ($mayMarkPaid && ! $passwordConfirmed) {
+        if ($mayMarkPaid && !$passwordConfirmed) {
             redirect()->setIntendedUrl($request->fullUrl());
         }
 
@@ -214,7 +215,7 @@ class PaymentLogController extends Controller
     {
         $actor = $request->user();
 
-        abort_if(! $actor instanceof User, 403);
+        abort_if(!$actor instanceof User, 403);
 
         return $actor;
     }
