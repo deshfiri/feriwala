@@ -116,7 +116,10 @@ return [
             'table' => env('AUTH_PASSWORD_RESET_TOKEN_TABLE', 'password_reset_tokens'),
 
             /*
-             * Minutes a reset link stays usable (§6).
+             * Minutes a reset link stays usable (§6): 24 hours, so a password-setup
+             * link an admin sends to a new person is still good the next day. The
+             * same window covers a self-service "forgot password" link, because the
+             * broker keeps no per-link expiry.
              *
              * A reset link is a password sitting in a mailbox, and the mailbox
              * is the thing most likely to be compromised later — so the window
@@ -128,7 +131,7 @@ return [
              * The token is single-use regardless: Laravel deletes it the moment
              * a reset succeeds, so this bounds the unused ones.
              */
-            'expire' => (int) env('AUTH_PASSWORD_RESET_EXPIRE', 60),
+            'expire' => (int) env('AUTH_PASSWORD_RESET_EXPIRE', 1440),
 
             /*
              * Seconds before another link may be requested for the same
@@ -147,7 +150,7 @@ return [
         'suppliers' => [
             'provider' => 'suppliers',
             'table' => 'supplier_password_reset_tokens',
-            'expire' => (int) env('AUTH_PASSWORD_RESET_EXPIRE', 60),
+            'expire' => (int) env('AUTH_PASSWORD_RESET_EXPIRE', 1440),
             'throttle' => (int) env('AUTH_PASSWORD_RESET_THROTTLE', 60),
         ],
     ],

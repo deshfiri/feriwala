@@ -37,7 +37,8 @@ class LocationController extends MobileController
      * List the places inside a place
      *
      * The children of one place: `type` is the level of the PARENT (`division`,
-     * `district` or `upazila`) and `sourceId` its `source_id`, so a division's
+     * `district` or `upazila`; the plural `divisions`, `districts`, `upazilas` is
+     * accepted too) and `sourceId` its `source_id`, so a division's
      * districts, a district's upazilas, an upazila's unions. A parent that does not
      * exist, or a union (which has no children), gives an empty list. `404` for a
      * `type` that is not a level.
@@ -46,7 +47,7 @@ class LocationController extends MobileController
      */
     public function children(string $type, string $sourceId): JsonResponse
     {
-        $parentType = BdLocationType::tryFrom($type);
+        $parentType = BdLocationType::tryFrom($type) ?? BdLocationType::tryFrom(rtrim($type, 's'));
 
         abort_if($parentType === null, 404);
 

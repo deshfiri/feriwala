@@ -407,6 +407,9 @@ describe('bank and location lookups', function () {
             ->assertOk()->assertJsonPath('data.0.name_en', 'Test Division');
         $this->getJson(route('mobile.v1.locations.children', ['type' => 'division', 'sourceId' => $chain['division']->source_id]))
             ->assertOk()->assertJsonPath('data.0.id', $chain['district']->id);
+        // The plural a client naturally builds from "divisions" resolves the same way.
+        $this->getJson(route('mobile.v1.locations.children', ['type' => 'divisions', 'sourceId' => $chain['division']->source_id]))
+            ->assertOk()->assertJsonPath('data.0.id', $chain['district']->id);
         $this->getJson(route('mobile.v1.locations.children', ['type' => 'nonsense', 'sourceId' => 'x']))->assertNotFound();
     });
 });

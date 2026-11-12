@@ -96,7 +96,7 @@ describe('the reset token', function () {
 
     it('is bounded rather than left open', function () {
         expect((int) config('auth.passwords.users.expire'))->toBeGreaterThan(0)
-            ->and((int) config('auth.passwords.users.expire'))->toBeLessThanOrEqual(120)
+            ->and((int) config('auth.passwords.users.expire'))->toBeLessThanOrEqual(1440)
             // And a second link cannot be requested straight away, so the form
             // cannot be used to flood a mailbox with live credentials.
             ->and((int) config('auth.passwords.users.throttle'))->toBeGreaterThan(0);
