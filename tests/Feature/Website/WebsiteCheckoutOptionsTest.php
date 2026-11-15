@@ -93,7 +93,7 @@ beforeEach(function () {
  */
 function checkoutOptionsShop($account): Website
 {
-    $website = Website::factory()->forAccount($account)->active()->create();
+    $website = Website::factory()->forAccount($account)->active()->create(['sms_verification_enabled' => true]);
 
     websiteTestOwnsSelection(WebsiteProduct::create([
         'website_id' => $website->id,
@@ -141,7 +141,14 @@ function checkoutOptionsSite(?array $credential = null): TestResponse
 }
 
 describe('the SMS code for cash-on-delivery orders', function () {
-    it('asks for it by default, exactly as every shop always has', function () {
+    it('is off for a new storefront until its Partner turns it on', function () {
+        $fresh = Website::factory()->forAccount($this->account)->active()->create();
+
+        expect($fresh->refresh()->sms_verification_enabled)->toBeFalse()
+            ->and(app(CheckoutVerification::class)->requiredFor($fresh))->toBeFalse();
+    });
+
+    it('asks for it when the shop has it on', function () {
         checkoutOptionsOrder()->assertCreated()->assertJsonPath('status', OrderStatus::CustomerVerificationPending->value);
 
         expect($this->sent)->toHaveCount(1)->and($this->sent->first()->event)->toBe('cod_confirmation');

@@ -116,13 +116,13 @@ describe('the base address', function () {
         foreach ([
             'https://portal.steadfast.com.bd/api/v1',
             'https://PORTAL.steadfast.com.bd/api/v1/',
+            'https://portal.packzy.com/api/v1',
         ] as $allowed) {
             expect(SteadfastCredentials::isPermittedBaseUrl(rtrim($allowed, '/')))->toBeTrue();
         }
 
         foreach ([
             'http://portal.steadfast.com.bd/api/v1',
-            'https://portal.packzy.com/api/v1',
             'https://evil.example.com/api/v1',
             'https://portal.steadfast.com.bd.evil.com/api/v1',
             'https://user:pass@portal.steadfast.com.bd/api/v1',

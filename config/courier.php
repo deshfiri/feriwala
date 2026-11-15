@@ -35,8 +35,8 @@ return [
     |
     | `default_base_url` is the host Steadfast's own maintained package documents
     | in its README. The package's config file ships a different default
-    | (portal.packzy.com); that host is deliberately not allowed until
-    | Steadfast's merchant panel names it for this account.
+    | (portal.packzy.com); Steadfast serves the same API from both hosts, so
+    | both are allowed and an administrator can choose either.
     |
     | In production the base address must be https and its host must be listed in
     | `allowed_hosts` -- the API key travels in every request, so an address an
@@ -46,7 +46,7 @@ return [
 
     'steadfast' => [
         'default_base_url' => 'https://portal.steadfast.com.bd/api/v1',
-        'allowed_hosts' => ['portal.steadfast.com.bd'],
+        'allowed_hosts' => ['portal.steadfast.com.bd', 'portal.packzy.com'],
         'connect_timeout' => 5,
         'timeout' => 20,
 

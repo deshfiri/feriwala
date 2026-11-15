@@ -15,7 +15,7 @@ use App\Domain\Website\Models\Website;
  *    when on, **every** storefront requires the code and no Partner can turn it
  *    off;
  * 2. otherwise the Partner's own choice for that storefront
- *    (`websites.sms_verification_enabled`), on unless they switched it off.
+ *    (`websites.sms_verification_enabled`), off unless they switched it on.
  *
  * This governs storefront customer orders only. Account and Supplier
  * verification have their own rules and are not read here.
@@ -51,8 +51,8 @@ class CheckoutVerification
             return false;
         }
 
-        // A website not yet read back from the database has no value: the default is on.
-        return $this->requiredByPlatform() || ($website->sms_verification_enabled ?? true);
+        // A website not yet read back from the database has no value: the default is off.
+        return $this->requiredByPlatform() || ($website->sms_verification_enabled ?? false);
     }
 
     /**
