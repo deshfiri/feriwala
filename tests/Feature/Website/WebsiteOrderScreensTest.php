@@ -58,7 +58,7 @@ beforeEach(function () {
         PackageFeature::ProductPublishLimit->value => null,
     ]);
 
-    $this->website = Website::factory()->forAccount($this->account)->active()->create(['name' => 'Ayesha Fashion']);
+    $this->website = Website::factory()->forAccount($this->account)->active()->create(['name' => 'Ayesha Fashion', 'sms_verification_enabled' => true]);
     $this->selection = websiteOrderScreensSelection($this->website);
     websiteTestFee(FeeType::WebsiteDelivery, 6000);
 

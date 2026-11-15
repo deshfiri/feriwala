@@ -81,7 +81,7 @@ beforeEach(function () {
     ]);
     $this->chain = addressTestLocationChain();
     $this->partner = $this->account->owner;
-    $this->website = Website::factory()->forAccount($this->account)->active()->create(['name' => 'Alpha shop']);
+    $this->website = Website::factory()->forAccount($this->account)->active()->create(['name' => 'Alpha shop', 'sms_verification_enabled' => true]);
     $this->selection = partnerOrderTestSelection($this->website);
     websiteTestOwnsSelection($this->selection, 20);
 });
