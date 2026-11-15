@@ -38,6 +38,12 @@ class ConfigureCheckoutVerificationPolicy
 
         $this->settings->set(CheckoutVerification::POLICY, $required, $actor->id);
 
+        // Requiring the code and switching it off for everyone cannot both stand.
+        if ($required && $this->verification->disabledByPlatform()) {
+            $this->settings->define(CheckoutVerification::DISABLED, 'orders', SettingType::Boolean, false, label: 'Switch the SMS code off for every storefront');
+            $this->settings->set(CheckoutVerification::DISABLED, false, $actor->id);
+        }
+
         $this->audit->handle(new AuditEntry(
             action: 'website.sms_verification_policy_changed',
             actorId: $actor->id,

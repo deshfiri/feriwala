@@ -31,7 +31,13 @@ type Props = {
     website: WebsiteDetail;
     themes: { value: string; label: string }[];
     image_limits: { max_bytes: number; accepted: string[] };
-    sms_verification: { enabled: boolean; locked: boolean; effective: boolean };
+    sms_verification: {
+        enabled: boolean;
+        locked: boolean;
+        effective: boolean;
+        /** Feriwala has switched the code off for every storefront. */
+        disabled_by_platform?: boolean;
+    };
 };
 
 const controlClass =
@@ -336,7 +342,11 @@ export default function WebsiteSettings({
                                         className="text-muted-foreground text-xs"
                                         data-test="sms-locked"
                                     >
-                                        {t('website.settings.sms_locked')}
+                                        {smsVerification.disabled_by_platform
+                                            ? t(
+                                                  'website.settings.sms_disabled_by_platform',
+                                              )
+                                            : t('website.settings.sms_locked')}
                                     </p>
                                 )}
                                 <InputError

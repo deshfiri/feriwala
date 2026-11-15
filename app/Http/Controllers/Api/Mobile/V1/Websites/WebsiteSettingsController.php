@@ -66,6 +66,7 @@ class WebsiteSettingsController extends MobileController
             'sms_verification' => [
                 'enabled' => $record->sms_verification_enabled,
                 'locked' => $this->verification->lockedFor($record),
+                'disabled_by_platform' => $this->verification->disabledByPlatform(),
                 'effective' => $this->verification->requiredFor($record),
             ],
         ]);

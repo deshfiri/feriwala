@@ -186,6 +186,11 @@ class WebsiteRefused extends RuntimeException
         return new self(__('website.refused.sms_verification_required_by_platform'), 'sms_verification_enabled');
     }
 
+    public static function smsVerificationDisabledByPlatform(): self
+    {
+        return new self(__('website.refused.sms_verification_disabled_by_platform'), 'sms_verification_enabled');
+    }
+
     public static function bannerLinkInvalid(): self
     {
         return new self(__('website.refused.banner_link_invalid'), 'banner_link_url');

@@ -16,7 +16,8 @@ use App\Models\User;
  * The choice is that storefront's alone — a Partner with several storefronts sets
  * each on its own. While the platform requires the code of every storefront it
  * cannot be turned off, and that is refused here rather than left to the screen.
- * Switching it **on** is always allowed.
+ * Switching it **on** is allowed unless the platform has switched the code off
+ * for every storefront.
  */
 class SetWebsiteSmsVerification
 {
@@ -35,7 +36,11 @@ class SetWebsiteSmsVerification
             throw WebsiteRefused::notEditable();
         }
 
-        if (! $enabled && $this->verification->lockedFor($website)) {
+        if ($enabled && $this->verification->disabledByPlatform()) {
+            throw WebsiteRefused::smsVerificationDisabledByPlatform();
+        }
+
+        if (! $enabled && $this->verification->requiredByPlatform()) {
             throw WebsiteRefused::smsVerificationRequiredByPlatform();
         }
 

@@ -25,6 +25,9 @@ class CheckoutVerification
     /** The platform policy: when true, every storefront requires the code. */
     public const POLICY = 'orders.website_sms_verification_required';
 
+    /** The platform's kill switch: when true, no storefront asks for the code and none can turn it on. */
+    public const DISABLED = 'orders.website_sms_verification_disabled';
+
     public function __construct(
         protected SettingsRepository $settings,
     ) {}
@@ -43,16 +46,31 @@ class CheckoutVerification
      */
     public function requiredFor(Website $website): bool
     {
+        // The platform's kill switch wins over every shop's own choice.
+        if ($this->disabledByPlatform()) {
+            return false;
+        }
+
         // A website not yet read back from the database has no value: the default is on.
         return $this->requiredByPlatform() || ($website->sms_verification_enabled ?? true);
     }
 
     /**
-     * Whether the Partner's own setting is overridden by the platform, so the
-     * screen can say why the switch cannot be turned off.
+     * Whether the platform has switched the code off for every storefront
+     * (`website:sms-verification off`): no shop is asked for one and none can
+     * turn it back on.
+     */
+    public function disabledByPlatform(): bool
+    {
+        return (bool) $this->settings->get(self::DISABLED, false);
+    }
+
+    /**
+     * Whether the Partner's own setting is overridden by the platform — either
+     * way — so the screen can say why the switch cannot be moved.
      */
     public function lockedFor(Website $website): bool
     {
-        return $this->requiredByPlatform();
+        return $this->requiredByPlatform() || $this->disabledByPlatform();
     }
 }
