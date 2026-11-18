@@ -50,6 +50,8 @@ return [
         'admin.*.setup-link.*',
         // A password staff set for an owner is sign-in access handed over.
         'admin.accounts.password.*',
+        // Changing an owner's login email or mobile changes who can sign in.
+        'admin.accounts.details.*',
         'admin.payments.manual-settlement',
         'admin.wallets.adjustments.*',
         'admin.wallets.reversals.*',

@@ -968,6 +968,8 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('accounts.setup-link.destroy');
         Route::put('accounts/{account}/password', [ManagedAccountController::class, 'setPassword'])
             ->name('accounts.password.update');
+        Route::put('accounts/{account}/details', [ManagedAccountController::class, 'updateDetails'])
+            ->name('accounts.details.update');
         Route::post('accounts/{account}/verify-contact', [ManagedAccountController::class, 'verifyContact'])
             ->name('accounts.verify-contact');
         Route::post('accounts/{account}/account-type', [ManagedAccountController::class, 'changeAccountType'])

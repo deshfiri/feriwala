@@ -260,6 +260,78 @@ describe('a Client/Partner account', function () {
             ->and(AuditLog::query()->where('action', 'password.set_by_staff')->exists())->toBeFalse();
     });
 
+    it('lets staff correct the business name and every owner detail, audited before and after', function () {
+        $this->actingAs($this->admin)->post(route('admin.accounts.store'), managedPartnerPayload());
+        $user = User::query()->where('email', 'rahim@example.com')->firstOrFail();
+        $account = $user->ownedAccount;
+
+        $this->put(route('admin.accounts.details.update', $account), [
+            'business_name' => 'Rahim Fashion House',
+            'name' => 'Rahim Ahmed',
+            'email' => 'rahim.ahmed@example.com',
+            'mobile' => '+8801711111111',
+            'date_of_birth' => '1990-05-17',
+            'gender' => 'male',
+            'country' => 'BD',
+            'nationality' => 'Bangladeshi',
+            'reason' => 'Owner asked by phone to correct their details.',
+        ])->assertSessionHasNoErrors();
+
+        $user->refresh();
+
+        expect($account->refresh()->name)->toBe('Rahim Fashion House')
+            ->and($user->name)->toBe('Rahim Ahmed')
+            ->and($user->email)->toBe('rahim.ahmed@example.com')
+            ->and($user->mobile)->toBe('+8801711111111')
+            ->and($user->date_of_birth?->format('Y-m-d'))->toBe('1990-05-17')
+            ->and($user->gender)->toBe('male')
+            ->and($user->nationality)->toBe('Bangladeshi');
+
+        $audit = AuditLog::query()->where('action', 'account.details_updated_by_staff')->sole();
+
+        expect($audit->actor_id)->toBe($this->admin->id)
+            ->and($audit->reason)->toBe('Owner asked by phone to correct their details.')
+            ->and($audit->before['email'])->toBe('rahim@example.com')
+            ->and($audit->after['email'])->toBe('rahim.ahmed@example.com')
+            ->and($audit->before['business_name'])->toBe('Rahim Traders');
+    });
+
+    it('refuses another person\'s email or mobile, a missing reason, and changes nothing', function () {
+        $taken = User::factory()->create(['email' => 'taken@example.com', 'mobile' => '+8801999999999']);
+        $this->actingAs($this->admin)->post(route('admin.accounts.store'), managedPartnerPayload());
+        $account = User::query()->where('email', 'rahim@example.com')->firstOrFail()->ownedAccount;
+        $route = route('admin.accounts.details.update', $account);
+        $valid = [
+            'business_name' => 'Rahim Traders', 'name' => 'Rahim Uddin', 'email' => 'rahim@example.com',
+            'mobile' => '+8801712345678', 'country' => 'BD', 'reason' => 'Correction.',
+        ];
+
+        $this->put($route, [...$valid, 'email' => $taken->email])->assertSessionHasErrors('email');
+        $this->put($route, [...$valid, 'mobile' => $taken->mobile])->assertSessionHasErrors('mobile');
+        $this->put($route, [...$valid, 'reason' => ''])->assertSessionHasErrors('reason');
+
+        // Saving the owner's own unchanged email and mobile is not a clash.
+        $this->put($route, [...$valid, 'name' => 'Rahim U.'])->assertSessionHasNoErrors();
+
+        expect($account->owner->fresh()->email)->toBe('rahim@example.com')
+            ->and($account->owner->fresh()->name)->toBe('Rahim U.');
+    });
+
+    it('refuses editing details to staff without the permission, and hides the form', function () {
+        $account = testBusinessAccount();
+        $staff = testPlatformStaff(PlatformRole::OrderManager);
+
+        $this->actingAs($staff)->put(route('admin.accounts.details.update', $account), [
+            'business_name' => 'Hijacked', 'name' => 'X', 'email' => 'x@example.com',
+            'mobile' => '+8801700000000', 'country' => 'BD', 'reason' => 'Trying.',
+        ])->assertForbidden();
+
+        expect($account->fresh()->name)->not->toBe('Hijacked');
+
+        $this->actingAs($this->admin)->get(route('admin.accounts.show', $account))
+            ->assertInertia(fn ($page) => $page->where('editable_details.email', $account->owner->email));
+    });
+
     it('refuses setting a password to staff without the permission', function () {
         $account = testBusinessAccount();
         $before = $account->owner->password;

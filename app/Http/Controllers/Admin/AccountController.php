@@ -7,6 +7,7 @@ use App\Domain\Account\Actions\ReactivateAccount;
 use App\Domain\Account\Actions\SuspendAccount;
 use App\Domain\Account\Enums\AccountStatus;
 use App\Domain\Account\Enums\AccountType;
+use App\Domain\Account\Enums\Gender;
 use App\Domain\Account\Exceptions\ActivationBlocked;
 use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Account\Queries\AccountDirectory;
@@ -19,6 +20,7 @@ use App\Domain\Kyc\Models\KycSubmission;
 use App\Domain\Package\Models\Package;
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Support\Localization\Countries;
 use App\Support\StateMachine\Exceptions\IllegalStateTransition;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -292,6 +294,24 @@ class AccountController extends Controller
                     && Gate::allows('completeManually', $account),
                 'verify_contact' => Gate::allows('verifyContact', $account),
                 'manage_identity' => Gate::allows('manageIdentity', $account),
+            ],
+
+            /*
+             * The current values behind the "Edit details" dialog, and the
+             * closed sets it picks from. Sent only to someone who may edit.
+             */
+            'editable_details' => $account->owner === null || ! Gate::allows('manageIdentity', $account) ? null : [
+                'business_name' => $account->name,
+                'name' => $account->owner->name,
+                'email' => $account->owner->email,
+                'mobile' => $account->owner->mobile,
+                // The stored date as the date input wants it (YYYY-MM-DD).
+                'date_of_birth' => $account->owner->getRawOriginal('date_of_birth'),
+                'gender' => $account->owner->gender,
+                'country' => $account->owner->country,
+                'nationality' => $account->owner->nationality,
+                'countries' => app(Countries::class)->options(),
+                'genders' => Gender::options(),
             ],
 
             // Email/mobile standing, including what staff confirmed by hand

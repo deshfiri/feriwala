@@ -3,6 +3,7 @@ import {
     Ban,
     BadgeCheck,
     ExternalLink,
+    Pencil,
     RotateCcw,
     ShieldCheck,
     Upload,
@@ -40,6 +41,7 @@ import SignInAccessDialog, { type Person } from './sign-in-access-dialog';
 import WithdrawKycRequestDialog from './withdraw-kyc-request-dialog';
 import SuspensionDialog from './suspension-dialog';
 import CompleteAccountDialog from './complete-account-dialog';
+import EditDetailsDialog, { type EditableDetails } from './edit-details-dialog';
 
 type Owner = {
     name: string;
@@ -156,6 +158,8 @@ type Props = {
     };
     /** Email/mobile standing, including what staff confirmed by hand. */
     contact: ContactState | null;
+    /** What "Edit details" starts from; null for someone who may not edit. */
+    editable_details: EditableDetails | null;
     blockers: string[];
 };
 
@@ -185,9 +189,11 @@ export default function AdminAccountShow({
     kyc_consequences: kycConsequences,
     kyc_batches: kycBatches,
     contact,
+    editable_details: editableDetails,
     can,
     blockers,
 }: Props) {
+    const [editingDetails, setEditingDetails] = useState(false);
     const [tab, setTab] = useState('overview');
     const { t, locale } = useTranslation();
     const [requesting, setRequesting] = useState(false);
@@ -244,6 +250,20 @@ export default function AdminAccountShow({
                                         />
                                         {t('account.dashboard_access.open')}
                                     </a>
+                                </Button>
+                            )}
+
+                            {editableDetails !== null && (
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setEditingDetails(true)}
+                                >
+                                    <Pencil
+                                        aria-hidden="true"
+                                        className="size-4"
+                                    />
+                                    {t('account.edit_details.action')}
                                 </Button>
                             )}
 
@@ -948,6 +968,15 @@ export default function AdminAccountShow({
                 open={changingAccountType}
                 onOpenChange={setChangingAccountType}
             />
+
+            {editableDetails !== null && (
+                <EditDetailsDialog
+                    accountId={business.id}
+                    details={editableDetails}
+                    open={editingDetails}
+                    onOpenChange={setEditingDetails}
+                />
+            )}
 
             <SignInAccessDialog
                 person={changingAccessFor}

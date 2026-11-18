@@ -4,6 +4,7 @@ return [
     'created' => 'Account created. A password-setup link has been sent to the owner.',
     'link_sent' => 'A new password-setup link was sent. Any earlier link no longer works.',
     'link_revoked' => 'The password-setup link was revoked.',
+    'details_updated' => 'Partner details updated.',
     'password_set' => 'Password set. Give it to the owner so they can sign in.',
     'verified' => 'Confirmed by staff. The person has been notified.',
     'channels' => ['email' => 'email address', 'mobile' => 'mobile number'],

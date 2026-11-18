@@ -7,6 +7,7 @@ use App\Domain\Account\Actions\ChangeAccountType;
 use App\Domain\Account\Actions\CreateManagedAccount;
 use App\Domain\Account\Actions\ManagePasswordSetup;
 use App\Domain\Account\Actions\SetPasswordByStaff;
+use App\Domain\Account\Actions\UpdatePartnerDetailsByStaff;
 use App\Domain\Account\Actions\VerifyContactManually;
 use App\Domain\Account\Enums\AccountType;
 use App\Domain\Account\Models\BusinessAccount;
@@ -100,6 +101,20 @@ class ManagedAccountController extends Controller
         ));
 
         return back()->with('success', __('managed_accounts.password_set'));
+    }
+
+    /**
+     * Correct the business name and the owner's details on their behalf.
+     */
+    public function updateDetails(Request $request, BusinessAccount $account, UpdatePartnerDetailsByStaff $update): RedirectResponse
+    {
+        Gate::authorize('manageIdentity', $account);
+
+        $this->guard(fn () => $update->handle($this->actor($request), $account, $request->only([
+            'business_name', 'name', 'email', 'mobile', 'date_of_birth', 'gender', 'country', 'nationality', 'reason',
+        ])));
+
+        return back()->with('success', __('managed_accounts.details_updated'));
     }
 
     public function changeAccountType(Request $request, BusinessAccount $account, ChangeAccountType $change): RedirectResponse

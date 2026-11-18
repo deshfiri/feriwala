@@ -66,6 +66,7 @@ it('refuses every new account-management route to Client/Partner and Supplier se
     'send partner link' => ['POST', 'admin.accounts.setup-link.store', ['account']],
     'revoke partner link' => ['DELETE', 'admin.accounts.setup-link.destroy', ['account']],
     'set partner password' => ['PUT', 'admin.accounts.password.update', ['account']],
+    'edit partner details' => ['PUT', 'admin.accounts.details.update', ['account']],
     'verify partner contact' => ['POST', 'admin.accounts.verify-contact', ['account']],
     'add supplier screen' => ['GET', 'admin.suppliers.create', []],
     'create supplier' => ['POST', 'admin.suppliers.store', []],

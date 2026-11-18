@@ -1,6 +1,26 @@
 <?php
 
 return [
+    'edit_details' => [
+        'action' => 'Edit details',
+        'title' => 'Edit partner details',
+        'description' => 'Correct the business name and the owner\'s details. Email and mobile are what the owner signs in with. Their verification status is kept as it is.',
+        'fields' => [
+            'business_name' => 'Business name',
+            'name' => 'Owner name',
+            'email' => 'Email',
+            'mobile' => 'Mobile',
+            'date_of_birth' => 'Date of birth',
+            'gender' => 'Gender',
+            'country' => 'Country',
+            'nationality' => 'Nationality',
+        ],
+        'not_set' => 'Not set',
+        'reason' => 'Reason',
+        'reason_help' => 'Recorded in the audit trail with the old and new values. Not shown to the partner.',
+        'submit' => 'Save changes',
+    ],
+
     'detail' => [
         'title' => 'Business account',
         'back_to_queue' => 'Back to queue',
