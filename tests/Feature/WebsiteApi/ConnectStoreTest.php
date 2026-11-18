@@ -120,6 +120,16 @@ it('takes an address as typed, without checking its shape', function () {
     expect($this->website->refresh()->domain)->toBe('shop_name.example.com');
 });
 
+it('takes an address with a port, a trailing dot or a pasted non-breaking space', function (string $typed) {
+    connectStore($this, $this->website, ['address' => $typed])->assertCreated();
+
+    expect($this->website->refresh()->domain)->toBe('shop.example.com');
+})->with([
+    'a port' => ['shop.example.com:443'],
+    'a trailing dot' => ['https://shop.example.com./'],
+    'a non-breaking space' => ["shop.example.com\u{00A0}"],
+]);
+
 it('refuses an address that is taken by another website, and leaves nothing half-made', function () {
     Website::factory()->create(['domain' => 'taken.example.com']);
 

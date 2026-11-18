@@ -12,10 +12,10 @@ use App\Domain\Website\Models\Website;
 use App\Domain\Website\Models\WebsiteCredential;
 use App\Domain\Website\Models\WebsiteDomain;
 use App\Domain\Website\Models\WebsiteWebhookEndpoint;
+use App\Domain\Website\RequestedAddress;
 use App\Domain\Website\StorefrontEnvironmentBlock;
 use App\Models\User;
 use Illuminate\Database\DatabaseManager;
-use Illuminate\Support\Str;
 
 /**
  * Connecting a partner's storefront in one step, on the partner's behalf (D32).
@@ -242,14 +242,8 @@ class ConnectStore
      */
     protected function normalise(string $address): ?string
     {
-        $value = Str::lower(trim($address));
-        $value = (string) preg_replace('#^[a-z][a-z0-9+.\-]*://#', '', $value);
-        $value = rtrim(explode('/', $value)[0], '.');
-
-        // Taken as typed, apart from what is never a public host: a port or
-        // whitespace (a local address is {@see LocalAddress}'s to accept), or a
-        // name with no dot in it.
-        return $value === '' || strlen($value) > 253 || ! str_contains($value, '.')
-            || preg_match('/[\s:]/', $value) === 1 ? null : $value;
+        // The same cleaner every address field uses (a local address is
+        // {@see LocalAddress}'s, asked first).
+        return RequestedAddress::host($address);
     }
 }

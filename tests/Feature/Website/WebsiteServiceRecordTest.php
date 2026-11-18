@@ -142,6 +142,28 @@ it('shows a partner only their own websites\' records', function () {
     $this->actingAs($other->owner)->get(route('websites.show', $mine->public_id))->assertNotFound();
 });
 
+it('records a domain however it was typed or pasted', function (string $typed) {
+    $website = websiteServiceRecordRequest($this);
+
+    $this->actingAs($this->staff)
+        ->post(route('admin.websites.domains.store', $website->public_id), ['domain' => $typed, 'term_months' => 12])
+        ->assertSessionHasNoErrors();
+
+    expect(WebsiteDomain::query()->sole()->domain)->toBe('www.karim.com');
+})->with([
+    'a full URL' => ['https://www.Karim.com/about?x=1'],
+    'a trailing slash and spaces' => [' www.karim.com/ '],
+    'a port' => ['www.karim.com:443'],
+]);
+
+it('still refuses something that is not a domain at all', function () {
+    $website = websiteServiceRecordRequest($this);
+
+    $this->actingAs($this->staff)
+        ->post(route('admin.websites.domains.store', $website->public_id), ['domain' => 'karim', 'term_months' => 12])
+        ->assertSessionHasErrors('domain');
+});
+
 it('lets only platform staff record a domain or hosting', function () {
     $website = websiteServiceRecordRequest($this);
 

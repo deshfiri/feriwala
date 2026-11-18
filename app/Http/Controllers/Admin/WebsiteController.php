@@ -61,7 +61,7 @@ class WebsiteController extends Controller
     protected const MINIMUM_REASON = 10;
 
     /** A real domain name: labels of letters, digits and hyphens, with at least one dot. */
-    protected const DOMAIN_RULE = 'regex:/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/i';
+    protected const DOMAIN_RULE = 'regex:'.RequestedAddress::DOMAIN_PATTERN;
 
     public function __construct(
         protected WebsiteOverview $overview,
@@ -393,11 +393,12 @@ class WebsiteController extends Controller
     {
         Gate::authorize('administer', $website);
 
+        // Cleaned like every other address field, so a pasted URL, a trailing
+        // slash or a stray space is the domain it plainly is.
+        $request->merge(['domain' => RequestedAddress::normalize($request->string('domain')->toString())]);
+
         $validated = $request->validate([
-            'domain' => [
-                'required', 'string', 'max:253',
-                'regex:/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/i',
-            ],
+            'domain' => ['required', 'string', 'max:253', self::DOMAIN_RULE, 'not_regex:/^[0-9.]+$/'],
             'registrar' => ['nullable', 'string', 'max:120'],
             'term_months' => ['required', 'integer', 'min:1', 'max:120'],
             'make_primary' => ['nullable', 'boolean'],
