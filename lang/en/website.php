@@ -652,7 +652,8 @@ return [
         'title' => 'Connect the store',
         'hint' => 'Give the storefront\'s address. You get a Store ID and a token; put them, with the ERP address, in the storefront\'s .env and it is connected.',
         'address' => 'Store address',
-        'address_hint' => 'A domain such as shop.example.com. On a developer machine, a local address such as http://127.0.0.1:8001 is accepted as it is.',
+        'address_hint' => 'Any domain, with or without a subdomain: yourshop.com, www.yourshop.com or shop.example.com. A full URL such as https://yourshop.com/ works too. On a developer machine, a local address such as http://127.0.0.1:8001 is accepted as it is.',
+        'domain_taken_by' => 'That domain is already used by the website “:website”. Remove it there first, or connect that website instead.',
         'submit' => 'Connect store',
         'done_title' => 'Store connected',
         'done_hint' => 'Copy this into the storefront\'s .env. The token is shown once; if it is lost, rotate it.',
@@ -670,7 +671,7 @@ return [
     'refused' => [
         'not_connected' => 'This store is not connected.',
         'already_connected' => 'This website already has a live store connection. Rotate its token, or revoke it first.',
-        'address_invalid' => 'Enter the store\'s address as a domain such as shop.example.com.',
+        'address_invalid' => 'Enter the store\'s address as a domain, such as yourshop.com or shop.example.com.',
         'not_entitled' => 'Your package does not include a dedicated website.',
         'entitlement_expired' => 'Your package website’s domain and hosting period has ended. Renew your package to add a website.',
         'limit_reached' => 'Your package allows :limit website(s). Close one or change your package to add another.',

@@ -6,6 +6,7 @@ use App\Domain\Website\Actions\ConnectStore;
 use App\Domain\Website\Data\ConnectedStore;
 use App\Domain\Website\Exceptions\WebsiteRefused;
 use App\Domain\Website\Models\Website;
+use App\Domain\Website\RequestedAddress;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
@@ -48,10 +49,39 @@ class WebsiteConnectionController extends Controller
                 (int) ($validated['term_months'] ?? 12),
             );
         } catch (WebsiteRefused $refused) {
-            throw ValidationException::withMessages([$refused->field => $refused->getMessage()]);
+            // The address is the one thing this form asks for, so every refusal
+            // is said against it -- a refusal filed under another field was a
+            // bare 422 the page never showed.
+            throw ValidationException::withMessages([
+                'address' => ($refused->field === 'domain' ? $this->holderOf($validated['address'], $website) : null)
+                    ?? $refused->getMessage(),
+            ]);
         }
 
         return $this->once($connected, 201);
+    }
+
+    /**
+     * When the domain is someone else's, say whose, so staff can go and free it.
+     * Staff-only, so naming the other website is no leak.
+     */
+    protected function holderOf(string $address, Website $website): ?string
+    {
+        $domain = RequestedAddress::host($address);
+
+        if ($domain === null) {
+            return null;
+        }
+
+        /** @var Website|null $holder */
+        $holder = Website::query()
+            ->whereKeyNot($website->id)
+            ->where(fn ($query) => $query
+                ->where('domain', $domain)
+                ->orWhereHas('domains', fn ($domains) => $domains->where('domain', $domain)))
+            ->first();
+
+        return $holder === null ? null : (string) __('website.connect.domain_taken_by', ['website' => $holder->name]);
     }
 
     /**

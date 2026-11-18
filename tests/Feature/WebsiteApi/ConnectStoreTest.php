@@ -130,6 +130,22 @@ it('takes an address with a port, a trailing dot or a pasted non-breaking space'
     'a non-breaking space' => ["shop.example.com\u{00A0}"],
 ]);
 
+it('connects a bare domain with no subdomain, typed as a full URL', function () {
+    connectStore($this, $this->website, ['address' => 'https://bivaluxebd.com'])->assertCreated();
+
+    expect($this->website->refresh()->domain)->toBe('bivaluxebd.com');
+});
+
+it('says, against the address, which website already holds the domain', function () {
+    $holder = Website::factory()->create(['domain' => 'bivaluxebd.com', 'name' => 'Bivaluxe Old']);
+    WebsiteDomain::factory()->create(['website_id' => $holder->id, 'domain' => 'bivaluxebd.com']);
+
+    connectStore($this, $this->website, ['address' => 'https://bivaluxebd.com'])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['address' => 'Bivaluxe Old'])
+        ->assertJsonMissingValidationErrors('domain');
+});
+
 it('refuses an address that is taken by another website, and leaves nothing half-made', function () {
     Website::factory()->create(['domain' => 'taken.example.com']);
 

@@ -164,7 +164,7 @@ export default function ConnectStore({
                                             event.target.value,
                                         )
                                     }
-                                    placeholder="shop.example.com"
+                                    placeholder="yourshop.com"
                                     autoComplete="off"
                                     maxLength={253}
                                     required
