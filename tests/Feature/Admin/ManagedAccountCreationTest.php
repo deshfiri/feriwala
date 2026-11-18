@@ -210,6 +210,69 @@ describe('a Client/Partner account', function () {
     it('shows the create screen to staff who may open accounts', function () {
         $this->actingAs($this->admin)->get(route('admin.accounts.create'))->assertOk();
     });
+
+    it('lets staff set a password the owner can sign in with, audited without the password', function () {
+        $this->actingAs($this->admin)->post(route('admin.accounts.store'), managedPartnerPayload());
+        $user = User::query()->where('email', 'rahim@example.com')->firstOrFail();
+        $rememberToken = $user->remember_token;
+
+        $this->put(route('admin.accounts.password.update', $user->ownedAccount), [
+            'password' => testStrongPassword(),
+            'password_confirmation' => testStrongPassword(),
+            'reason' => 'Could not open the setup email.',
+        ])->assertSessionHasNoErrors();
+
+        $user->refresh();
+
+        expect(Hash::check(testStrongPassword(), $user->password))->toBeTrue()
+            ->and($user->remember_token)->not->toBe($rememberToken);
+
+        $audit = AuditLog::query()->where('action', 'password.set_by_staff')->firstOrFail();
+
+        expect($audit->actor_id)->toBe($this->admin->id)
+            ->and($audit->auditable_id)->toBe($user->id)
+            ->and($audit->reason)->toBe('Could not open the setup email.');
+
+        foreach (AuditLog::query()->get() as $row) {
+            expect(json_encode($row->getAttributes()))->not->toContain(testStrongPassword())->not->toContain($user->password);
+        }
+
+        // The owner signs in with it.
+        auth()->logout();
+        $this->post(route('login.store'), ['email' => 'rahim@example.com', 'password' => testStrongPassword()]);
+        $this->assertAuthenticatedAs($user);
+    });
+
+    it('refuses a weak or unconfirmed password, or no reason, and changes nothing', function () {
+        $this->actingAs($this->admin)->post(route('admin.accounts.store'), managedPartnerPayload());
+        $user = User::query()->where('email', 'rahim@example.com')->firstOrFail();
+        $before = $user->password;
+        $route = route('admin.accounts.password.update', $user->ownedAccount);
+
+        $this->put($route, ['password' => 'short', 'password_confirmation' => 'short', 'reason' => 'Reason.'])
+            ->assertSessionHasErrors('password');
+        $this->put($route, ['password' => testStrongPassword(), 'password_confirmation' => 'Different!Passw0rd#1', 'reason' => 'Reason.'])
+            ->assertSessionHasErrors('password');
+        $this->put($route, ['password' => testStrongPassword(), 'password_confirmation' => testStrongPassword()])
+            ->assertSessionHasErrors('reason');
+
+        expect($user->fresh()->password)->toBe($before)
+            ->and(AuditLog::query()->where('action', 'password.set_by_staff')->exists())->toBeFalse();
+    });
+
+    it('refuses setting a password to staff without the permission', function () {
+        $account = testBusinessAccount();
+        $before = $account->owner->password;
+
+        $this->actingAs(testPlatformStaff(PlatformRole::OrderManager))
+            ->put(route('admin.accounts.password.update', $account), [
+                'password' => testStrongPassword(),
+                'password_confirmation' => testStrongPassword(),
+                'reason' => 'Trying.',
+            ])->assertForbidden();
+
+        expect($account->owner->fresh()->password)->toBe($before);
+    });
 });
 
 describe('a Supplier account', function () {

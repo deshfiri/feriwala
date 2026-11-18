@@ -48,3 +48,6 @@ Before naming a page prop, check it against what `HandleInertiaRequests::share()
 Everything under the business group in `useNavigation` addresses the reader's own account. Platform
 staff have none, so those links lead to a refusal — worse than their absence. Gate on `account`
 being present, not only on permissions.
+
+## A security admin route must be listed in config/reasons.php required_for
+DefaultReasonUnlessSecurity fills a blank `reason` with "No reason given." on every `admin.*` POST/PUT/PATCH/DELETE route unless its name matches `required_for` in config/reasons.php. So `'reason' => ['required']` in the controller is silently satisfied. Any new admin route touching sign-in access, permissions, suspension or money moved by hand must be added to `required_for`, with a test that posts no reason and asserts the error (e.g. `admin.accounts.password.*`).

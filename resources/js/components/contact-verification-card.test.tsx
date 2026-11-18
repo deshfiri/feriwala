@@ -10,9 +10,12 @@ const translations = {
             mobile: 'Mobile',
             reason: 'Reason',
             reason_help: 'Recorded.',
+            password: 'New password',
+            password_confirmation: 'Confirm password',
         },
         send_link: 'Send setup link',
         revoke_link: 'Revoke setup link',
+        set_password: 'Set password',
         contact: {
             title: 'Email & mobile',
             verified: 'Verified',
@@ -123,10 +126,29 @@ describe('the contact verification card', () => {
         ).not.toBeInTheDocument();
     });
 
-    it('never offers a password field', () => {
+    it('offers no password field unless the page asks for one', () => {
         renderCard();
 
         expect(screen.queryByLabelText(/password/i)).not.toBeInTheDocument();
+        expect(document.querySelector('input[type="password"]')).toBeNull();
+    });
+
+    it('lets staff set a password, confirmed and with a reason, where offered', () => {
+        renderCard({ setPasswordForm: target });
+
+        expect(screen.getByLabelText(/^New password/)).toHaveAttribute(
+            'type',
+            'password',
+        );
+        expect(screen.getByLabelText(/^Confirm password/)).toBeRequired();
+        expect(
+            screen.getByRole('button', { name: 'Set password' }),
+        ).toBeInTheDocument();
+    });
+
+    it('hides setting a password from someone without the permission', () => {
+        renderCard({ setPasswordForm: target, canManageSetup: false });
+
         expect(document.querySelector('input[type="password"]')).toBeNull();
     });
 });

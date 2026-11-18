@@ -84,7 +84,14 @@ function order(overrides: Partial<AdminOrderDetail> = {}): AdminOrderDetail {
         customer_note: null,
         intended_resale_channel: null,
         coupon_code: null,
-        totals: { total: money('20000.00') },
+        totals: {
+            subtotal: money('20000.00'),
+            discount: null,
+            delivery: money('0.00'),
+            tax: null,
+            cod_fee: null,
+            total: money('20000.00'),
+        },
         lines: [],
         payment: {
             reference: 'PAY-260915-TEST0001',
@@ -121,6 +128,36 @@ function order(overrides: Partial<AdminOrderDetail> = {}): AdminOrderDetail {
  * action, only for those who may take it.
  */
 describe('admin order page', () => {
+    it('shows the delivery charge and each part of the total', () => {
+        render(
+            <AdminOrder
+                order={order({
+                    totals: {
+                        subtotal: money('3400.00'),
+                        discount: null,
+                        delivery: money('60.00'),
+                        tax: null,
+                        cod_fee: money('20.00'),
+                        total: money('3480.00'),
+                    },
+                })}
+                can={{
+                    cancel: false,
+                    manage_shipments: false,
+                    record_cod_collection: false,
+                }}
+            />,
+        );
+
+        expect(screen.getByText('orders.summary.delivery')).toBeInTheDocument();
+        expect(screen.getByText('৳60.00')).toBeInTheDocument();
+        expect(screen.getByText('orders.summary.cod_fee')).toBeInTheDocument();
+        expect(screen.getByText('৳3480.00')).toBeInTheDocument();
+        expect(
+            screen.queryByText('orders.summary.discount'),
+        ).not.toBeInTheDocument();
+    });
+
     it('offers cancelling an unpaid order only when the server allows it', () => {
         const { rerender } = render(
             <AdminOrder

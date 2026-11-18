@@ -246,12 +246,17 @@ class OrderController extends Controller
                 'customer_note' => $record->customer_note,
                 'intended_resale_channel' => $record->intended_resale_channel?->value,
                 'coupon_code' => $record->coupon_code,
+                // The whole breakdown, so staff see what the total is made of.
+                // Delivery is always sent, even at zero, so an order priced
+                // with no delivery charge says so; the optional lines are null
+                // when there is nothing on them.
                 'totals' => [
                     'subtotal' => $record->subtotal->jsonSerialize(),
-                    'discount' => $record->discount->jsonSerialize(),
+                    'discount' => $record->discount->isPositive() ? $record->discount->jsonSerialize() : null,
                     'delivery' => $record->delivery->jsonSerialize(),
-                    'tax' => $record->tax->jsonSerialize(),
+                    'tax' => $record->tax->isPositive() ? $record->tax->jsonSerialize() : null,
                     'tax_included' => $record->tax_included->jsonSerialize(),
+                    'cod_fee' => $record->cod_fee->isPositive() ? $record->cod_fee->jsonSerialize() : null,
                     'total' => $record->total->jsonSerialize(),
                 ],
                 'lines' => $record->items->map(fn (OrderItem $item) => [

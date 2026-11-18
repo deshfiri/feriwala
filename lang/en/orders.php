@@ -123,6 +123,7 @@ return [
         'delivery' => 'Delivery',
         'tax' => 'Tax',
         'tax_included' => 'Prices include :amount tax',
+        'cod_fee' => 'Cash-on-delivery fee',
         'total' => 'Total',
     ],
 

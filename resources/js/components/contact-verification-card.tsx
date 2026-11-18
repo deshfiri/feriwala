@@ -40,21 +40,24 @@ type Props = {
     verifyForm: FormTarget;
     sendLinkForm: FormTarget;
     revokeLinkForm: FormTarget;
+    /** Where staff set a password for someone who cannot use the link; omitted where that is not offered. */
+    setPasswordForm?: FormTarget;
     canVerify: boolean;
     canManageSetup: boolean;
 };
 
 /**
- * Where an identity's email and mobile stand, with the two things staff may do
- * about it: confirm a channel by hand, and send or revoke the password-setup
- * link. Staff-only. Every action asks for a reason, which is recorded; nothing
- * here shows or sets a password.
+ * Where an identity's email and mobile stand, with what staff may do about it:
+ * confirm a channel by hand, send or revoke the password-setup link and, where
+ * offered, set a password for someone who cannot use the link. Staff-only.
+ * Every action asks for a reason, which is recorded; no password is ever shown.
  */
 export default function ContactVerificationCard({
     contact,
     verifyForm,
     sendLinkForm,
     revokeLinkForm,
+    setPasswordForm,
     canVerify,
     canManageSetup,
 }: Props) {
@@ -154,6 +157,18 @@ export default function ContactVerificationCard({
                         />
                     </div>
                 )}
+
+                {canManageSetup && setPasswordForm && (
+                    <div className="mt-4 space-y-3 border-t pt-4">
+                        <p className="text-sm font-medium">
+                            {t('managed_accounts.contact.password_title')}
+                        </p>
+                        <p className="text-muted-foreground text-xs">
+                            {t('managed_accounts.contact.password_help')}
+                        </p>
+                        <SetPasswordForm target={setPasswordForm} />
+                    </div>
+                )}
             </SectionCard>
 
             <Dialog
@@ -208,6 +223,67 @@ export default function ContactVerificationCard({
                 </DialogContent>
             </Dialog>
         </>
+    );
+}
+
+function SetPasswordForm({ target }: { target: FormTarget }) {
+    const { t } = useTranslation();
+
+    return (
+        <Form
+            {...target}
+            options={{ preserveScroll: true }}
+            resetOnSuccess
+            className="space-y-3"
+        >
+            {({ processing, errors }) => (
+                <>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                        <FormField
+                            label={t('managed_accounts.fields.password')}
+                            error={errors.password}
+                            required
+                        >
+                            {(field) => (
+                                <Input
+                                    {...field}
+                                    type="password"
+                                    name="password"
+                                    autoComplete="new-password"
+                                    required
+                                />
+                            )}
+                        </FormField>
+                        <FormField
+                            label={t(
+                                'managed_accounts.fields.password_confirmation',
+                            )}
+                            required
+                        >
+                            {(field) => (
+                                <Input
+                                    {...field}
+                                    type="password"
+                                    name="password_confirmation"
+                                    autoComplete="new-password"
+                                    required
+                                />
+                            )}
+                        </FormField>
+                    </div>
+                    <FormField
+                        label={t('managed_accounts.fields.reason')}
+                        error={errors.reason}
+                        required
+                    >
+                        {(field) => <Input {...field} name="reason" required />}
+                    </FormField>
+                    <SubmitButton processing={processing}>
+                        {t('managed_accounts.set_password')}
+                    </SubmitButton>
+                </>
+            )}
+        </Form>
     );
 }
 

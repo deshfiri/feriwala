@@ -48,6 +48,8 @@ return [
         'admin.accounts.kyc-upload.store',
         'admin.suppliers.kyc-upload.store',
         'admin.*.setup-link.*',
+        // A password staff set for an owner is sign-in access handed over.
+        'admin.accounts.password.*',
         'admin.payments.manual-settlement',
         'admin.wallets.adjustments.*',
         'admin.wallets.reversals.*',

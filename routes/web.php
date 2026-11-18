@@ -966,6 +966,8 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('accounts.setup-link.store');
         Route::delete('accounts/{account}/setup-link', [ManagedAccountController::class, 'revokeSetupLink'])
             ->name('accounts.setup-link.destroy');
+        Route::put('accounts/{account}/password', [ManagedAccountController::class, 'setPassword'])
+            ->name('accounts.password.update');
         Route::post('accounts/{account}/verify-contact', [ManagedAccountController::class, 'verifyContact'])
             ->name('accounts.verify-contact');
         Route::post('accounts/{account}/account-type', [ManagedAccountController::class, 'changeAccountType'])

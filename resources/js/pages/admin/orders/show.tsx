@@ -83,7 +83,15 @@ export type AdminOrderDetail = {
     customer_note: string | null;
     intended_resale_channel: string | null;
     coupon_code: string | null;
-    totals: { total: Money };
+    /** The server's own breakdown; optional lines are null when nothing is on them. */
+    totals: {
+        subtotal: Money;
+        discount: Money | null;
+        delivery: Money;
+        tax: Money | null;
+        cod_fee: Money | null;
+        total: Money;
+    };
     lines: {
         id: string;
         name: string;
@@ -583,6 +591,38 @@ export default function AdminOrder({ order, can, exchange_origin }: Props) {
                                         label={t('orders.admin.fields.coupon')}
                                     >
                                         {order.coupon_code}
+                                    </Row>
+                                )}
+                                <Row label={t('orders.summary.subtotal')}>
+                                    <MoneyAmount
+                                        amount={order.totals.subtotal}
+                                    />
+                                </Row>
+                                {order.totals.discount && (
+                                    <Row label={t('orders.summary.discount')}>
+                                        <MoneyAmount
+                                            amount={order.totals.discount}
+                                            direction="debit"
+                                        />
+                                    </Row>
+                                )}
+                                <Row label={t('orders.summary.delivery')}>
+                                    <MoneyAmount
+                                        amount={order.totals.delivery}
+                                    />
+                                </Row>
+                                {order.totals.tax && (
+                                    <Row label={t('orders.summary.tax')}>
+                                        <MoneyAmount
+                                            amount={order.totals.tax}
+                                        />
+                                    </Row>
+                                )}
+                                {order.totals.cod_fee && (
+                                    <Row label={t('orders.summary.cod_fee')}>
+                                        <MoneyAmount
+                                            amount={order.totals.cod_fee}
+                                        />
                                     </Row>
                                 )}
                                 <Row label={t('orders.admin.fields.total')}>

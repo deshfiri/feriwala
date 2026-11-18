@@ -12,6 +12,7 @@ use App\Domain\Order\Models\Order;
 use App\Domain\Package\Enums\PackageFeature;
 use App\Domain\Website\Models\Website;
 use App\Domain\Website\Models\WebsiteCustomer;
+use App\Support\Money\Money;
 use App\Support\StatusHistory\StatusChange;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Support\Facades\DB;
@@ -94,6 +95,34 @@ it('shows staff why an order is held and the notes the buyer never sees', functi
             ->where('order.history.0.internal_note', 'INTERNAL-HOLD-NOTE')
             ->where('order.history.0.source', 'payment_gateway')
             ->where('can.cancel', false));
+});
+
+it('shows staff the order\'s delivery charge and the rest of its breakdown', function () {
+    $order = Order::factory()->create([
+        'business_account_id' => $this->karim->id,
+        'subtotal' => Money::fromDecimal('3400.00'),
+        'delivery' => Money::fromDecimal('60.00'),
+        'total' => Money::fromDecimal('3460.00'),
+    ]);
+
+    $this->actingAs(testPlatformStaff(PlatformRole::OrderManager))
+        ->get(route('admin.orders.show', $order->public_id))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('order.totals.subtotal.amount', '3400.00')
+            ->where('order.totals.delivery.amount', '60.00')
+            ->where('order.totals.total.amount', '3460.00')
+            ->where('order.totals.discount', null)
+            ->where('order.totals.tax', null)
+            ->where('order.totals.cod_fee', null));
+});
+
+it('sends a zero delivery charge rather than leaving it out', function () {
+    $order = Order::factory()->create(['business_account_id' => $this->karim->id]);
+
+    $this->actingAs(testPlatformStaff(PlatformRole::OrderManager))
+        ->get(route('admin.orders.show', $order->public_id))
+        ->assertInertia(fn (Assert $page) => $page->where('order.totals.delivery.amount', '0.00'));
 });
 
 it('refuses the review to staff without the order permission, and to the order\'s own buyer', function () {

@@ -717,6 +717,9 @@ export default function AdminAccountShow({
                             revokeLinkForm={ManagedAccountController.revokeSetupLink.form(
                                 business.id,
                             )}
+                            setPasswordForm={ManagedAccountController.setPassword.form(
+                                business.id,
+                            )}
                         />
                     )}
                 </SectionTabPanel>

@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Concerns\PasswordValidationRules;
 use App\Domain\Account\Actions\ChangeAccountType;
 use App\Domain\Account\Actions\CreateManagedAccount;
 use App\Domain\Account\Actions\ManagePasswordSetup;
+use App\Domain\Account\Actions\SetPasswordByStaff;
 use App\Domain\Account\Actions\VerifyContactManually;
 use App\Domain\Account\Enums\AccountType;
 use App\Domain\Account\Models\BusinessAccount;
@@ -24,11 +26,14 @@ use InvalidArgumentException;
  * Staff opening a Client/Partner account on someone's behalf, and managing its
  * password-setup invitation.
  *
- * The owner sets their own password through an expiring, single-use link;
- * nothing here accepts, shows or stores one.
+ * The owner normally sets their own password through an expiring, single-use
+ * link. Where they cannot, staff may set one for them ({@see setPassword()});
+ * it is hashed on save and never shown back.
  */
 class ManagedAccountController extends Controller
 {
+    use PasswordValidationRules;
+
     public function create(Request $request): Response
     {
         Gate::authorize('create', BusinessAccount::class);
@@ -71,6 +76,30 @@ class ManagedAccountController extends Controller
         $this->guard(fn () => $setup->revoke($account->owner()->firstOrFail(), ManagePasswordSetup::USERS, $this->actor($request), $validated['reason']));
 
         return back()->with('success', __('managed_accounts.link_revoked'));
+    }
+
+    /**
+     * Set the owner's password for them, when they could not use the setup
+     * link. Staff hand the password over; it is never shown back or stored in
+     * the clear.
+     */
+    public function setPassword(Request $request, BusinessAccount $account, SetPasswordByStaff $setPassword): RedirectResponse
+    {
+        Gate::authorize('manageIdentity', $account);
+
+        $validated = $request->validate([
+            'password' => $this->passwordRules(),
+            'reason' => ['required', 'string', 'max:1000'],
+        ]);
+
+        $this->guard(fn () => $setPassword->handle(
+            $account->owner()->firstOrFail(),
+            $validated['password'],
+            $this->actor($request),
+            $validated['reason'],
+        ));
+
+        return back()->with('success', __('managed_accounts.password_set'));
     }
 
     public function changeAccountType(Request $request, BusinessAccount $account, ChangeAccountType $change): RedirectResponse
