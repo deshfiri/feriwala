@@ -180,15 +180,32 @@ describe('endpoint', function () {
             ->toBeFalse();
     });
 
-    it('refuses an address the ERP must not post to', function (string $url) {
+    it('refuses an address that is not https', function () {
         $this->actingAs($this->superAdmin)
-            ->putJson(route('admin.websites.webhook.store', $this->website->public_id), ['url' => $url])
+            ->putJson(route('admin.websites.webhook.store', $this->website->public_id), ['url' => 'http://shop.example.com/hooks'])
             ->assertUnprocessable()
             ->assertJsonValidationErrors('url');
 
         expect(WebsiteWebhookEndpoint::query()->count())->toBe(0);
+    });
+
+    it('saves any https address an administrator gives, and never posts to it while it is internal', function (string $url) {
+        $this->actingAs($this->superAdmin)
+            ->putJson(route('admin.websites.webhook.store', $this->website->public_id), ['url' => $url])
+            ->assertOk()
+            ->assertJsonPath('url', $url);
+
+        // Saved as given; the address guard at delivery is what keeps the ERP
+        // from posting inside its own network.
+        $delivery = app(PublishWebsiteEvent::class)->handle($this->website, WebhookEvent::ProductUpdated, ['sku' => 'SKU-1']);
+
+        expect($delivery)->not->toBeNull();
+
+        app(AttemptWebhookDelivery::class)->handle($delivery->id);
+
+        Http::assertNothingSent();
+        expect($delivery->refresh()->last_error)->toBe(AttemptWebhookDelivery::ADDRESS_REFUSED);
     })->with([
-        'plain http' => 'http://shop.example.com/hooks',
         'localhost' => 'https://localhost/hooks',
         'loopback' => 'https://127.0.0.1/hooks',
         'private range' => 'https://10.0.0.8/hooks',
@@ -226,14 +243,15 @@ describe('endpoint', function () {
             ->and(strlen($endpoint->secret))->toBe(64);
     });
 
-    it('says why when the address cannot receive a webhook and there is no endpoint', function () {
+    it('issues a secret for the website\'s own address even while that address is not reachable', function () {
         $this->website->forceFill(['domain' => '127.0.0.1'])->save();
 
         $this->actingAs($this->superAdmin)
             ->postJson(route('admin.websites.webhook.rotate', $this->website->public_id))
-            ->assertUnprocessable();
+            ->assertOk()
+            ->assertJsonPath('url', 'https://127.0.0.1/webhooks/feriwala');
 
-        expect(WebsiteWebhookEndpoint::query()->count())->toBe(0);
+        expect(WebsiteWebhookEndpoint::query()->count())->toBe(1);
     });
 
     it('switches the endpoint off', function () {

@@ -45,9 +45,10 @@ class WebsiteWebhookController extends Controller
         ]);
 
         try {
-            // Staff typing an address by hand may be ahead of their DNS: a name that
-            // does not resolve yet is accepted here, and delivery waits for it.
-            $result = $this->webhooks->configure($website, $this->actor($request), $validated['url'], acceptUnresolved: true);
+            // Staff typing an address by hand: taken as given, whatever its DNS says
+            // today. Delivery checks the address before every send and waits until
+            // it points somewhere real.
+            $result = $this->webhooks->configure($website, $this->actor($request), $validated['url'], asGiven: true);
         } catch (WebsiteRefused $refused) {
             throw ValidationException::withMessages([$refused->field => $refused->getMessage()]);
         }

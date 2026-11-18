@@ -108,6 +108,49 @@ it('lets an administrator save an address whose DNS is not live yet, from the ad
     expect(WebsiteWebhookEndpoint::query()->where('website_id', $this->website->id)->value('is_active'))->toBeTrue();
 });
 
+/** Every name resolves to loopback, as bivaluxebd.com's A record did. */
+function webhookRefusalLoopbackDns(): void
+{
+    app()->instance(HostResolver::class, new class implements HostResolver
+    {
+        public function resolve(string $host): array
+        {
+            return ['127.0.0.1'];
+        }
+    });
+}
+
+it('saves the address an administrator gives, whatever its DNS points at today', function () {
+    $this->seed(RolesAndPermissionsSeeder::class);
+    webhookRefusalLoopbackDns();
+
+    $this->actingAs(testPlatformStaff(PlatformRole::SuperAdmin))
+        ->putJson(route('admin.websites.webhook.store', $this->website->public_id), ['url' => 'https://bivaluxebd.com/webhooks/feriwala'])
+        ->assertOk()
+        ->assertJsonPath('url', 'https://bivaluxebd.com/webhooks/feriwala');
+
+    expect(WebsiteWebhookEndpoint::query()->where('website_id', $this->website->id)->value('is_active'))->toBeTrue();
+});
+
+it('generates a webhook secret for the website\'s own address, whatever its DNS points at today', function () {
+    $this->seed(RolesAndPermissionsSeeder::class);
+    webhookRefusalLoopbackDns();
+    $this->website->forceFill(['domain' => 'bivaluxebd.com'])->save();
+
+    $this->actingAs(testPlatformStaff(PlatformRole::SuperAdmin))
+        ->postJson(route('admin.websites.webhook.rotate', $this->website->public_id))
+        ->assertOk()
+        ->assertJsonPath('url', 'https://bivaluxebd.com/webhooks/feriwala');
+});
+
+it('still asks an administrator for an https address', function () {
+    $this->seed(RolesAndPermissionsSeeder::class);
+
+    $this->actingAs(testPlatformStaff(PlatformRole::SuperAdmin))
+        ->putJson(route('admin.websites.webhook.store', $this->website->public_id), ['url' => 'http://bivaluxebd.com/webhooks/feriwala'])
+        ->assertUnprocessable();
+});
+
 it('keeps connecting a store strict: an unreachable address skips the webhook rather than registering one', function () {
     webhookRefusalNoDns();
 

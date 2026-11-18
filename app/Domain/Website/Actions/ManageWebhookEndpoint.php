@@ -21,10 +21,10 @@ use Carbon\CarbonImmutable;
  * The address must be HTTPS on the standard port and must not point inside
  * the platform's own network: the ERP is about to POST signed data to whatever
  * this says, and an address of `localhost` or a private range is a way to make
- * the ERP call itself. The name is resolved here and every address it gives
- * must be public ({@see OutboundAddressGuard}); delivery resolves it again before
- * every attempt. A name that does not resolve yet is refused, except when staff
- * typing an address by hand ask for it to be accepted anyway.
+ * the ERP call itself. Automatic paths resolve the name here and every address
+ * it gives must be public ({@see OutboundAddressGuard}). Staff saving an address
+ * by hand have it taken as given. Either way, delivery resolves it again before
+ * every attempt and sends nothing to a private or unresolved host.
  *
  * The signing secret is shown once, like a credential secret, and rotation
  * keeps the previous one valid for verification for a window so the storefront
@@ -45,17 +45,24 @@ class ManageWebhookEndpoint
      *                                  still going live; every automatic path (connecting a
      *                                  store, rotating) keeps the strict default and skips the
      *                                  webhook rather than register one nobody can reach.
+     * @param  bool  $asGiven  staff saving an address by hand: take it as given, with no host or
+     *                         DNS check at all (only a plain HTTPS address is required). Nothing is
+     *                         lost by it: {@see AttemptWebhookDelivery} checks the address again
+     *                         before every send and posts nothing to a private or unresolved host,
+     *                         so deliveries simply start once the domain's DNS points somewhere real.
      * @return array{endpoint: WebsiteWebhookEndpoint, secret: string|null}
      *
      * @throws WebsiteRefused
      */
-    public function configure(Website $website, User $actor, string $url, bool $acceptUnresolved = false): array
+    public function configure(Website $website, User $actor, string $url, bool $acceptUnresolved = false, bool $asGiven = false): array
     {
         if ($website->status->isTerminal()) {
             throw WebsiteRefused::notEditable();
         }
 
-        $this->assertDeliverable($url, $acceptUnresolved);
+        $asGiven
+            ? $this->assertHttps($url)
+            : $this->assertDeliverable($url, $acceptUnresolved);
 
         /** @var WebsiteWebhookEndpoint|null $endpoint */
         $endpoint = WebsiteWebhookEndpoint::query()->where('website_id', $website->id)->first();
@@ -100,7 +107,8 @@ class ManageWebhookEndpoint
             return ['endpoint' => $endpoint, 'secret' => $this->rotate($endpoint, $actor)];
         }
 
-        $created = $this->configure($website, $actor, 'https://'.$website->host().ConnectStore::WEBHOOK_PATH);
+        // Staff pressed the button: register the website's own address as it is.
+        $created = $this->configure($website, $actor, 'https://'.$website->host().ConnectStore::WEBHOOK_PATH, asGiven: true);
 
         return ['endpoint' => $created['endpoint'], 'secret' => (string) $created['secret']];
     }
@@ -133,6 +141,20 @@ class ManageWebhookEndpoint
         $endpoint->loadMissing('website');
 
         $this->record($endpoint->website, $actor, 'website.webhook_disabled', []);
+    }
+
+    /**
+     * A plain HTTPS address with a host, and nothing more asked of it.
+     *
+     * @throws WebsiteRefused
+     */
+    protected function assertHttps(string $url): void
+    {
+        $parts = parse_url($url);
+
+        if (! is_array($parts) || ($parts['scheme'] ?? '') !== 'https' || ($parts['host'] ?? '') === '') {
+            throw WebsiteRefused::webhookAddressRefused('scheme');
+        }
     }
 
     /**

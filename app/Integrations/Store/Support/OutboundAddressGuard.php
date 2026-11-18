@@ -27,6 +27,14 @@ final class OutboundAddressGuard
      */
     public function addressFor(string $host): string
     {
+        // Names that mean "this network" whatever DNS says about them. Checked
+        // here, at the call, because an address may be saved as given.
+        $name = strtolower(trim($host, '[].'));
+
+        if ($name === 'localhost' || str_ends_with($name, '.localhost') || str_ends_with($name, '.internal')) {
+            throw StorePlatformException::addressRefused();
+        }
+
         $addresses = $this->resolver->resolve($host);
 
         if ($addresses === []) {
