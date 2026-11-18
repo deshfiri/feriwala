@@ -38,6 +38,9 @@ use Illuminate\Database\DatabaseManager;
  * is handed back as it is rather than refused, because pressing pay twice is
  * not an error the person can do anything about.
  *
+ * A charge priced at zero is waived rather than paid: the wallet refuses a
+ * zero posting, and reporting that as a short wallet blocked ৳0 renewals.
+ *
  * A wallet that cannot cover it moves the website to **deposit pending** and
  * says so. That is §16.4's state for exactly this, and it is what the wallet
  * top-up screen exists to resolve.
@@ -92,6 +95,11 @@ class SettleWebsiteCharge
         }
 
         $website = $current->website;
+
+        if ($current->amount->isZero()) {
+            return $this->waiveNothingOwed($current, $website, $actor);
+        }
+
         $wallet = $this->guard->walletFor($website->businessAccount);
 
         if ($wallet === null || $wallet->usableBalance()->lessThan($current->amount)) {
@@ -152,6 +160,39 @@ class SettleWebsiteCharge
         $this->openTheBuild($website, $actor);
 
         return $paid;
+    }
+
+    /**
+     * Close a charge priced at zero without touching the wallet.
+     *
+     * There is nothing to debit -- the wallet refuses a zero posting, and a
+     * paid charge must point at the transaction that paid it -- so it is
+     * waived: Feriwala takes nothing for it. The renewal or build waiting on it
+     * then goes ahead exactly as it would after a payment.
+     */
+    protected function waiveNothingOwed(WebsiteCharge $charge, Website $website, ?User $actor): WebsiteCharge
+    {
+        $charge->forceFill(['status' => WebsiteChargeStatus::Waived])->save();
+
+        $this->audit->handle(new AuditEntry(
+            action: 'website.charge_waived',
+            actorId: $actor?->id,
+            actorType: $actor === null ? 'system' : 'user',
+            auditableType: WebsiteCharge::class,
+            auditableId: $charge->id,
+            after: [
+                'type' => $charge->type->value,
+                'amount' => $charge->amount->jsonSerialize(),
+                'currency' => $charge->currency_code,
+            ],
+            reason: 'Priced at zero: nothing to take from the wallet.',
+            accountId: $charge->business_account_id,
+            module: 'website',
+        ));
+
+        $this->openTheBuild($website, $actor);
+
+        return $charge;
     }
 
     /**

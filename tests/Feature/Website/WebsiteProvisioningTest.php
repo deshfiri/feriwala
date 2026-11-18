@@ -203,6 +203,29 @@ describe('paying for a website', function () {
             ->and($charge->wallet_transaction_id)->not->toBeNull();
     });
 
+    it('closes a zero charge without touching the wallet, and starts the build', function () {
+        $account = websiteTestAccount();
+        $wallet = websiteTestWallet($account, '5100.00');
+        $website = Website::factory()->forAccount($account)->create(['status' => WebsiteStatus::SetupPending]);
+
+        $charge = WebsiteCharge::factory()->create([
+            'website_id' => $website->id,
+            'business_account_id' => $account->id,
+            'type' => WebsiteChargeType::Domain,
+            'amount' => Money::zero(Currency::BDT),
+        ]);
+
+        $this->actingAs($account->owner)
+            ->post(route('websites.charges.pay', [$website->public_id, $charge->public_id]))
+            ->assertSessionHasNoErrors()
+            ->assertRedirect(route('websites.show', $website->public_id));
+
+        expect($charge->refresh()->status)->toBe(WebsiteChargeStatus::Waived)
+            ->and($charge->wallet_transaction_id)->toBeNull()
+            ->and($wallet->refresh()->total->toDecimal())->toBe('5100.00')
+            ->and($website->refresh()->status)->toBe(WebsiteStatus::Development);
+    });
+
     it('asks for a deposit rather than charging a wallet that cannot cover it', function () {
         $account = websiteTestAccount();
         $wallet = websiteTestWallet($account, '10.00');

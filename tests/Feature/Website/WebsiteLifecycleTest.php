@@ -2,6 +2,7 @@
 
 use App\Domain\Access\Enums\PlatformRole;
 use App\Domain\Billing\Enums\FeeType;
+use App\Domain\Billing\Models\FeeRule;
 use App\Domain\Package\Enums\UserPackageStatus;
 use App\Domain\Wallet\Data\PostingContext;
 use App\Domain\Wallet\Enums\LedgerTransactionType;
@@ -195,6 +196,30 @@ describe('renewing a term', function () {
 
         expect($charge->type)->toBe(WebsiteChargeType::Domain)
             ->and($charge->status)->toBe(WebsiteChargeStatus::Paid);
+    });
+
+    it('renews a domain priced at zero without asking the wallet for anything', function () {
+        FeeRule::query()->where('fee_type', FeeType::WebsiteDomain->value)->update(['amount' => '0.00']);
+
+        $account = websiteTestAccount();
+        $wallet = websiteTestWallet($account, '5100.00');
+
+        $website = Website::factory()->forAccount($account)->create([
+            'status' => WebsiteStatus::DomainRenewalPending,
+        ]);
+
+        $domain = WebsiteDomain::factory()->expiringIn(20)->create(['website_id' => $website->id]);
+        $expiry = $domain->expires_at;
+
+        $this->actingAs($account->owner)
+            ->post(route('websites.domains.renew', [$website->public_id, $domain->id]))
+            ->assertSessionHasNoErrors()
+            ->assertRedirect(route('websites.show', $website->public_id));
+
+        expect($wallet->refresh()->total->toDecimal())->toBe('5100.00')
+            ->and($domain->refresh()->expires_at?->toDateString())->toBe($expiry?->addMonths(12)->toDateString())
+            ->and($website->refresh()->status)->toBe(WebsiteStatus::Active)
+            ->and(WebsiteCharge::query()->where('website_id', $website->id)->sole()->status)->toBe(WebsiteChargeStatus::Waived);
     });
 
     it('raises one charge for a term, however many times a renewal is attempted', function () {
