@@ -95,9 +95,192 @@
 
                 next = Math.max(min, next);
                 input.value = String(max > 0 ? Math.min(max, next) : next);
+                // Let whatever watches the field (the live cart) hear it.
+                input.dispatchEvent(new Event('change', { bubbles: true }));
             });
         });
     });
+
+    // The form's own CSRF token, for the JSON requests below.
+    var csrf = function (scope) {
+        var field = (scope || document).querySelector('input[name="_token"]');
+
+        return field ? field.value : '';
+    };
+
+    // Ask our own server for fresh figures. Each caller keeps one request in
+    // flight at a time: a newer one aborts the older, and an answer that is not
+    // the newest is dropped (the sequence number), so a slow early answer can
+    // never overwrite a later one.
+    var freshFigures = function (state, url, body, done) {
+        state.sequence += 1;
+        var sequence = state.sequence;
+
+        if (state.controller) {
+            state.controller.abort();
+        }
+
+        state.controller = window.AbortController ? new AbortController() : null;
+
+        return fetch(url, {
+            method: 'POST',
+            credentials: 'same-origin',
+            signal: state.controller ? state.controller.signal : undefined,
+            headers: {
+                Accept: 'application/json',
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': body._token,
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            body: JSON.stringify(body),
+        })
+            .then(function (response) {
+                return response
+                    .json()
+                    .catch(function () {
+                        return {};
+                    })
+                    .then(function (data) {
+                        return { ok: response.ok, data: data };
+                    });
+            })
+            .then(function (answer) {
+                if (sequence === state.sequence) {
+                    done(answer.ok, answer.data);
+                }
+            })
+            .catch(function (error) {
+                if (error && error.name === 'AbortError') {
+                    return;
+                }
+
+                if (sequence === state.sequence) {
+                    done(false, {});
+                }
+            });
+    };
+
+    // Cart: every quantity change is saved and priced at once — no Update
+    // button. The figures shown are the server's, rendered as the page is.
+    var cart = document.querySelector('[data-cart]');
+
+    if (cart && window.fetch) {
+        var cartState = { sequence: 0, controller: null };
+        var totals = document.querySelector('[data-quote-totals]');
+        var checkoutLink = document.querySelector('[data-checkout-link]');
+        var pending = 0;
+
+        var setPending = function (busy) {
+            pending = Math.max(0, pending + (busy ? 1 : -1));
+            cart.setAttribute('aria-busy', pending > 0 ? 'true' : 'false');
+
+            if (checkoutLink) {
+                checkoutLink.setAttribute('aria-disabled', pending > 0 ? 'true' : 'false');
+                checkoutLink.classList.toggle('is-disabled', pending > 0);
+            }
+        };
+
+        if (checkoutLink) {
+            // Never leave for checkout on figures still being worked out.
+            checkoutLink.addEventListener('click', function (event) {
+                if (checkoutLink.getAttribute('aria-disabled') === 'true') {
+                    event.preventDefault();
+                }
+            });
+        }
+
+        cart.querySelectorAll('form[data-live-qty]').forEach(function (form) {
+            var input = form.querySelector('input[name="quantity"]');
+            var sku = form.querySelector('input[name="sku"]').value;
+            var line = cart.querySelector('[data-line="' + sku + '"]');
+            var error = line ? line.querySelector('[data-line-error]') : null;
+            var fallback = form.querySelector('[data-qty-fallback]');
+            var timer = null;
+
+            if (fallback) {
+                fallback.hidden = true;
+            }
+
+            var apply = function (ok, data) {
+                setPending(false);
+
+                // What the server confirmed, whether it took the change or not.
+                if (data.quantity) {
+                    input.value = String(data.quantity);
+                    input.setAttribute('data-confirmed', String(data.quantity));
+                } else if (!ok) {
+                    input.value = input.getAttribute('data-confirmed') || input.value;
+                }
+
+                if (error) {
+                    error.textContent = ok ? '' : data.message || error.getAttribute('data-fallback') || '';
+                    error.hidden = ok || !error.textContent;
+                }
+
+                Object.keys(data.lines || {}).forEach(function (key) {
+                    var row = cart.querySelector('[data-line="' + key + '"]');
+
+                    if (!row) {
+                        return;
+                    }
+
+                    var unit = row.querySelector('[data-line-unit]');
+                    var total = row.querySelector('[data-line-total]');
+
+                    if (unit) {
+                        unit.textContent = data.lines[key].unit;
+                    }
+
+                    if (total) {
+                        total.textContent = data.lines[key].total;
+                    }
+                });
+
+                if (totals && data.totals_html) {
+                    totals.innerHTML = data.totals_html;
+                }
+
+                if (checkoutLink && data.checkout_blocked !== undefined) {
+                    checkoutLink.classList.toggle('is-blocked', !!data.checkout_blocked);
+                    checkoutLink.setAttribute('aria-disabled', data.checkout_blocked ? 'true' : 'false');
+                }
+            };
+
+            var save = function () {
+                window.clearTimeout(timer);
+
+                var value = parseInt(input.value, 10);
+
+                if (!value || value < 1 || String(value) === input.getAttribute('data-confirmed')) {
+                    if (!value || value < 1) {
+                        input.value = input.getAttribute('data-confirmed') || '1';
+                    }
+
+                    return;
+                }
+
+                setPending(true);
+                freshFigures(
+                    cartState,
+                    cart.getAttribute('data-quantity-url'),
+                    { _token: csrf(form), sku: sku, quantity: String(value) },
+                    apply,
+                );
+            };
+
+            // Typing: wait for a pause. A button or leaving the field: at once.
+            input.addEventListener('input', function () {
+                window.clearTimeout(timer);
+                timer = window.setTimeout(save, 450);
+            });
+            input.addEventListener('change', save);
+
+            form.addEventListener('submit', function (event) {
+                event.preventDefault();
+                save();
+            });
+        });
+    }
 
     // A picture that cannot be loaded is replaced by its fallback — never a broken-image icon.
     var swapFallback = function (image) {
@@ -377,8 +560,8 @@
     }
 
     // Delivery area: division → district → upazila, each fetched from our own
-    // endpoint (which holds the credentials). Optional: without it the customer
-    // just types the address.
+    // endpoint (which holds the credentials). Required: the district chosen
+    // decides the delivery charge (D37).
     var areas = document.querySelector('[data-areas]');
 
     if (areas && window.fetch) {
@@ -481,6 +664,9 @@
                     hidden.value = selects[level - 1].value;
                 }
 
+                // The delivery charge depends on it: ask for fresh figures.
+                hidden.dispatchEvent(new CustomEvent('areachange', { bubbles: true }));
+
                 if (level === 1) {
                     suggest(district, chosen ? label : '');
                 }
@@ -500,5 +686,92 @@
                 areas.hidden = false;
             }
         });
+    }
+
+    // Checkout: the delivery charge is the ERP's, for the district chosen
+    // (Inside or Outside Dhaka). Every change of area asks for fresh figures;
+    // the customer can go on only on a complete, current quote.
+    var quoteForm = document.querySelector('form[data-quote-url]');
+    var areaField = document.getElementById('area_id');
+
+    if (quoteForm && areaField && window.fetch) {
+        var quoteState = { sequence: 0, controller: null };
+        var quoteTotals = document.querySelector('[data-quote-totals]');
+        var quoteNote = document.querySelector('[data-quote-note]');
+        var grands = document.querySelectorAll('[data-quote-grand]');
+        var areaError = document.querySelector('[data-area-error]');
+        var summaryBox = document.querySelector('.co-summary');
+        var ready = false;
+
+        var lock = function (locked) {
+            submitButtons(quoteForm).forEach(function (button) {
+                button.disabled = locked;
+                button.setAttribute('aria-disabled', locked ? 'true' : 'false');
+            });
+        };
+
+        var setBusy = function (busy) {
+            if (summaryBox) {
+                summaryBox.setAttribute('aria-busy', busy ? 'true' : 'false');
+                summaryBox.classList.toggle('is-loading', busy);
+            }
+        };
+
+        var show = function (ok, data) {
+            setBusy(false);
+            ready = !!(ok && data.ready);
+
+            if (data.totals_html && quoteTotals) {
+                quoteTotals.innerHTML = data.totals_html;
+            }
+
+            if (data.note_html !== undefined && data.note_html !== null && quoteNote) {
+                quoteNote.innerHTML = data.note_html;
+            }
+
+            grands.forEach(function (grand) {
+                grand.textContent = ready ? data.grand_total || '' : '';
+            });
+
+            if (areaError) {
+                areaError.textContent = ok ? '' : data.message || '';
+                areaError.hidden = ok || !areaError.textContent;
+            }
+
+            lock(!ready);
+        };
+
+        var requote = function () {
+            ready = false;
+            lock(true);
+            setBusy(true);
+            freshFigures(
+                quoteState,
+                quoteForm.getAttribute('data-quote-url'),
+                { _token: csrf(quoteForm), area_id: areaField.value },
+                show,
+            );
+        };
+
+        areaField.addEventListener('areachange', requote);
+
+        // Not without a complete quote, even if a button was re-enabled.
+        quoteForm.addEventListener(
+            'submit',
+            function (event) {
+                if (!ready) {
+                    event.preventDefault();
+                    event.stopImmediatePropagation();
+
+                    if (areaError && !areaField.value) {
+                        areaError.textContent = areaError.getAttribute('data-required') || '';
+                        areaError.hidden = !areaError.textContent;
+                    }
+                }
+            },
+            true,
+        );
+
+        lock(true);
     }
 })();

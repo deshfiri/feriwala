@@ -6,7 +6,9 @@
 @php
     $chosen = old('payment_method', (string) ($methods[0] ?? ''));
     $unitCount = array_sum(array_column($items, 'quantity'));
-    $hasQuote = $quote !== null && $quote['grand_total'] !== null;
+    // A quote without an area prices the goods only; the delivery charge and
+    // total arrive once the customer picks their district (D37).
+    $hasQuote = $quote !== null;
     $hasOnline = in_array('online', $methods, true);
 
     /** Field error: the server's sentence, kept beside the field it belongs to. */
@@ -32,7 +34,7 @@
 
     <div class="co-grid">
         {{-- ============================================================ form --}}
-        <form id="checkout-form" class="co-form" action="{{ route('checkout.submit') }}" method="post" novalidate data-once data-checkout>
+        <form id="checkout-form" class="co-form" action="{{ route('checkout.submit') }}" method="post" novalidate data-once data-checkout data-quote-url="{{ route('checkout.quote') }}">
             @csrf
 
             <p class="co-required-note">{{ t('checkout.required_note') }}</p>
@@ -89,6 +91,7 @@
                     </div>
                 </div>
                 <input type="hidden" name="area_id" id="area_id" value="{{ old('area_id') }}">
+                <p class="co-error" id="err-area_id" role="alert" data-area-error data-required="{{ t('checkout.error.area') }}" @if (! $errors->has('area_id')) hidden @endif>{{ $errors->first('area_id') }}</p>
 
                 <div class="co-field">
                     <label for="line1">{{ t('checkout.address') }} <span class="co-req" aria-hidden="true">*</span></label>
@@ -117,12 +120,10 @@
                     </div>
                 </div>
 
-                @if ($hasQuote)
-                    <p class="co-note">
-                        <svg class="co-ico" aria-hidden="true"><use href="#co-i-truck"/></svg>
-                        <span>{{ Money::isZero($quote['shipping']) ? t('checkout.delivery_free') : t('checkout.delivery_flat', ['amount' => money($quote['shipping'])]) }}</span>
-                    </p>
-                @endif
+                <p class="co-note" aria-live="polite">
+                    <svg class="co-ico" aria-hidden="true"><use href="#co-i-truck"/></svg>
+                    <span data-quote-note>@if ($hasQuote)@include('partials.delivery-note', ['quote' => $quote])@else{{ t('delivery.choose_area') }}@endif</span>
+                </p>
 
                 <div class="co-field">
                     <label for="note">{{ t('checkout.note') }} <span class="co-opt">{{ t('checkout.optional') }}</span></label>
@@ -189,7 +190,7 @@
                         </span>
                     </span>
                     <span class="co-sum-total">
-                        @if ($hasQuote)<strong>{{ money($quote['grand_total']) }}</strong>@endif
+                        <strong data-quote-grand>{{ $hasQuote && $quote['grand_total'] !== null ? money($quote['grand_total']) : '' }}</strong>
                         <svg class="co-ico co-chevron" aria-hidden="true"><use href="#co-i-chevron"/></svg>
                     </span>
                 </summary>
@@ -212,21 +213,14 @@
                     @endforeach
                 </ul>
 
-                @if ($hasQuote)
-                    <dl class="co-totals">
-                        <div><dt>{{ t('totals.subtotal') }}</dt><dd>{{ money($quote['subtotal']) }}</dd></div>
-                        @if (! Money::isZero($quote['discount']))
-                            <div class="co-discount"><dt>{{ t('totals.discount') }}</dt><dd>− {{ money($quote['discount']) }}</dd></div>
-                        @endif
-                        <div><dt>{{ t('totals.shipping') }}</dt><dd>{{ Money::isZero($quote['shipping']) ? t('checkout.delivery_free') : money($quote['shipping']) }}</dd></div>
-                        @if (! Money::isZero($quote['tax']))
-                            <div><dt>{{ t('totals.tax') }}</dt><dd>{{ money($quote['tax']) }}</dd></div>
-                        @endif
-                        <div class="co-grand"><dt>{{ t('totals.total') }}</dt><dd>{{ money($quote['grand_total']) }}</dd></div>
-                    </dl>
-                @else
-                    <p class="co-help">{{ t('checkout.price_unavailable') }}</p>
-                @endif
+                {{-- Replaced with the ERP's fresh figures when the area changes. --}}
+                <div data-quote-totals aria-live="polite">
+                    @if ($hasQuote)
+                        @include('partials.quote-totals', ['quote' => $quote, 'variant' => 'checkout'])
+                    @else
+                        <p class="co-help">{{ t('checkout.price_unavailable') }}</p>
+                    @endif
+                </div>
 
                 <div class="co-submit">
                     <button class="co-btn" type="submit" form="checkout-form" {{ $methods === [] ? 'disabled' : '' }} data-submit data-busy="{{ t('checkout.submitting') }}">
@@ -249,7 +243,7 @@
     <div class="co-bar">
         <div class="co-bar-total">
             <span>{{ t('totals.total') }}</span>
-            @if ($hasQuote)<strong>{{ money($quote['grand_total']) }}</strong>@endif
+            <strong data-quote-grand>{{ $hasQuote && $quote['grand_total'] !== null ? money($quote['grand_total']) : '' }}</strong>
         </div>
         <button class="co-btn" type="submit" form="checkout-form" {{ $methods === [] ? 'disabled' : '' }} data-submit data-busy="{{ t('checkout.submitting') }}">
             <span class="co-btn-label">{{ t('checkout.review') }}</span>

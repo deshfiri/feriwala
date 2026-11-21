@@ -51,7 +51,19 @@ it('draws the checkout page with its three area selects and the ERP\'s own figur
         ->toContain('M / Navy')
         ->toContain('৳4,980.00')   // subtotal and line total, as the ERP sent them
         ->toContain('৳5,040.00')   // grand total
-        ->toContain('Delivery is a flat ৳60.00');
+        ->toContain('Delivery Outside Dhaka: ৳60.00 per order.');
+});
+
+it('asks for the district, and shows no total, while the ERP has no area to price delivery for', function () {
+    FakeErp::shop()->on('POST /checkout/quote', fn () => [200, ['data' => FakeErp::quoteData(2, area: null)]]);
+
+    $html = storefrontGet($this, '/checkout', [], [Basket::COOKIE => storefrontBasket()])->assertOk()->getContent();
+
+    expect($html)
+        ->toContain('৳4,980.00')
+        ->toContain('Choose your district to see the delivery charge.')
+        ->not->toContain('co-grand')
+        ->not->toContain('৳5,040.00');
 });
 
 it('leaves out the discount line when there is no discount', function () {

@@ -7,6 +7,7 @@ use App\Services\Basket;
 use App\Services\BasketQuote;
 use App\Services\Catalog;
 use DomainException;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cookie;
@@ -166,6 +167,98 @@ class CartController extends Controller
         self::basket($request)->setQuantity(request_string($request, 'sku'), (int) request_string($request, 'quantity', '1'));
 
         return redirect()->route('cart.show');
+    }
+
+    /**
+     * Save a line's quantity and answer with the ERP's fresh figures, rendered
+     * as the page renders them -- so the page swaps them in and never works a
+     * price out itself.
+     *
+     * A quantity the ERP will not take is not kept: the line goes back to the
+     * last quantity it confirmed, and the answer says so with that state.
+     */
+    public function quantity(Request $request): JsonResponse
+    {
+        $sku = Basket::sku(request_string($request, 'sku'));
+        $wanted = filter_var(request_string($request, 'quantity'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'max_range' => Basket::MAX_QUANTITY]]);
+        $basket = self::basket($request);
+        $before = null;
+
+        foreach ($basket->items() as $line) {
+            if ($line['sku'] === $sku) {
+                $before = $line['quantity'];
+            }
+        }
+
+        if ($before === null) {
+            return response()->json(['message' => t('cart.not_found')], 404);
+        }
+
+        if ($wanted === false) {
+            return $this->quantityAnswer($basket, $sku, $before, t('cart.quantity_invalid'), 422);
+        }
+
+        $basket->setQuantity($sku, $wanted);
+
+        try {
+            $quote = $this->quotes->for($basket->items());
+
+            // Not that many to be had: refused like any other quantity the ERP
+            // will not take, rather than kept and left to block checkout.
+            foreach ((array) $quote['items'] as $line) {
+                if ((string) $line['sku'] === $sku && $wanted > $before && (! ($line['in_stock'] ?? true) || ! ($line['reservable'] ?? true))) {
+                    $basket->setQuantity($sku, $before);
+
+                    return $this->quantityAnswer($basket, $sku, $before, t('cart.quantity_unavailable'), 422);
+                }
+            }
+
+            return $this->quantityAnswer($basket, $sku, $wanted, null, 200, $quote);
+        } catch (ErpException $exception) {
+            // Not taken: back to what was confirmed, and say why.
+            $basket->setQuantity($sku, $before);
+
+            return $this->quantityAnswer($basket, $sku, $before, match (true) {
+                $exception->is('quantity_not_allowed') => t('cart.quantity_not_allowed'),
+                $exception->is('product_unavailable') => t('cart.unavailable_line'),
+                $exception->isUnavailable() => t('cart.quote_unavailable'),
+                default => t('cart.quantity_invalid'),
+            }, 422);
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $quote
+     */
+    private function quantityAnswer(Basket $basket, string $sku, int $quantity, ?string $message, int $status, ?array $quote = null): JsonResponse
+    {
+        if ($quote === null) {
+            try {
+                $quote = $this->quotes->for($basket->items());
+            } catch (ErpException) {
+                $quote = null;
+            }
+        }
+
+        $lines = [];
+        $blocked = false;
+
+        foreach ((array) ($quote['items'] ?? []) as $line) {
+            $lines[(string) $line['sku']] = [
+                'unit' => money($line['unit_price']),
+                'total' => money($line['line_total']),
+            ];
+            $blocked = $blocked || ! ($line['in_stock'] ?? true) || ! ($line['reservable'] ?? true);
+        }
+
+        return response()->json([
+            'sku' => $sku,
+            'quantity' => $quantity,
+            'message' => $message,
+            'lines' => $lines,
+            'totals_html' => $quote === null ? null : view('partials.quote-totals', ['quote' => $quote, 'variant' => 'cart'])->render(),
+            'checkout_blocked' => $blocked || $quote === null,
+        ], $status, ['Cache-Control' => 'no-store, private']);
     }
 
     public function remove(Request $request): RedirectResponse

@@ -2,6 +2,7 @@
 
 namespace Tests\Support;
 
+use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Sleep;
@@ -62,7 +63,7 @@ final class FakeErp
     }
 
     /**
-     * @return \GuzzleHttp\Promise\PromiseInterface
+     * @return PromiseInterface
      */
     public function handle(Request $request)
     {
@@ -156,15 +157,21 @@ final class FakeErp
     }
 
     /**
-     * What `POST /checkout/quote` answers (the `data` of it), for FW-1-M x $quantity at 2,490.00 plus 60.00 shipping.
+     * What `POST /checkout/quote` answers (the `data` of it), for FW-1-M x $quantity at 2,490.00
+     * plus $shipping delivery to $area (D37). With no area the ERP prices the goods only:
+     * shipping and grand total are null and the delivery says an address is required.
      *
      * @param  array<string, mixed>  $overrides
      * @return array<string, mixed>
      */
-    public static function quoteData(int $quantity = 2, array $overrides = []): array
+    public static function quoteData(int $quantity = 2, array $overrides = [], ?string $area = 'outside_dhaka', string $shipping = '60.00'): array
     {
         $line = number_format(2490 * $quantity, 2, '.', '');
-        $total = number_format(2490 * $quantity + 60, 2, '.', '');
+        $total = bcadd($line, $shipping, 2);
+        $labels = ['inside_dhaka' => 'Inside Dhaka', 'outside_dhaka' => 'Outside Dhaka'];
+        $delivery = $area === null
+            ? ['status' => 'address_required', 'area' => null, 'charge' => null, 'is_free' => false]
+            : ['status' => 'priced', 'area' => ['code' => $area, 'label' => $labels[$area]], 'charge' => self::moneyBody($shipping), 'is_free' => bccomp($shipping, '0', 2) === 0];
 
         return array_replace([
             'currency' => 'BDT',
@@ -173,8 +180,9 @@ final class FakeErp
                 'unit_price' => self::moneyBody('2490.00'), 'line_total' => self::moneyBody($line),
                 'availability' => ['in_stock' => true, 'quantity' => 12, 'reservable' => true],
             ]],
-            'subtotal' => self::moneyBody($line), 'discount' => self::moneyBody('0.00'), 'shipping' => self::moneyBody('60.00'),
-            'tax' => self::moneyBody('0.00'), 'tax_included' => self::moneyBody('0.00'), 'grand_total' => self::moneyBody($total),
+            'subtotal' => self::moneyBody($line), 'discount' => self::moneyBody('0.00'), 'shipping' => $area === null ? null : self::moneyBody($shipping),
+            'tax' => self::moneyBody('0.00'), 'tax_included' => self::moneyBody('0.00'), 'grand_total' => $area === null ? null : self::moneyBody($total),
+            'delivery' => $delivery,
             'payment' => ['methods' => ['online', 'cod'], 'cod' => ['enabled' => true, 'eligible' => true, 'maximum' => null]],
             'quoted_at' => gmdate('c'), 'valid_until' => gmdate('c', time() + 600),
         ], $overrides);

@@ -301,5 +301,20 @@
     "checkout.items_count": ":n items",
     "checkout.submitting": "Please wait…",
     "checkout.price_unavailable": "The total is confirmed on the next step.",
-    "checkout.continue_hint": "Next: review your order. Nothing is charged yet."
+    "checkout.continue_hint": "Next: review your order. Nothing is charged yet.",
+    "checkout.error.area": "Please choose your district so we can work out the delivery charge.",
+    "delivery.inside_dhaka": "Inside Dhaka",
+    "delivery.outside_dhaka": "Outside Dhaka",
+    "delivery.free": "Free delivery",
+    "delivery.choose_area": "Choose your district to see the delivery charge.",
+    "delivery.at_checkout": "Worked out at checkout",
+    "delivery.note_free": "Free delivery (:area).",
+    "delivery.note_charge": "Delivery :area: :amount per order.",
+    "delivery.invalid_area": "We could not find that delivery area. Please choose your district again.",
+    "delivery.not_configured": "Delivery is not available just now. Please try again later.",
+    "cart.decrease": "Decrease quantity",
+    "cart.increase": "Increase quantity",
+    "cart.quantity_invalid": "Please enter a quantity of 1 or more.",
+    "cart.quantity_not_allowed": "That quantity cannot be ordered for this item.",
+    "cart.quantity_unavailable": "Not that many are available. Please choose a smaller quantity."
 }

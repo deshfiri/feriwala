@@ -8,6 +8,10 @@ use App\Erp\ErpException;
 /**
  * What the ERP says a basket costs: the figures the cart and the checkout form
  * show. Nothing is computed here; the ERP's answer is reshaped, never recalculated.
+ *
+ * The delivery charge depends on where the order goes (D37): with an area the
+ * ERP prices it, Inside or Outside Dhaka; without one it prices the goods and
+ * says an area is needed, and `shipping` and `grand_total` come back empty.
  */
 final class BasketQuote
 {
@@ -21,44 +25,25 @@ final class BasketQuote
      * quote answers about the cart and not about a method nobody chose.
      *
      * @param  list<array{sku: string, quantity: int}>  $items
-     * @return array<string, mixed>
+     * @param  string|null  $areaId  a delivery area id from the ERP's directory
+     * @return array<string, mixed> the quote, normalised as {@see Checkouts::normaliseQuote()} does
      *
      * @throws ErpException
      */
-    public function for(array $items): array
+    public function for(array $items, ?string $areaId = null): array
     {
         $methods = (array) $this->site->get()['payment_methods'];
-        $response = $this->erp->post('/checkout/quote', [
+        $body = [
             'items' => array_map(static fn (array $line): array => ['sku' => $line['sku'], 'quantity' => $line['quantity']], $items),
             'payment_method' => (string) ($methods[0] ?? 'online'),
-        ]);
+        ];
 
-        $data = is_array($response['data'] ?? null) ? $response['data'] : [];
-        $lines = [];
-
-        foreach ((array) ($data['items'] ?? []) as $line) {
-            if (! is_array($line)) {
-                continue;
-            }
-
-            $availability = is_array($line['availability'] ?? null) ? $line['availability'] : [];
-            $lines[] = [
-                'sku' => (string) ($line['sku'] ?? ''),
-                'quantity' => (int) ($line['quantity'] ?? 0),
-                'unit_price' => is_array($line['unit_price'] ?? null) ? $line['unit_price'] : null,
-                'line_total' => is_array($line['line_total'] ?? null) ? $line['line_total'] : null,
-                'in_stock' => (bool) ($availability['in_stock'] ?? true),
-                'reservable' => (bool) ($availability['reservable'] ?? true),
-            ];
+        if ($areaId !== null && $areaId !== '') {
+            $body['delivery'] = ['area_id' => $areaId];
         }
 
-        return [
-            'items' => $lines,
-            'subtotal' => is_array($data['subtotal'] ?? null) ? $data['subtotal'] : null,
-            'discount' => is_array($data['discount'] ?? null) ? $data['discount'] : null,
-            'shipping' => is_array($data['shipping'] ?? null) ? $data['shipping'] : null,
-            'tax' => is_array($data['tax'] ?? null) ? $data['tax'] : null,
-            'grand_total' => is_array($data['grand_total'] ?? null) ? $data['grand_total'] : null,
-        ];
+        $response = $this->erp->post('/checkout/quote', $body);
+
+        return Checkouts::normaliseQuote(is_array($response['data'] ?? null) ? $response['data'] : []);
     }
 }

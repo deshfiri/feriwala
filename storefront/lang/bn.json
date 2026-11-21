@@ -301,5 +301,20 @@
     "checkout.items_count": ":n টি পণ্য",
     "checkout.submitting": "অপেক্ষা করুন…",
     "checkout.price_unavailable": "মোট মূল্য পরের ধাপে নিশ্চিত করা হবে।",
-    "checkout.continue_hint": "পরের ধাপ: অর্ডার দেখে নিন। এখনও কিছু কাটা হচ্ছে না।"
+    "checkout.continue_hint": "পরের ধাপ: অর্ডার দেখে নিন। এখনও কিছু কাটা হচ্ছে না।",
+    "checkout.error.area": "ডেলিভারি চার্জ জানতে আপনার জেলা বেছে নিন।",
+    "delivery.inside_dhaka": "ঢাকার ভেতরে",
+    "delivery.outside_dhaka": "ঢাকার বাইরে",
+    "delivery.free": "ফ্রি ডেলিভারি",
+    "delivery.choose_area": "ডেলিভারি চার্জ দেখতে আপনার জেলা বেছে নিন।",
+    "delivery.at_checkout": "চেকআউটে হিসাব হবে",
+    "delivery.note_free": "ফ্রি ডেলিভারি (:area)।",
+    "delivery.note_charge": "ডেলিভারি :area: প্রতি অর্ডারে :amount।",
+    "delivery.invalid_area": "এই ডেলিভারি এলাকা পাওয়া যায়নি। আবার আপনার জেলা বেছে নিন।",
+    "delivery.not_configured": "এই মুহূর্তে ডেলিভারি নেওয়া যাচ্ছে না। পরে আবার চেষ্টা করুন।",
+    "cart.decrease": "পরিমাণ কমান",
+    "cart.increase": "পরিমাণ বাড়ান",
+    "cart.quantity_invalid": "১ বা তার বেশি পরিমাণ লিখুন।",
+    "cart.quantity_not_allowed": "এই পণ্যের জন্য এই পরিমাণ অর্ডার করা যায় না।",
+    "cart.quantity_unavailable": "এত পরিমাণ পাওয়া যাচ্ছে না। কম পরিমাণ বেছে নিন।"
 }

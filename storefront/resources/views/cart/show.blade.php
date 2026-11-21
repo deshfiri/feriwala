@@ -20,27 +20,33 @@
 @else
     @if ($problem !== null)<p class="flash flash-warning" role="status">{{ t($problem) }}</p>@endif
 
-    <div class="layout-cart">
+    <div class="layout-cart" data-cart data-quantity-url="{{ route('cart.quantity') }}">
         <ul class="lines">
             @foreach ($items as $line)
                 @php $price = $prices[$line['sku']] ?? null; @endphp
-                <li class="line">
+                <li class="line" data-line="{{ $line['sku'] }}">
                     <a class="line-media" href="{{ route('products.show', ['slug' => $line['slug']]) }}">
                         @if (safe_url($line['image']) !== '')<img src="{{ safe_url($line['image']) }}" alt="" width="96" height="96" loading="lazy">@else<span class="placeholder">{{ mb_substr($line['name'], 0, 1) }}</span>@endif
                     </a>
                     <div class="line-body">
                         <a class="line-name" href="{{ route('products.show', ['slug' => $line['slug']]) }}">{{ $line['name'] }}</a>
                         @if ($line['variant'] !== null)<p class="muted small">{{ $line['variant'] }}</p>@endif
-                        @if ($price !== null && $price['unit_price'] !== null)<p class="muted small">{{ money($price['unit_price']) }}</p>@endif
+                        <p class="muted small" data-line-unit>{{ $price !== null ? money($price['unit_price']) : '' }}</p>
                         @if (isset($lineProblems[$line['sku']]))<p class="error small" role="alert">{{ t($lineProblems[$line['sku']]) }}</p>@endif
+                        <p class="error small" role="alert" data-line-error hidden></p>
 
                         <div class="line-actions">
-                            <form action="{{ route('cart.update') }}" method="post" class="qty">
+                            {{-- Without script this posts and reloads; with it, every change is saved and priced at once. --}}
+                            <form action="{{ route('cart.update') }}" method="post" class="qty" data-live-qty>
                                 @csrf
                                 <input type="hidden" name="sku" value="{{ $line['sku'] }}">
                                 <label class="sr-only" for="q-{{ $line['sku'] }}">{{ t('product.quantity') }}</label>
-                                <input id="q-{{ $line['sku'] }}" name="quantity" type="number" min="1" max="1000" value="{{ (string) $line['quantity'] }}">
-                                <button type="submit" class="btn btn-quiet btn-small">{{ t('cart.update') }}</button>
+                                <span class="stepper" data-stepper>
+                                    <button type="button" class="btn btn-quiet btn-small" data-step="-1" aria-label="{{ t('cart.decrease') }}" hidden>−</button>
+                                    <input id="q-{{ $line['sku'] }}" name="quantity" type="number" min="1" max="1000" inputmode="numeric" value="{{ (string) $line['quantity'] }}" data-confirmed="{{ (string) $line['quantity'] }}">
+                                    <button type="button" class="btn btn-quiet btn-small" data-step="1" aria-label="{{ t('cart.increase') }}" hidden>+</button>
+                                </span>
+                                <button type="submit" class="btn btn-quiet btn-small" data-qty-fallback>{{ t('cart.update') }}</button>
                             </form>
                             <form action="{{ route('cart.remove') }}" method="post">
                                 @csrf
@@ -50,7 +56,7 @@
                         </div>
                     </div>
                     <div class="line-total">
-                        @if ($price !== null && $price['line_total'] !== null)<strong>{{ money($price['line_total']) }}</strong>@endif
+                        <strong data-line-total>{{ $price !== null ? money($price['line_total']) : '' }}</strong>
                     </div>
                 </li>
             @endforeach
@@ -59,17 +65,8 @@
         <aside class="summary-box" aria-labelledby="sum">
             <h2 id="sum">{{ t('cart.summary') }}</h2>
             @if ($quote !== null)
-                <dl class="totals">
-                    <div><dt>{{ t('totals.subtotal') }}</dt><dd>{{ money($quote['subtotal']) }}</dd></div>
-                    @if (! Money::isZero($quote['discount']))
-                        <div><dt>{{ t('totals.discount') }}</dt><dd>− {{ money($quote['discount']) }}</dd></div>
-                    @endif
-                    <div><dt>{{ t('totals.shipping') }}</dt><dd>{{ money($quote['shipping']) }}</dd></div>
-                    @if (! Money::isZero($quote['tax']))
-                        <div><dt>{{ t('totals.tax') }}</dt><dd>{{ money($quote['tax']) }}</dd></div>
-                    @endif
-                    <div class="grand"><dt>{{ t('totals.total') }}</dt><dd>{{ money($quote['grand_total']) }}</dd></div>
-                </dl>
+                {{-- Replaced with the ERP's fresh figures when a quantity changes. --}}
+                <div data-quote-totals aria-live="polite">@include('partials.quote-totals', ['quote' => $quote, 'variant' => 'cart'])</div>
                 <p class="muted small">{{ t('cart.price_note') }}</p>
             @else
                 <p class="muted">{{ t('cart.no_quote') }}</p>
@@ -78,7 +75,7 @@
             @if ($blocked)
                 <button class="btn btn-wide" disabled>{{ t('cart.checkout') }}</button>
             @else
-                <a class="btn btn-accent btn-wide" href="{{ route('checkout.form') }}">{{ t('cart.checkout') }}</a>
+                <a class="btn btn-accent btn-wide" href="{{ route('checkout.form') }}" data-checkout-link>{{ t('cart.checkout') }}</a>
             @endif
             <a class="btn btn-quiet btn-wide !text-white" href="{{ route('products.index') }}">{{ t('cart.continue') }}</a>
         </aside>

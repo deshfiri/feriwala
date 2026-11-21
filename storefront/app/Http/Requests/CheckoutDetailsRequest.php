@@ -78,7 +78,9 @@ class CheckoutDetailsRequest extends FormRequest
             'city' => ['required'],
             'district' => ['nullable'],
             'postcode' => ['nullable'],
-            'area_id' => ['nullable'],
+            // The delivery charge is priced from this area's district (D37):
+            // without it there is no delivery charge and no order.
+            'area_id' => ['required', $this->check(fn (string $v): bool => preg_match('/^(district|upazila|union):[A-Za-z0-9-]{1,32}:[A-Za-z0-9]{1,32}$/', $v) === 1, 'checkout.error.area')],
             'note' => ['nullable'],
             'gateway' => ['nullable'],
             'payment_method' => ['required', function (string $attribute, mixed $value, Closure $fail): void {
@@ -101,6 +103,7 @@ class CheckoutDetailsRequest extends FormRequest
             'phone.required' => t('checkout.error.phone'),
             'line1.required' => t('checkout.error.address'),
             'city.required' => t('checkout.error.city'),
+            'area_id.required' => t('checkout.error.area'),
             'payment_method.required' => t('checkout.error.payment_method'),
         ];
     }

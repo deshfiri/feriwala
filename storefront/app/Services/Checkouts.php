@@ -254,6 +254,24 @@ final class Checkouts
     }
 
     /**
+     * How the ERP priced delivery (D37): Inside or Outside Dhaka by the chosen
+     * area's district, or that an area is still needed. Never worked out here.
+     *
+     * @return array{status: string, area: string|null, is_free: bool}
+     */
+    public static function normaliseDelivery(mixed $delivery): array
+    {
+        $delivery = is_array($delivery) ? $delivery : [];
+        $area = is_array($delivery['area'] ?? null) ? ($delivery['area']['code'] ?? null) : null;
+
+        return [
+            'status' => ($delivery['status'] ?? null) === 'priced' ? 'priced' : 'address_required',
+            'area' => in_array($area, ['inside_dhaka', 'outside_dhaka'], true) ? $area : null,
+            'is_free' => (bool) ($delivery['is_free'] ?? false),
+        ];
+    }
+
+    /**
      * @param  array<string, mixed>  $data
      * @return array<string, mixed>
      */
@@ -294,6 +312,7 @@ final class Checkouts
             'tax' => $money($data['tax'] ?? null),
             'tax_included' => $money($data['tax_included'] ?? null),
             'grand_total' => $money($data['grand_total'] ?? null),
+            'delivery' => self::normaliseDelivery($data['delivery'] ?? null),
             'cod_eligible' => (bool) ($cod['eligible'] ?? true),
             'cod_maximum' => $money($cod['maximum'] ?? null),
             'quoted_at' => is_string($data['quoted_at'] ?? null) ? $data['quoted_at'] : gmdate('c'),

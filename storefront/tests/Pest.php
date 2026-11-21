@@ -87,7 +87,7 @@ function storefrontDetails(array $overrides = []): array
 {
     return $overrides + [
         'name' => 'Nusrat Jahan', 'phone' => '01712-345678', 'email' => '', 'line1' => 'House 1, Road 2',
-        'city' => 'Dhaka', 'district' => 'Dhaka', 'payment_method' => 'cod',
+        'city' => 'Dhaka', 'district' => 'Dhaka', 'area_id' => 'district:30:26', 'payment_method' => 'cod',
     ];
 }
 

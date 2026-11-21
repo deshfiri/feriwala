@@ -10,6 +10,7 @@ use App\Services\Checkouts;
 use App\Services\Orders;
 use App\Services\Site;
 use DomainException;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -63,6 +64,59 @@ class CheckoutController extends Controller
             'methods' => (array) $site['payment_methods'],
             'gateways' => (array) $site['gateways'],
         ]);
+    }
+
+    /**
+     * The ERP's figures for the basket delivered to the area just chosen (D37):
+     * rendered as the form renders them, so the page swaps them in and never
+     * works a delivery charge or a total out itself. `ready` says whether the
+     * total is complete -- the form may only go on when it is.
+     */
+    public function quote(Request $request): JsonResponse
+    {
+        $items = CartController::basket($request)->items();
+        $areaId = request_string($request, 'area_id');
+
+        if ($items === []) {
+            return $this->quoteAnswer(null, t('checkout.empty'), 422);
+        }
+
+        if ($areaId !== '' && preg_match('/^(division|district|upazila|union):[A-Za-z0-9-]{1,32}:[A-Za-z0-9]{1,32}$/', $areaId) !== 1) {
+            return $this->quoteAnswer(null, t('delivery.invalid_area'), 422);
+        }
+
+        // Only a division picked so far: no district yet, so no delivery
+        // charge -- the goods are priced and the customer is asked for more.
+        if (str_starts_with($areaId, 'division:')) {
+            $areaId = '';
+        }
+
+        try {
+            $quote = $this->quotes->for($items, $areaId === '' ? null : $areaId);
+        } catch (ErpException $exception) {
+            return $this->quoteAnswer(null, match (true) {
+                $exception->is('delivery_address_required', 'validation_failed') => t('delivery.invalid_area'),
+                $exception->is('website_not_accepting_orders') => t('delivery.not_configured'),
+                $exception->isUnavailable() => t('cart.quote_unavailable'),
+                default => t('cart.quote_failed'),
+            }, $exception->is('delivery_address_required', 'validation_failed') ? 422 : 409);
+        }
+
+        return $this->quoteAnswer($quote, null, 200);
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $quote
+     */
+    private function quoteAnswer(?array $quote, ?string $message, int $status): JsonResponse
+    {
+        return response()->json([
+            'ready' => $quote !== null && $quote['grand_total'] !== null,
+            'message' => $message,
+            'totals_html' => $quote === null ? null : view('partials.quote-totals', ['quote' => $quote, 'variant' => 'checkout'])->render(),
+            'note_html' => $quote === null ? null : trim(view('partials.delivery-note', ['quote' => $quote])->render()),
+            'grand_total' => $quote === null || $quote['grand_total'] === null ? null : money($quote['grand_total']),
+        ], $status, ['Cache-Control' => 'no-store, private']);
     }
 
     public function submit(CheckoutDetailsRequest $request): RedirectResponse|Response

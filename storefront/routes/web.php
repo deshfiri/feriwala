@@ -39,10 +39,12 @@ Route::middleware(LoadStorefront::class)->group(function (): void {
     Route::get('/cart', [CartController::class, 'show'])->name('cart.show');
     Route::post('/cart/add', [CartController::class, 'add'])->name('cart.add');
     Route::post('/cart/update', [CartController::class, 'update'])->name('cart.update');
+    Route::post('/cart/quantity', [CartController::class, 'quantity'])->name('cart.quantity');
     Route::post('/cart/remove', [CartController::class, 'remove'])->name('cart.remove');
 
     Route::get('/checkout', [CheckoutController::class, 'form'])->name('checkout.form');
     Route::post('/checkout', [CheckoutController::class, 'submit'])->name('checkout.submit');
+    Route::post('/checkout/quote', [CheckoutController::class, 'quote'])->name('checkout.quote');
     Route::get('/checkout/{token}', [CheckoutController::class, 'review'])->name('checkout.review');
     Route::post('/checkout/{token}/place', [CheckoutController::class, 'place'])->name('checkout.place');
 
