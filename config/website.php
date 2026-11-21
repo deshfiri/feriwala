@@ -37,6 +37,15 @@ return [
     'allow_local_addresses' => (bool) env('WEBSITE_ALLOW_LOCAL_ADDRESSES', env('APP_ENV') === 'local'),
 
     /*
+    | Development or staging origins whose non-default port is part of the
+    | address, e.g. `https://staging.example.com:8443` (comma-separated). A
+    | typed address keeps its port only when it matches one of these exactly,
+    | or when its host is localhost, 127.0.0.1 or ::1. Empty by default, so a
+    | production address never carries a port.
+    */
+    'port_origins' => array_values(array_filter(array_map('trim', explode(',', (string) env('WEBSITE_PORT_ORIGINS', ''))))),
+
+    /*
     |--------------------------------------------------------------------------
     | Subdomains nobody may claim
     |--------------------------------------------------------------------------

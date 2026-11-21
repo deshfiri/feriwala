@@ -28,9 +28,15 @@ final class LocalAddress
 
     /**
      * The host (and port) of an address typed as a URL, or null when it is an
-     * ordinary subdomain label — or when local addresses are not allowed.
+     * ordinary subdomain label, when it is malformed (a bad port, no host) --
+     * or when local addresses are not allowed.
      *
-     * @return array{host: string, origin: string}|null
+     * A typed port is kept unless it is the scheme's default (80 for http, 443
+     * for https). `host` is host and port, for naming; `stored` is what goes in
+     * `websites.domain` -- the same, with `https://` in front when the address
+     * was typed as https, so {@see self::originOf()} rebuilds the full origin.
+     *
+     * @return array{host: string, stored: string, origin: string}|null
      */
     public static function parse(string $input): ?array
     {
@@ -54,18 +60,22 @@ final class LocalAddress
             return null;
         }
 
-        $parts = parse_url(str_contains($value, '://') ? $value : 'http://'.$value);
+        $parts = RequestedAddress::parts($value);
 
-        if (! is_array($parts) || ! isset($parts['host']) || preg_match('/^[a-z0-9]([a-z0-9.\-]*[a-z0-9])?$/', $parts['host']) !== 1) {
+        if ($parts === null || preg_match('/^([a-z0-9]([a-z0-9.\-]*[a-z0-9])?|[0-9a-f:.]+)$/', $parts['host']) !== 1) {
             return null;
         }
 
-        // parse_url() has already refused a port outside 1–65535.
-        $port = $parts['port'] ?? null;
+        $scheme = $parts['scheme'] === 'https' ? 'https' : 'http';
+        $host = str_contains($parts['host'], ':') ? '['.$parts['host'].']' : $parts['host'];
 
-        $host = $parts['host'].($port !== null ? ':'.$port : '');
+        if ($parts['port'] !== null && ! RequestedAddress::isDefaultPort($scheme, $parts['port'])) {
+            $host .= ':'.$parts['port'];
+        }
 
-        return ['host' => $host, 'origin' => 'http://'.$host];
+        $origin = $scheme.'://'.$host;
+
+        return ['host' => $host, 'stored' => $scheme === 'https' ? $origin : $host, 'origin' => $origin];
     }
 
     /**
@@ -99,7 +109,7 @@ final class LocalAddress
         // host with a port, `localhost` or an IP is treated as local.
         $isLocal = $parsed !== null
             && (str_contains($website->domain, ':')
-                || $website->domain === 'localhost'
+                || in_array($website->domain, RequestedAddress::LOOPBACK_HOSTS, true)
                 || preg_match('/^\d{1,3}(\.\d{1,3}){3}$/', $website->domain) === 1);
 
         return $isLocal ? $parsed['origin'] : null;

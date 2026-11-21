@@ -35,7 +35,7 @@ class SubmitWebsiteRequest
         $requestedAddress = null;
 
         if ($local !== null) {
-            if (Website::query()->where('domain', $local['host'])->exists()) {
+            if (Website::query()->where('domain', $local['stored'])->exists()) {
                 throw ValidationException::withMessages(['subdomain' => WebsiteRefused::subdomainTaken()->getMessage()]);
             }
 
@@ -44,7 +44,9 @@ class SubmitWebsiteRequest
             $normalised = RequestedAddress::normalize($address);
 
             if ($normalised === '') {
-                throw ValidationException::withMessages(['subdomain' => __('validation.required', ['attribute' => 'address'])]);
+                throw ValidationException::withMessages(['subdomain' => trim($address) === ''
+                    ? __('validation.required', ['attribute' => 'address'])
+                    : WebsiteRefused::addressInvalid()->getMessage()]);
             }
 
             if (RequestedAddress::isPlainLabel($normalised)) {
@@ -71,7 +73,7 @@ class SubmitWebsiteRequest
         }
 
         if ($local !== null) {
-            $website->forceFill(['domain' => $local['host']])->save();
+            $website->forceFill(['domain' => $local['stored']])->save();
         } elseif ($requestedAddress !== null) {
             $website->forceFill(['requested_address' => $requestedAddress])->save();
         }

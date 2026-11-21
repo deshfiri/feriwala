@@ -66,7 +66,7 @@ class ConnectStore
         }
 
         $local = LocalAddress::parse($address);
-        $domain = $local['host'] ?? $this->normalise($address);
+        $domain = $local['stored'] ?? $this->normalise($address);
 
         if ($domain === null) {
             throw WebsiteRefused::addressInvalid();

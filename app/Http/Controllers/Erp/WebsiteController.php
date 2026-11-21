@@ -107,7 +107,7 @@ class WebsiteController extends Controller
         if ($local !== null) {
             $request->validate(['name' => ['required', 'string', 'min:2', 'max:120']]);
 
-            if (Website::query()->where('domain', $local['host'])->exists()) {
+            if (Website::query()->where('domain', $local['stored'])->exists()) {
                 throw ValidationException::withMessages(['subdomain' => WebsiteRefused::subdomainTaken()->getMessage()]);
             }
 
@@ -124,7 +124,10 @@ class WebsiteController extends Controller
             $address = RequestedAddress::normalize((string) $request->input('subdomain'));
 
             if ($address === '') {
-                throw ValidationException::withMessages(['subdomain' => __('validation.required', ['attribute' => 'address'])]);
+                // Something typed but malformed (a bad port, no host) is not the same as nothing typed.
+                throw ValidationException::withMessages(['subdomain' => trim((string) $request->input('subdomain')) === ''
+                    ? __('validation.required', ['attribute' => 'address'])
+                    : WebsiteRefused::addressInvalid()->getMessage()]);
             }
 
             if (RequestedAddress::isPlainLabel($address)) {
@@ -162,7 +165,7 @@ class WebsiteController extends Controller
         }
 
         if ($local !== null) {
-            $website->forceFill(['domain' => $local['host']])->save();
+            $website->forceFill(['domain' => $local['stored']])->save();
         } elseif (isset($requestedAddress)) {
             $website->forceFill(['requested_address' => $requestedAddress])->save();
         }

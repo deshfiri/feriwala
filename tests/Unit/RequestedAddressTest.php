@@ -29,6 +29,36 @@ it('reduces whatever was typed or pasted to the host', function (string $typed, 
     'a .com.bd' => ['https://www.my-shop.com.bd/', 'www.my-shop.com.bd'],
 ]);
 
+it('keeps a port typed for a development machine, and drops a default one', function (string $typed, string $address, string $origin) {
+    expect(RequestedAddress::normalize($typed))->toBe($address)
+        ->and(RequestedAddress::origin($typed))->toBe($origin);
+})->with([
+    '127.0.0.1 with a port' => ['http://127.0.0.1:8001', '127.0.0.1:8001', 'http://127.0.0.1:8001'],
+    'localhost with a port' => ['http://localhost:8002', 'localhost:8002', 'http://localhost:8002'],
+    '::1 with a port' => ['http://[::1]:8003/', '[::1]:8003', 'http://[::1]:8003'],
+    'no scheme' => ['127.0.0.1:8001', '127.0.0.1:8001', 'http://127.0.0.1:8001'],
+    'http on its default port' => ['http://127.0.0.1:80', '127.0.0.1', 'http://127.0.0.1'],
+    'https on its default port' => ['https://example.com:443', 'example.com', 'https://example.com'],
+    'a public host keeps no port' => ['https://shop.com:8443/cart', 'shop.com', 'https://shop.com'],
+]);
+
+it('refuses a bad port or a malformed address rather than guessing', function (string $typed) {
+    expect(RequestedAddress::parts($typed))->toBeNull()
+        ->and(RequestedAddress::normalize($typed))->toBe('')
+        ->and(RequestedAddress::origin($typed))->toBeNull()
+        ->and(RequestedAddress::host($typed))->toBeNull();
+})->with([
+    'port zero' => ['http://127.0.0.1:0'],
+    'port too large' => ['http://localhost:65536'],
+    'port not a number' => ['https://shop.com:abc'],
+    'negative port' => ['shop.com:-1'],
+    'a port with letters' => ['127.0.0.1:80a'],
+    'only a scheme' => ['http://'],
+    'no host before the path' => ['http:///shop'],
+    'an illegal character' => ['http://shop$.com'],
+    'not an IPv6 address' => ['http://[::zz]:80/'],
+]);
+
 it('says plainly when there is no domain in it at all', function (string $typed) {
     expect(RequestedAddress::host($typed))->toBeNull();
 })->with([
