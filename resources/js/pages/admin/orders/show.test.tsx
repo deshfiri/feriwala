@@ -88,6 +88,8 @@ function order(overrides: Partial<AdminOrderDetail> = {}): AdminOrderDetail {
             subtotal: money('20000.00'),
             discount: null,
             delivery: money('0.00'),
+            delivery_free: false,
+            delivery_area: null,
             tax: null,
             cod_fee: null,
             total: money('20000.00'),
@@ -136,6 +138,8 @@ describe('admin order page', () => {
                         subtotal: money('3400.00'),
                         discount: null,
                         delivery: money('60.00'),
+                        delivery_free: false,
+                        delivery_area: 'Inside Dhaka',
                         tax: null,
                         cod_fee: money('20.00'),
                         total: money('3480.00'),
@@ -149,7 +153,10 @@ describe('admin order page', () => {
             />,
         );
 
-        expect(screen.getByText('orders.summary.delivery')).toBeInTheDocument();
+        // The area the frozen charge was priced for, beside it (D37).
+        expect(
+            screen.getByText('orders.summary.delivery (Inside Dhaka)'),
+        ).toBeInTheDocument();
         expect(screen.getByText('৳60.00')).toBeInTheDocument();
         expect(screen.getByText('orders.summary.cod_fee')).toBeInTheDocument();
         expect(screen.getByText('৳3480.00')).toBeInTheDocument();

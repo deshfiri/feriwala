@@ -132,6 +132,8 @@ function supplierOrderPlace(WebsiteProduct $selection, int $quantity = 1, string
     $delivery = Money::fromDecimal('60.00', Currency::BDT);
 
     [$order] = app(PlaceWebsiteOrder::class)->handle(test()->website, new WebsiteOrderSubmission(
+
+        deliveryLocation: deliveryTestLocation(),
         reference: $reference ?? 'SF-ALLOC-'.Str::upper(Str::random(6)),
         idempotencyKey: (string) Str::uuid(),
         customer: new WebsiteCustomerDetails(name: 'Karim Hossain', mobile: '+8801'.random_int(100000000, 999999999)),
@@ -307,6 +309,8 @@ describe('allocation', function () {
         $delivery = Money::fromDecimal('60.00', Currency::BDT);
 
         [$order] = app(PlaceWebsiteOrder::class)->handle($this->website, new WebsiteOrderSubmission(
+
+            deliveryLocation: deliveryTestLocation(),
             reference: 'SF-MULTI-'.Str::upper(Str::random(6)),
             idempotencyKey: (string) Str::uuid(),
             customer: new WebsiteCustomerDetails(name: 'Karim Hossain', mobile: '+8801712345000'),
@@ -361,6 +365,8 @@ describe('allocation', function () {
         $delivery = Money::fromDecimal('60.00', Currency::BDT);
 
         [$order] = app(PlaceWebsiteOrder::class)->handle($this->website, new WebsiteOrderSubmission(
+
+            deliveryLocation: deliveryTestLocation(),
             reference: 'SF-LEGACY-'.Str::upper(Str::random(6)),
             idempotencyKey: (string) Str::uuid(),
             customer: new WebsiteCustomerDetails(name: 'Karim Hossain', mobile: '+8801712345111'),

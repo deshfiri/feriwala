@@ -4,6 +4,7 @@ namespace App\Domain\Order\Actions;
 
 use App\Domain\Audit\Actions\RecordAuditLog;
 use App\Domain\Audit\Data\AuditEntry;
+use App\Domain\Location\Models\BdLocation;
 use App\Domain\Order\Data\WebsiteOrderQuote;
 use App\Domain\Order\Data\WebsiteOrderSubmission;
 use App\Domain\Order\Exceptions\WebsiteOrderRefused;
@@ -45,15 +46,17 @@ class PlaceOrderOnBehalf
      *
      * @throws WebsiteOrderRefused
      */
-    public function quote(Website $website, array $items, ?Money $discount = null): WebsiteOrderQuote
+    public function quote(Website $website, array $items, ?Money $discount = null, ?BdLocation $deliveryLocation = null): WebsiteOrderQuote
     {
-        return $this->pricing->quote($website, $this->normalised($items), null, $discount);
+        return $this->pricing->quote($website, $this->normalised($items), null, $discount, $deliveryLocation);
     }
 
     /**
      * @param  array{name: string, mobile: string, email?: string|null}  $customer
      * @param  array<string, string|null>  $shippingAddress
      * @param  array<int, array{sku: string, quantity: int}>  $items
+     * @param  BdLocation|null  $deliveryLocation  the address's district, from its validated location chain (D37)
+     * @param  Money|null  $shownTotal  the total the Partner was shown; only compared, never used to price
      * @return array{0: Order, 1: bool} the order, and whether this call placed it
      *
      * @throws WebsiteOrderRefused
@@ -67,6 +70,8 @@ class PlaceOrderOnBehalf
         string $idempotencyKey,
         ?string $note = null,
         ?Money $discount = null,
+        ?BdLocation $deliveryLocation = null,
+        ?Money $shownTotal = null,
     ): array {
         $mobile = $this->mobiles->normalise($customer['mobile']);
 
@@ -75,7 +80,15 @@ class PlaceOrderOnBehalf
         }
 
         $items = $this->normalised($items);
-        $quote = $this->pricing->quote($website, $items, null, $discount);
+        $quote = $this->pricing->quote($website, $items, null, $discount, $deliveryLocation);
+
+        // The total moved since the Partner looked (a rate, a price): they are
+        // shown the new figures and place it again, never charged a figure
+        // they did not see.
+        if ($shownTotal !== null && $quote->isDeliveryPriced()
+            && ($shownTotal->currency !== $quote->total->currency || ! $shownTotal->equals($quote->total))) {
+            throw WebsiteOrderRefused::priceMismatch($quote->authoritative(), $shownTotal);
+        }
 
         // The figures come from the ERP's own quote, so the claim the intake
         // checks is the price the Partner was shown a moment ago.
@@ -103,6 +116,7 @@ class PlaceOrderOnBehalf
             paymentMethod: 'cod',
             customerNote: $note,
             sellerDiscount: $quote->discount->isPositive() ? $quote->discount : null,
+            deliveryLocation: $deliveryLocation,
         );
 
         [$order, $placed] = $this->orders->handle($website, $submission);

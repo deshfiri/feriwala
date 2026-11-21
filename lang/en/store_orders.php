@@ -49,6 +49,8 @@ return [
         'line1' => 'House, road and area',
         'postcode' => 'Postcode (optional)',
         'bad_location' => 'Choose the division, district and upazila again — that combination is not valid.',
+        'total_changed' => 'The total has changed since you looked. Check the new total below and place the order again.',
+        'delivery_pick_place' => 'Choose the district to see the delivery charge.',
         'items' => 'Products',
         'product' => 'Product',
         'product_search' => 'Search by name or SKU',

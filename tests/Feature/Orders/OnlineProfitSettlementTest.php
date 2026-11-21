@@ -96,6 +96,8 @@ function onlineProfitPlace(string $method): Order
     test()->website->forceFill(['sms_verification_enabled' => false])->save();
 
     [$order] = app(PlaceWebsiteOrder::class)->handle(test()->website, new WebsiteOrderSubmission(
+
+        deliveryLocation: deliveryTestLocation(),
         reference: 'SF-OP-'.Str::upper(Str::random(6)),
         idempotencyKey: (string) Str::uuid(),
         customer: new WebsiteCustomerDetails(name: 'Ayesha Rahman', mobile: '+88017'.random_int(10000000, 99999999)),

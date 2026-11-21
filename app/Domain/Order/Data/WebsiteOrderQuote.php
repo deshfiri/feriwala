@@ -2,6 +2,7 @@
 
 namespace App\Domain\Order\Data;
 
+use App\Domain\Billing\Data\DeliveryChargeResolution;
 use App\Domain\Tax\Data\TaxBreakdown;
 use App\Domain\Tax\Data\TaxCharge;
 use App\Support\Money\Currency;
@@ -28,7 +29,38 @@ readonly class WebsiteOrderQuote
         public TaxCharge $deliveryTax,
         public TaxBreakdown $tax,
         public Money $total,
+        /** Where `$delivery` came from, frozen onto the order; null until a delivery location is known. */
+        public ?DeliveryChargeResolution $deliveryCharge = null,
     ) {}
+
+    /**
+     * Whether the delivery charge is in these figures. Without a delivery
+     * location only the goods are priced: `$delivery` is zero and `$total`
+     * leaves delivery out, so such a quote is never shown as a grand total
+     * and never placed.
+     */
+    public function isDeliveryPriced(): bool
+    {
+        return $this->deliveryCharge !== null;
+    }
+
+    /**
+     * The delivery as a storefront shows it: the area and whether it is free,
+     * or that an address is still needed. Never a rule id or other internals.
+     *
+     * @return array{status: string, area: array{code: string, label: string}|null, charge: array<string, mixed>|null, is_free: bool}
+     */
+    public function deliverySummary(): array
+    {
+        $charge = $this->deliveryCharge;
+
+        return [
+            'status' => $charge === null ? 'address_required' : 'priced',
+            'area' => $charge === null ? null : ['code' => $charge->area->value, 'label' => $charge->area->label()],
+            'charge' => $charge?->amount->jsonSerialize(),
+            'is_free' => $charge?->isFree() ?? false,
+        ];
+    }
 
     /**
      * Whether the storefront's claim is this quote, exactly.
@@ -72,8 +104,11 @@ readonly class WebsiteOrderQuote
             'subtotal' => $this->subtotal->jsonSerialize(),
             'discount' => $this->discount->jsonSerialize(),
             'tax' => $this->tax->addedTotal()->jsonSerialize(),
-            'shipping' => $this->delivery->jsonSerialize(),
-            'grand_total' => $this->total->jsonSerialize(),
+            // No delivery location yet: no delivery charge and no grand total,
+            // rather than a total that quietly leaves delivery out (D37).
+            'shipping' => $this->isDeliveryPriced() ? $this->delivery->jsonSerialize() : null,
+            'grand_total' => $this->isDeliveryPriced() ? $this->total->jsonSerialize() : null,
+            'delivery' => $this->deliverySummary(),
         ];
     }
 

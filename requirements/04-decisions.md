@@ -1036,7 +1036,7 @@ stock reservation are unchanged.
 | --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | H1  | A checkout quote is **advisory**. `POST /orders` prices the cart again with zero tolerance and refuses any difference with `price_mismatch`.                                                                                            |
 | H2  | A quote **never reserves or deducts stock** and writes nothing. Its `reservable` answer applies the placement rules read-only.                                                                                                          |
-| H3  | Delivery stays the **flat per-package** website delivery fee. The weight and area engine is not switched on.                                                                                                                            |
+| H3  | Delivery stays the **flat per-package** website delivery fee. The weight and area engine is not switched on. **Amended 2026-11-21 by D37:** customer orders pay an Inside Dhaka or Outside Dhaka amount.                                |
 | H4  | Delivery areas come from the **BdLocation** directory, under stable natural-key identifiers.                                                                                                                                            |
 | H5  | Best sellers: a rolling **30-day** window of paid online orders and confirmed COD orders, excluding cancelled and refunded ones. Details approved later the same day — see below.                                                       |
 | H6  | **Owners** set promotional windows on their own selections, within the administrator's limits: the window is locked wherever the promotional price is.                                                                                  |
@@ -1682,3 +1682,45 @@ offered.
 `ProcessRefund`, `RequestRefund` and the return refund path refuse a Partner-owned payment. The
 Storefront API contract is unchanged in v1; Model B adds no breaking field (see
 [05-storefront-api-contract.md](05-storefront-api-contract.md)).
+
+## D37 — Customer delivery charge: Inside Dhaka / Outside Dhaka (2026-11-21) — **narrowly amends D31 H3**
+
+**Instructed by the Project Owner on 2026-11-21.** D31 H3 said customer delivery is a flat
+per-package website delivery fee with the weight and area engine left off. For **customer orders
+only**, that changes to exactly two admin-set amounts. Nothing else in D31 changes, and the weight,
+area and courier engine (`delivery_charge_rules`, `CalculateDeliveryCharge`) stays off for checkout.
+
+**The rule.**
+
+- Customer orders — storefront orders and orders a Partner enters by hand — pay one delivery charge
+  per order: the **Inside Dhaka** amount when the delivery address's canonical district is Dhaka,
+  the **Outside Dhaka** amount for every other Bangladesh district.
+- "Dhaka" is the BdLocation **district** Dhaka (natural key: `type = district`, `source_id = 26`),
+  which holds Dhaka North and Dhaka South City Corporations. It is not the Dhaka division.
+- The district comes from structured location data only: the address's BdLocation id resolved up its
+  hierarchy (H4). Never from free text, a postcode, or a flag the client sends. An address whose
+  district cannot be resolved, or that is outside Bangladesh, cannot be priced and is refused with a
+  request for a valid delivery address.
+- Applied once per order. Never multiplied by product, quantity or parcel.
+- Both amounts are set by authorised staff under Admin → Orders → Delivery Charges, on the existing
+  `fee_rules` (one fee type per area), dated and audited like every fee rule. Zero is allowed and
+  shown as "Free delivery". A missing amount fails closed: an order to that area is refused with
+  "Delivery charge is not configured", never charged nothing.
+- No plan-specific delivery charge: the two amounts are the same for every Partner. No Partner
+  override, district-by-district rate, weight, distance, parcel count, courier price or
+  free-delivery threshold — each needs its own decision.
+- The ERP alone calculates the charge, in the quote and again at order placement, and freezes it on
+  the order with how it was reached. Orders placed before this keep the charge they were placed with.
+
+**Fee rules.** Outside Dhaka keeps the existing `website_delivery` fee type, so a rate a deployment
+already set prices Outside Dhaka from the moment this ships; Inside Dhaka is the new
+`customer_delivery_inside_dhaka`. Delivery tax keeps the `website_delivery` tax scope for both.
+`php artisan delivery-charges:check` fails while either rate is missing.
+
+**Storefront API.** Still v1, through the area fields D31 already defined (`delivery.area_id` on the
+quote, `shipping_address.area_id` on the order), with the owner-approved tightening this decision
+needs: an order without a resolvable area is refused, and a quote without one prices the goods only
+(`shipping` and `grand_total` null). See the contract, §6.1.
+
+**Not changed.** Wholesale purchases keep one flat delivery charge (`wholesale_delivery`), set on the
+same screen.

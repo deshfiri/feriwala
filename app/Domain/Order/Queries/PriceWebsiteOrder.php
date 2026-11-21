@@ -2,17 +2,17 @@
 
 namespace App\Domain\Order\Queries;
 
-use App\Domain\Billing\Enums\FeeType;
-use App\Domain\Billing\FeeRuleResolver;
+use App\Domain\Billing\Exceptions\DeliveryChargeRefused;
+use App\Domain\Billing\OrderDeliveryCharges;
 use App\Domain\Catalog\Enums\SalesChannel;
 use App\Domain\Catalog\Models\Product;
 use App\Domain\Catalog\Models\ProductVariant;
 use App\Domain\Catalog\ProductEligibility;
 use App\Domain\Catalog\PurchasedProducts;
+use App\Domain\Location\Models\BdLocation;
 use App\Domain\Order\Data\WebsiteOrderLine;
 use App\Domain\Order\Data\WebsiteOrderQuote;
 use App\Domain\Order\Exceptions\WebsiteOrderRefused;
-use App\Domain\Package\Entitlements;
 use App\Domain\Tax\Data\TaxBreakdown;
 use App\Domain\Tax\Enums\TaxScope;
 use App\Domain\Tax\TaxEngine;
@@ -37,8 +37,12 @@ use Carbon\CarbonImmutable;
  *     applies, its window included ({@see WebsiteProduct::sellingPrice()}) —
  *     and is taxed per line at the rule in force for the product.
  *
- * Delivery is the website delivery fee for the owner's package, then the global
- * rule, taxed as a fee. There is no website coupon yet, so the discount is zero.
+ * Delivery is one charge per order, Inside Dhaka or Outside Dhaka by the
+ * delivery address's canonical district ({@see OrderDeliveryCharges}, D37),
+ * taxed as a fee. Without a delivery location the goods are priced and the
+ * delivery is not: the quote says so, and placement refuses it. An address
+ * with no resolvable district, or an area with no rate, is refused -- never
+ * charged nothing. There is no website coupon yet, so the discount is zero.
  * The customer is a consumer, never a business account, so no account's tax
  * exemption applies.
  */
@@ -47,21 +51,20 @@ class PriceWebsiteOrder
     public function __construct(
         protected ProductEligibility $eligibility,
         protected PurchasedProducts $purchased,
-        protected FeeRuleResolver $fees,
+        protected OrderDeliveryCharges $deliveryCharges,
         protected TaxEngine $tax,
-        protected Entitlements $entitlements,
     ) {}
 
     /**
      * @param  array<int, array{sku: string, quantity: int}>  $items
      * @param  Money|null  $discount  a seller's discount on the goods, shared across the lines; none for a storefront's own order
+     * @param  BdLocation|null  $deliveryLocation  where the order goes (any level at or below its district); null prices the goods only
      *
      * @throws WebsiteOrderRefused
      */
-    public function quote(Website $website, array $items, ?CarbonImmutable $at = null, ?Money $discount = null): WebsiteOrderQuote
+    public function quote(Website $website, array $items, ?CarbonImmutable $at = null, ?Money $discount = null, ?BdLocation $deliveryLocation = null): WebsiteOrderQuote
     {
         $at ??= CarbonImmutable::now();
-        $account = $website->businessAccount;
         $currency = Currency::tryFrom($website->currency_code) ?? Currency::BDT;
 
         $lines = [];
@@ -92,15 +95,25 @@ class PriceWebsiteOrder
 
         $charges = array_map(fn (WebsiteOrderLine $line) => $line->tax, $lines);
 
-        $delivery = $lines === []
-            ? Money::zero($currency)
-            : $this->fees->websiteCharge(FeeType::WebsiteDelivery, $this->entitlements->activePackage($account)?->package, $currency, $at);
+        // One delivery charge per order, whatever the number of products or
+        // pieces: Inside or Outside Dhaka by the address's district (D37).
+        $deliveryCharge = null;
+
+        if ($lines !== [] && $deliveryLocation !== null) {
+            try {
+                $deliveryCharge = $this->deliveryCharges->forLocation($deliveryLocation, $currency, $at);
+            } catch (DeliveryChargeRefused $refused) {
+                throw WebsiteOrderRefused::fromDeliveryCharge($refused);
+            }
+        }
+
+        $delivery = $deliveryCharge === null ? Money::zero($currency) : $deliveryCharge->amount;
 
         $deliveryTax = $this->tax->charge(
             amount: $delivery,
             at: $at,
             scope: TaxScope::Fee,
-            scopeValue: FeeType::WebsiteDelivery->value,
+            scopeValue: OrderDeliveryCharges::taxScopeValue(),
         );
 
         $charges[] = $deliveryTax;
@@ -116,6 +129,7 @@ class PriceWebsiteOrder
             deliveryTax: $deliveryTax,
             tax: $tax,
             total: $subtotal->minus($discount)->plus($delivery)->plus($tax->addedTotal()),
+            deliveryCharge: $deliveryCharge,
         );
     }
 

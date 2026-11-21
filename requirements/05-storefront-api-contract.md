@@ -601,6 +601,21 @@ Responses:
 | `409` | `duplicate_storefront_order` — this `storefront_order_reference` already exists                              |
 | `422` | `insufficient_stock`, `price_mismatch`, `product_unavailable`, `payment_unverified`, `invalid_mobile_number` |
 
+**Delivery charge (D37).** `totals.shipping` is the ERP's own: one charge per order, the Inside
+Dhaka or Outside Dhaka rate, chosen by the district of `shipping_address.area_id` (a
+`GET /delivery/areas` id at district level or below), never multiplied by product or quantity.
+
+- `shipping_address.area_id` is required for an order. Without one, or with one that resolves to no
+  district (a division, say), the order is refused `422 delivery_address_required`.
+- The quote takes the same id as `delivery.area_id`. Without it the quote prices the goods and
+  answers `shipping: null`, `grand_total: null` and `delivery.status: "address_required"`; with it,
+  `delivery` carries `status: "priced"`, `area: {code, label}` (`inside_dhaka` / `outside_dhaka`),
+  `charge` and `is_free`. No rule identifier is ever returned.
+- An area with no rate configured is refused, at quote and at order, with the existing
+  `409 website_not_accepting_orders` and the detail `"reason": "delivery_not_configured"`.
+- A rate that changes between quote and order is caught by `price_mismatch` with the fresh
+  `authoritative` figures (§6.1.1); the order is never placed at a figure the customer did not see.
+
 `storefront_order_reference` is unique per website and is a **second** duplicate guard beneath the
 idempotency key — protecting against a storefront that retries with a fresh key (§17.3, §43).
 

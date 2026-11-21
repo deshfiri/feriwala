@@ -2,6 +2,7 @@
 
 return [
     'store_orders' => 'স্টোর অর্ডার',
+    'delivery_charges' => 'ডেলিভারি চার্জ',
     'cases' => 'ফেরত, বদল ও ক্ষতি',
     'returns_exchanges' => 'ফেরত ও বদল',
     'my_damages' => 'আমার ক্ষতিগ্রস্ত পণ্য',

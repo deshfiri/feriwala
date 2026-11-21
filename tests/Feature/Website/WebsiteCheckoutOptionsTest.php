@@ -120,7 +120,7 @@ function checkoutOptionsOrder(?string $key = null, ?array $credential = null, ?s
     return storefrontCall($record, $secret, 'orders', method: 'POST', body: (string) json_encode([
         'storefront_order_reference' => 'SF-OPT-'.($key !== null ? strtoupper(substr(md5($key), 0, 6)) : Str::upper(Str::random(6))),
         'customer' => ['name' => 'Ayesha Rahman', 'phone' => '01712-345678', 'is_guest' => true],
-        'shipping_address' => ['line1' => 'House 12', 'city' => 'Dhaka', 'country' => 'BD'],
+        'shipping_address' => ['line1' => 'House 12', 'city' => 'Dhaka', 'country' => 'BD', 'area_id' => deliveryTestAreaId()],
         'items' => [['sku' => $sku ?? test()->selection->product->sku, 'quantity' => 2, 'unit_price' => $money('2600.00')]],
         'totals' => [
             'subtotal' => $money('5200.00'),

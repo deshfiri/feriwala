@@ -85,6 +85,8 @@ const order: WebsiteOrderDetail = {
         subtotal: money('5200.00'),
         discount: money('0.00'),
         delivery: money('60.00'),
+        delivery_free: false,
+        delivery_area: 'Outside Dhaka',
         tax: money('0.00'),
         total: money('5260.00'),
     },

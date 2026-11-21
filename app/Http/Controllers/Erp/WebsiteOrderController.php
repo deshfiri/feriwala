@@ -307,6 +307,8 @@ class WebsiteOrderController extends Controller
                 'subtotal' => $order->subtotal->jsonSerialize(),
                 'discount' => $order->discount->jsonSerialize(),
                 'delivery' => $order->delivery->jsonSerialize(),
+                'delivery_free' => $order->hasFreeDelivery(),
+                'delivery_area' => $order->delivery_area?->label(),
                 'tax' => $order->tax->jsonSerialize(),
                 'total' => $order->total->jsonSerialize(),
             ],

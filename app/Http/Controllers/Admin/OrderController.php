@@ -254,6 +254,10 @@ class OrderController extends Controller
                     'subtotal' => $record->subtotal->jsonSerialize(),
                     'discount' => $record->discount->isPositive() ? $record->discount->jsonSerialize() : null,
                     'delivery' => $record->delivery->jsonSerialize(),
+                    'delivery_free' => $record->hasFreeDelivery(),
+                    // The area the frozen charge was priced for (D37); null on
+                    // a wholesale order or one placed before the snapshot.
+                    'delivery_area' => $record->delivery_area?->label(),
                     'tax' => $record->tax->isPositive() ? $record->tax->jsonSerialize() : null,
                     'tax_included' => $record->tax_included->jsonSerialize(),
                     'cod_fee' => $record->cod_fee->isPositive() ? $record->cod_fee->jsonSerialize() : null,

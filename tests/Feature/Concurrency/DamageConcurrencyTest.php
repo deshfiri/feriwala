@@ -224,6 +224,7 @@ function damageRaceApproved(): OrderDamage
 
     /** @var Order $order */
     [$order] = app(PlaceWebsiteOrder::class)->handle(test()->website, new WebsiteOrderSubmission(
+        deliveryLocation: deliveryTestLocation(),
         reference: 'SF-DR-'.Str::upper(Str::random(6)),
         idempotencyKey: (string) Str::uuid(),
         customer: new WebsiteCustomerDetails(name: 'Ayesha Rahman', mobile: '+88017'.random_int(10000000, 99999999)),

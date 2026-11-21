@@ -61,7 +61,7 @@ const MONEY_COLUMN_INVENTORY = [
         'exchange_additional_due', 'exchange_refund_due',
     ],
     'order_return_charges' => ['amount'],
-    'orders' => ['subtotal', 'discount', 'delivery', 'tax', 'tax_included', 'cod_fee', 'total'],
+    'orders' => ['subtotal', 'discount', 'delivery', 'delivery_tax', 'tax', 'tax_included', 'cod_fee', 'total'],
     'package_charges' => ['amount'],
     'packages' => ['fee', 'registration_fee', 'renewal_fee', 'required_deposit', 'minimum_balance'],
     'payment_allocations' => ['amount'],

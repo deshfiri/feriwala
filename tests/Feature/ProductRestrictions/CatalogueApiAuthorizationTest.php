@@ -412,6 +412,8 @@ describe('no way into the catalogue except the administration', function () {
         $address = ['line1' => 'House 12', 'city' => 'Dhaka', 'country' => 'BD'];
 
         [$order] = app(PlaceWebsiteOrder::class)->handle($website, new WebsiteOrderSubmission(
+
+            deliveryLocation: deliveryTestLocation(),
             reference: 'SF-CATALOGUE-1',
             idempotencyKey: (string) Str::uuid(),
             customer: new WebsiteCustomerDetails(name: 'Ayesha Rahman', mobile: '+8801712345678'),

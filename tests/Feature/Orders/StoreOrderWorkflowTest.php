@@ -100,6 +100,8 @@ function storeOrderPlace(?Website $website = null, string $method = 'cod', ?Webs
     $address = ['line1' => 'House 12', 'city' => 'Dhaka', 'country' => 'BD'];
 
     [$order] = app(PlaceWebsiteOrder::class)->handle($website, new WebsiteOrderSubmission(
+
+        deliveryLocation: deliveryTestLocation(),
         reference: 'SF-WF-'.Str::upper(Str::random(6)),
         idempotencyKey: (string) Str::uuid(),
         customer: new WebsiteCustomerDetails(name: 'Ayesha Rahman', mobile: '+88017'.random_int(10000000, 99999999)),

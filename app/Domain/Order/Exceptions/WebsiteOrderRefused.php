@@ -2,6 +2,7 @@
 
 namespace App\Domain\Order\Exceptions;
 
+use App\Domain\Billing\Exceptions\DeliveryChargeRefused;
 use App\Domain\Order\Models\Order;
 use App\Support\Money\Money;
 use RuntimeException;
@@ -32,6 +33,29 @@ class WebsiteOrderRefused extends RuntimeException
     public static function notAcceptingOrders(): self
     {
         return new self(409, 'website_not_accepting_orders', 'This website is not taking orders in its current state.');
+    }
+
+    /**
+     * A customer order that cannot be given a delivery charge (D37), said in
+     * terms a customer can act on:
+     *
+     *   - no district can be resolved from the address: `422
+     *     delivery_address_required`, pointing at the address field;
+     *   - no rate is configured: the code every storefront already handles,
+     *     `409 website_not_accepting_orders`, with "Delivery charge is not
+     *     configured" and the reason for staff in the details.
+     */
+    public static function fromDeliveryCharge(DeliveryChargeRefused $refused, string $field = 'delivery_address'): self
+    {
+        if ($refused->reason === DeliveryChargeRefused::NOT_CONFIGURED) {
+            return new self(409, 'website_not_accepting_orders', 'Delivery charge is not configured. Please try again later.', [
+                'reason' => DeliveryChargeRefused::NOT_CONFIGURED,
+            ]);
+        }
+
+        return new self(422, DeliveryChargeRefused::ADDRESS_UNRESOLVED, $refused->getMessage(), [
+            'field' => $field,
+        ]);
     }
 
     public static function productUnavailable(string $sku): self

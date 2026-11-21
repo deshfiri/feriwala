@@ -88,6 +88,10 @@ export type AdminOrderDetail = {
         subtotal: Money;
         discount: Money | null;
         delivery: Money;
+        /** A delivery-charge rule set it to zero on purpose. */
+        delivery_free: boolean;
+        /** The area the frozen charge was priced for, already translated. */
+        delivery_area: string | null;
         tax: Money | null;
         cod_fee: Money | null;
         total: Money;
@@ -606,10 +610,20 @@ export default function AdminOrder({ order, can, exchange_origin }: Props) {
                                         />
                                     </Row>
                                 )}
-                                <Row label={t('orders.summary.delivery')}>
-                                    <MoneyAmount
-                                        amount={order.totals.delivery}
-                                    />
+                                <Row
+                                    label={
+                                        order.totals.delivery_area
+                                            ? `${t('orders.summary.delivery')} (${order.totals.delivery_area})`
+                                            : t('orders.summary.delivery')
+                                    }
+                                >
+                                    {order.totals.delivery_free ? (
+                                        t('delivery_charges.free')
+                                    ) : (
+                                        <MoneyAmount
+                                            amount={order.totals.delivery}
+                                        />
+                                    )}
                                 </Row>
                                 {order.totals.tax && (
                                     <Row label={t('orders.summary.tax')}>

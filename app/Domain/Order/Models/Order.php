@@ -9,6 +9,7 @@ use App\Concerns\HasStateMachine;
 use App\Concerns\RecordsStatusHistory;
 use App\Domain\Account\Enums\AccountType;
 use App\Domain\Account\Models\BusinessAccount;
+use App\Domain\Billing\Enums\DeliveryArea;
 use App\Domain\Billing\Models\Payment;
 use App\Domain\Courier\Models\Shipment;
 use App\Domain\Notification\Actions\AnnounceCaseEvent;
@@ -73,6 +74,11 @@ use LogicException;
  * @property Money $subtotal
  * @property Money $discount
  * @property Money $delivery
+ * @property DeliveryArea|null $delivery_area the customer delivery area (D37); null on a wholesale order or one placed before the snapshot
+ * @property int|null $delivery_district_id the canonical district the area was resolved from
+ * @property int|null $delivery_fee_rule_id the fee rule (pricing version) that priced the delivery charge
+ * @property Money|null $delivery_tax
+ * @property string|null $delivery_tax_mode
  * @property Money $tax
  * @property Money $tax_included
  * @property Money $cod_fee
@@ -133,6 +139,8 @@ class Order extends Model
             'subtotal' => MoneyCast::class,
             'discount' => MoneyCast::class,
             'delivery' => MoneyCast::class,
+            'delivery_tax' => MoneyCast::class,
+            'delivery_area' => DeliveryArea::class,
             'tax' => MoneyCast::class,
             'tax_included' => MoneyCast::class,
             'cod_fee' => MoneyCast::class,
@@ -287,6 +295,15 @@ class Order extends Model
     public function courierStatusHistory(): HasMany
     {
         return $this->hasMany(OrderCourierStatusChange::class)->orderBy('id');
+    }
+
+    /**
+     * Whether the area's rate set this order's delivery to zero on purpose
+     * ("Free delivery"), as against an order with no delivery snapshot at all.
+     */
+    public function hasFreeDelivery(): bool
+    {
+        return $this->delivery_area !== null && $this->delivery->isZero();
     }
 
     /**

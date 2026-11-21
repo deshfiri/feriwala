@@ -145,7 +145,7 @@ function codTestBody(array $overrides = []): array
     return array_replace_recursive([
         'storefront_order_reference' => 'SF-COD-'.Str::upper(Str::random(5)),
         'customer' => ['name' => 'Ayesha Rahman', 'phone' => '01712-345678', 'is_guest' => true],
-        'shipping_address' => ['line1' => 'House 12', 'city' => 'Dhaka', 'country' => 'BD'],
+        'shipping_address' => ['line1' => 'House 12', 'city' => 'Dhaka', 'country' => 'BD', 'area_id' => deliveryTestAreaId()],
         'items' => [['sku' => test()->selection->product->sku, 'quantity' => 2, 'unit_price' => $money('2600.00')]],
         'totals' => [
             'subtotal' => $money('5200.00'),

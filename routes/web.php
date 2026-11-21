@@ -17,6 +17,7 @@ use App\Http\Controllers\Admin\DamageCaseActionController;
 use App\Http\Controllers\Admin\DashboardAccessController;
 use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\Admin\DeletionRequestController;
+use App\Http\Controllers\Admin\DeliveryChargeController;
 use App\Http\Controllers\Admin\DeliverySettingsController;
 use App\Http\Controllers\Admin\DepositRuleController;
 use App\Http\Controllers\Admin\IdentityAccessController;
@@ -1658,6 +1659,18 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('delivery-settings.rules.store');
         Route::post('delivery-settings/rules/{rule}/close', [DeliverySettingsController::class, 'closeRule'])
             ->name('delivery-settings.rules.close');
+
+        /*
+         * Admin → Orders → Delivery Charges: the Inside / Outside Dhaka customer
+         * rates (D37) and the flat wholesale charge, on the fee rules, under the
+         * billing permission Admin → Billing already uses for the same rows.
+         */
+        Route::get('delivery-charges', [DeliveryChargeController::class, 'index'])
+            ->name('delivery-charges.index');
+        Route::post('delivery-charges', [DeliveryChargeController::class, 'store'])
+            ->name('delivery-charges.store');
+        Route::delete('delivery-charges/{rule}', [DeliveryChargeController::class, 'destroy'])
+            ->name('delivery-charges.destroy');
 
         /*
          * Product Sourcing Groups: legacy. Same Product links

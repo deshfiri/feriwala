@@ -105,6 +105,8 @@ function websiteOrderScreensOrder(Website $website, string $reference, string $p
     ];
 
     [$order] = app(PlaceWebsiteOrder::class)->handle($website, new WebsiteOrderSubmission(
+
+        deliveryLocation: deliveryTestLocation(),
         reference: $reference,
         idempotencyKey: (string) Str::uuid(),
         customer: new WebsiteCustomerDetails(

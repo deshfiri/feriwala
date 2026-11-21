@@ -5,7 +5,7 @@ namespace App\Domain\Billing\Enums;
 /**
  * A fee an administrator can price by rule (§9).
  *
- * One case today. It is an enum rather than a bare string because a fee type
+ * It is an enum rather than a bare string because a fee type
  * that nothing validates is a typo away from a rule that matches nothing —
  * silently, and only visibly wrong on somebody's invoice.
  */
@@ -31,13 +31,18 @@ enum FeeType: string
     case WholesaleDelivery = 'wholesale_delivery';
 
     /**
-     * Charged on an order a customer places on a partner website (§16, §17, P5-23).
+     * The customer delivery charge for an address **outside Dhaka district**
+     * (D37), on a storefront order or one a Partner enters by hand.
      *
-     * Feriwala is merchant of record and delivers the order (D12), so the charge
-     * is Feriwala's, priced by rule for the website owner's package and then the
-     * global rule — never a figure the storefront sends.
+     * The value is the original website delivery fee's, kept so the rule a
+     * deployment already priced stays in force for the area it now names.
+     * Feriwala is merchant of record and delivers the order (D12): the charge is
+     * Feriwala's, from the global rule only, never a figure the storefront sends.
      */
     case WebsiteDelivery = 'website_delivery';
+
+    /** The customer delivery charge for an address inside Dhaka district (D37). */
+    case CustomerDeliveryInsideDhaka = 'customer_delivery_inside_dhaka';
 
     /**
      * What a dedicated website costs to build, to keep a domain for, to host,
@@ -59,7 +64,8 @@ enum FeeType: string
         return match ($this) {
             self::Registration => 'Registration fee',
             self::WholesaleDelivery => 'Wholesale delivery charge',
-            self::WebsiteDelivery => 'Website order delivery charge',
+            self::WebsiteDelivery => 'Customer delivery charge — Outside Dhaka',
+            self::CustomerDeliveryInsideDhaka => 'Customer delivery charge — Inside Dhaka',
             self::WebsiteSetup => 'Website setup charge',
             self::WebsiteDomain => 'Domain charge',
             self::WebsiteHosting => 'Hosting charge',

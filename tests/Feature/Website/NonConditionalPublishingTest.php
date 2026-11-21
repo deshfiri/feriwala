@@ -131,7 +131,7 @@ function nonConditionalPlaceOrder(string $unit = '2500.00'): TestResponse
     $body = [
         'storefront_order_reference' => 'SF-NC-'.Str::upper(Str::random(5)),
         'customer' => ['name' => 'Ayesha Rahman', 'phone' => '01712-345678', 'is_guest' => true],
-        'shipping_address' => ['line1' => 'House 12', 'city' => 'Dhaka', 'country' => 'BD'],
+        'shipping_address' => ['line1' => 'House 12', 'city' => 'Dhaka', 'country' => 'BD', 'area_id' => deliveryTestAreaId()],
         'items' => [['sku' => test()->product->sku, 'quantity' => 2, 'unit_price' => $money($unit)]],
         'totals' => [
             'subtotal' => $money($subtotal),

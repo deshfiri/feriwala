@@ -2,10 +2,13 @@
 
 use App\Domain\Account\Enums\AccountType;
 use App\Domain\Account\Models\BusinessAccount;
+use App\Domain\Billing\Actions\ManageDeliveryCharges;
+use App\Domain\Billing\Enums\DeliveryArea;
 use App\Domain\Billing\Enums\FeeType;
 use App\Domain\Billing\Enums\GatewayOwnership;
 use App\Domain\Billing\Enums\PaymentPurpose;
 use App\Domain\Billing\Enums\PaymentStatus;
+use App\Domain\Billing\Models\FeeRule;
 use App\Domain\Billing\Models\Invoice;
 use App\Domain\Billing\Models\Payment;
 use App\Domain\Catalog\Models\Category;
@@ -20,6 +23,7 @@ use App\Domain\Inventory\PartnerStock;
 use App\Domain\Inventory\StockReservations;
 use App\Domain\Location\Enums\BdLocationType;
 use App\Domain\Location\Models\BdLocation;
+use App\Domain\Location\Queries\DeliveryAreas;
 use App\Domain\Order\Actions\ExpireUnpaidOrders;
 use App\Domain\Order\Enums\OrderSource;
 use App\Domain\Order\Enums\OrderStatus;
@@ -41,6 +45,7 @@ use App\Domain\Website\Models\Website;
 use App\Domain\Website\Models\WebsiteCustomer;
 use App\Domain\Website\Models\WebsiteDomain;
 use App\Domain\Website\Models\WebsiteProduct;
+use App\Models\User;
 use App\Notifications\Orders\WebsiteOrderPaid;
 use App\Support\Money\Currency;
 use App\Support\Money\Money;
@@ -162,6 +167,8 @@ function websiteOrderBody(array $overrides = []): array
             'district' => 'Dhaka',
             'postcode' => '1216',
             'country' => 'BD',
+            // The structured area prices the delivery (D37); the text above never does.
+            'area_id' => deliveryTestAreaId(),
         ],
         'items' => [
             ['sku' => test()->selection->product->sku, 'quantity' => 2, 'unit_price' => $money('2600.00')],
@@ -213,6 +220,151 @@ function websiteOrderPay(Order $order): void
 {
     test()->post(route('webhooks.payment', 'sslcommerz'), websiteOrderIpn((string) $order->payment?->reference));
 }
+
+/**
+ * An order body claiming `$shipping` for delivery to `$area`, two kettles.
+ *
+ * @param  array<string, mixed>  $overrides
+ * @return array<string, mixed>
+ */
+function storefrontDeliveryBody(string $area, string $shipping, array $overrides = []): array
+{
+    return array_replace_recursive([
+        'shipping_address' => ['area_id' => $area],
+        'totals' => [
+            'shipping' => ['amount' => $shipping, 'currency' => 'BDT'],
+            'grand_total' => ['amount' => bcadd('5200.00', $shipping, 2), 'currency' => 'BDT'],
+        ],
+    ], $overrides);
+}
+
+describe('the delivery charge on a storefront order (D37)', function () {
+    beforeEach(function () {
+        // Outside Dhaka is the ৳60 rule set above; Inside Dhaka ৳80.
+        deliveryTestRate(FeeType::CustomerDeliveryInsideDhaka, '80.00');
+        $this->geo = deliveryTestDhakaGeography();
+        $this->inside = DeliveryAreas::publicId($this->geo['dhaka_north']);
+        $this->gazipur = DeliveryAreas::publicId($this->geo['gazipur']);
+    });
+
+    it('charges Inside Dhaka for an address in Dhaka district, freezes how, and asks the gateway for the whole total', function () {
+        websiteOrderQuote(['delivery' => ['area_id' => $this->inside]])
+            ->assertOk()
+            ->assertJsonPath('data.delivery.status', 'priced')
+            ->assertJsonPath('data.delivery.area.code', 'inside_dhaka')
+            ->assertJsonPath('data.delivery.area.label', 'Inside Dhaka')
+            ->assertJsonPath('data.delivery.is_free', false)
+            ->assertJsonPath('data.shipping.amount', '80.00')
+            ->assertJsonPath('data.grand_total.amount', '5280.00')
+            ->assertJsonMissingPath('data.delivery.rule');
+
+        websiteOrderSubmit(storefrontDeliveryBody($this->inside, '80.00'))->assertCreated()
+            ->assertJsonPath('totals.shipping.amount', '80.00');
+
+        $order = websiteTestOrders()->sole();
+
+        expect($order->delivery->toDecimal())->toBe('80.00')
+            ->and($order->delivery_area)->toBe(DeliveryArea::InsideDhaka)
+            ->and($order->delivery_district_id)->toBe($this->geo['dhaka']->id)
+            ->and($order->delivery_fee_rule_id)->toBe(FeeRule::query()->where('fee_type', FeeType::CustomerDeliveryInsideDhaka->value)->value('id'))
+            ->and($order->delivery_tax?->toDecimal())->toBe('0.00')
+            ->and($order->total->toDecimal())->toBe('5280.00')
+            ->and($order->payment?->amount->toDecimal())->toBe('5280.00');
+    });
+
+    it('charges Outside Dhaka for another district of Dhaka division', function () {
+        websiteOrderQuote(['delivery' => ['area_id' => $this->gazipur]])
+            ->assertOk()
+            ->assertJsonPath('data.delivery.area.code', 'outside_dhaka')
+            ->assertJsonPath('data.shipping.amount', '60.00');
+
+        websiteOrderSubmit(storefrontDeliveryBody($this->gazipur, '60.00'))->assertCreated();
+
+        expect(websiteTestOrders()->sole()->delivery_area)->toBe(DeliveryArea::OutsideDhaka);
+    });
+
+    it('prices only the goods until there is an address, and never places an order without one', function () {
+        websiteOrderQuote(['delivery' => ['area_id' => null]])
+            ->assertOk()
+            ->assertJsonPath('data.subtotal.amount', '5200.00')
+            ->assertJsonPath('data.shipping', null)
+            ->assertJsonPath('data.grand_total', null)
+            ->assertJsonPath('data.delivery.status', 'address_required')
+            ->assertJsonPath('data.payment.cod.eligible', false);
+
+        websiteOrderSubmit(['shipping_address' => ['area_id' => null]])
+            ->assertUnprocessable()
+            ->assertJsonPath('error.code', 'delivery_address_required');
+
+        expect(websiteTestOrders()->exists())->toBeFalse();
+    });
+
+    it('refuses an address that stops above its district', function () {
+        $division = DeliveryAreas::publicId($this->geo['dhaka_division']);
+
+        websiteOrderQuote(['delivery' => ['area_id' => $division]])
+            ->assertUnprocessable()
+            ->assertJsonPath('error.code', 'delivery_address_required');
+
+        websiteOrderSubmit(storefrontDeliveryBody($division, '80.00'))
+            ->assertUnprocessable()
+            ->assertJsonPath('error.code', 'delivery_address_required');
+    });
+
+    it('fails closed when the area has no rate: "Delivery charge is not configured"', function () {
+        FeeRule::query()->where('fee_type', FeeType::CustomerDeliveryInsideDhaka->value)->update(['is_active' => false]);
+
+        websiteOrderQuote(['delivery' => ['area_id' => $this->inside]])
+            ->assertStatus(409)
+            ->assertJsonPath('error.code', 'website_not_accepting_orders')
+            ->assertJsonPath('error.details.reason', 'delivery_not_configured');
+
+        websiteOrderSubmit(storefrontDeliveryBody($this->inside, '80.00'))
+            ->assertStatus(409)
+            ->assertJsonPath('error.message', 'Delivery charge is not configured. Please try again later.');
+
+        expect(websiteTestOrders()->exists())->toBeFalse();
+    });
+
+    it('ignores what the storefront claims for delivery: a different figure is refused with the real one', function () {
+        websiteOrderSubmit(storefrontDeliveryBody($this->inside, '0.00'))
+            ->assertUnprocessable()
+            ->assertJsonPath('error.code', 'price_mismatch')
+            ->assertJsonPath('error.details.authoritative.shipping.amount', '80.00')
+            ->assertJsonPath('error.details.authoritative.delivery.area.code', 'inside_dhaka');
+
+        expect(websiteTestOrders()->exists())->toBeFalse();
+    });
+
+    it('places exactly what the quote said', function () {
+        $quote = websiteOrderQuote(['delivery' => ['area_id' => $this->inside]])->assertOk();
+
+        websiteOrderSubmit([...websiteOrderFromQuote($quote), 'shipping_address' => ['area_id' => $this->inside]])->assertCreated();
+
+        expect(websiteTestOrders()->sole()->total->toDecimal())->toBe($quote->json('data.grand_total.amount'));
+    });
+
+    it('refuses an order whose rate changed after the quote, with the new figures', function () {
+        $quote = websiteOrderQuote(['delivery' => ['area_id' => $this->inside]])->assertOk();
+
+        app(ManageDeliveryCharges::class)->set(User::factory()->create(), FeeType::CustomerDeliveryInsideDhaka, Money::fromDecimal('100.00'));
+
+        websiteOrderSubmit([...websiteOrderFromQuote($quote), 'shipping_address' => ['area_id' => $this->inside]])
+            ->assertUnprocessable()
+            ->assertJsonPath('error.code', 'price_mismatch')
+            ->assertJsonPath('error.details.authoritative.shipping.amount', '100.00')
+            ->assertJsonPath('error.details.authoritative.grand_total.amount', '5300.00');
+
+        expect(websiteTestOrders()->exists())->toBeFalse();
+    });
+
+    it('charges once per order, whatever the quantity', function () {
+        websiteOrderQuote(['delivery' => ['area_id' => $this->gazipur], 'items' => [['sku' => $this->selection->product->sku, 'quantity' => 7]]])
+            ->assertOk()
+            ->assertJsonPath('data.shipping.amount', '60.00')
+            ->assertJsonPath('data.grand_total.amount', '18260.00');
+    });
+});
 
 describe('taking the order', function () {
     it('takes a submitted order, prices it, holds its stock and opens its payment', function () {
@@ -772,6 +924,8 @@ function websiteOrderQuote(array $body = [], ?array $credential = null): TestRes
     return storefrontCall($record, $secret, 'checkout/quote', method: 'POST', body: (string) json_encode([
         'items' => [['sku' => test()->selection->product->sku, 'quantity' => 2]],
         'payment_method' => 'online',
+        // A complete quote needs where the order goes (D37).
+        'delivery' => ['area_id' => deliveryTestAreaId()],
         ...$body,
     ]), overrides: ['headers' => ['Content-Type' => 'application/json']]);
 }
@@ -815,7 +969,8 @@ describe('the checkout quote (P2 H1–H3)', function () {
             ->assertJsonPath('data.tax.amount', '0.00')
             ->assertJsonPath('data.grand_total.amount', '5260.00')
             ->assertJsonPath('data.grand_total.minor_units', 526000)
-            ->assertJsonPath('data.delivery.basis', 'flat')
+            ->assertJsonPath('data.delivery.basis', 'area')
+            ->assertJsonPath('data.delivery.area.code', 'outside_dhaka')
             ->assertJsonPath('data.items.0.availability.reservable', true)
             ->assertJsonPath('data.payment.methods', ['online']);
 
@@ -994,8 +1149,12 @@ describe('delivery areas (P2 H4)', function () {
     });
 
     it('accepts a known area on a quote and an order, and refuses an unknown one', function () {
+        // District 26 is Dhaka district: the Inside Dhaka rate (D37).
+        deliveryTestRate(FeeType::CustomerDeliveryInsideDhaka, '60.00');
+
         websiteOrderQuote(['delivery' => ['area_id' => 'district:3:26']])->assertOk()
             ->assertJsonPath('data.delivery.area_id', 'district:3:26')
+            ->assertJsonPath('data.delivery.area.code', 'inside_dhaka')
             ->assertJsonPath('data.shipping.amount', '60.00');
 
         websiteOrderQuote(['delivery' => ['area_id' => 'district:3:27']])->assertStatus(422)->assertJsonPath('error.code', 'validation_failed');

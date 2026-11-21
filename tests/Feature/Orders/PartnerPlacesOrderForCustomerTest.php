@@ -1,7 +1,12 @@
 <?php
 
+use App\Domain\Access\Enums\PlatformRole;
+use App\Domain\Billing\Actions\ManageDeliveryCharges;
+use App\Domain\Billing\Enums\DeliveryArea;
 use App\Domain\Billing\Enums\FeeType;
+use App\Domain\Billing\Models\FeeRule;
 use App\Domain\Inventory\Models\Warehouse;
+use App\Domain\Location\Models\BdLocation;
 use App\Domain\Order\Enums\OrderSource;
 use App\Domain\Order\Enums\OrderStatus;
 use App\Domain\Order\Models\Order;
@@ -20,8 +25,11 @@ use App\Support\Money\Currency;
 use App\Support\Money\Money;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Testing\TestResponse;
 use Inertia\Testing\AssertableInertia as Assert;
 
 /*
@@ -136,6 +144,149 @@ function partnerOrderTestCode(): string
 
     return (string) end($matches[1]);
 }
+
+/** The manual-entry quote for two of the default selection, to `$district` when given. */
+function partnerOrderTestQuote(?BdLocation $district = null, ?BdLocation $division = null): TestResponse
+{
+    return test()->actingAs(test()->partner)->postJson(route('store-orders.quote'), array_filter([
+        'storefront' => test()->website->public_id,
+        'items' => [['sku' => test()->selection->product->sku, 'quantity' => 2]],
+        'division_id' => $division?->id,
+        'district_id' => $district?->id,
+    ], fn ($value) => $value !== null));
+}
+
+describe('the delivery charge (D37)', function () {
+    beforeEach(function () {
+        // Outside Dhaka is the ৳60 rule set above; Inside Dhaka ৳80.
+        deliveryTestRate(FeeType::CustomerDeliveryInsideDhaka, '80.00');
+        $this->geo = deliveryTestDhakaGeography();
+    });
+
+    it('charges Outside Dhaka once, freezes how it was reached, and collects it on delivery', function () {
+        $this->actingAs($this->partner)->post(route('store-orders.store'), partnerOrderTestBody([
+            // Five pieces still pay one delivery charge.
+            'items' => [['sku' => $this->selection->product->sku, 'quantity' => 5]],
+        ]))->assertSessionHasNoErrors();
+
+        $order = partnerOrderTestOrders()->sole();
+
+        expect($order->delivery->toDecimal())->toBe('60.00')
+            ->and($order->subtotal->toDecimal())->toBe('13000.00')
+            ->and($order->total->toDecimal())->toBe('13060.00')
+            ->and($order->delivery_area)->toBe(DeliveryArea::OutsideDhaka)
+            ->and($order->delivery_district_id)->toBe($this->chain['district']->id)
+            ->and($order->delivery_fee_rule_id)->toBe(FeeRule::query()->where('fee_type', FeeType::WebsiteDelivery->value)->value('id'))
+            ->and($order->delivery_tax?->toDecimal())->toBe('0.00')
+            ->and($order->delivery_tax_mode)->not->toBeNull()
+            // Cash on delivery collects the whole total, delivery included.
+            ->and($order->payment?->amount->toDecimal())->toBe('13060.00');
+    });
+
+    it('charges Inside Dhaka for an address in Dhaka district', function () {
+        $this->actingAs($this->partner)->post(route('store-orders.store'), partnerOrderTestBody([
+            'division_id' => $this->geo['dhaka_division']->id,
+            'district_id' => $this->geo['dhaka']->id,
+            'upazila_id' => $this->geo['dhaka_north']->id,
+            'union_id' => null,
+        ]))->assertSessionHasNoErrors();
+
+        $order = partnerOrderTestOrders()->sole();
+
+        expect($order->delivery->toDecimal())->toBe('80.00')
+            ->and($order->total->toDecimal())->toBe('5280.00')
+            ->and($order->delivery_area)->toBe(DeliveryArea::InsideDhaka);
+    });
+
+    it('quotes the goods until a district is picked, then the area and its charge', function () {
+        partnerOrderTestQuote()
+            ->assertOk()
+            ->assertJsonPath('data.subtotal.amount', '5200.00')
+            ->assertJsonPath('data.delivery', null)
+            ->assertJsonPath('data.total', null);
+
+        partnerOrderTestQuote($this->geo['dhaka'], $this->geo['dhaka_division'])
+            ->assertOk()
+            ->assertJsonPath('data.delivery.amount', '80.00')
+            ->assertJsonPath('data.delivery_area.code', 'inside_dhaka')
+            ->assertJsonPath('data.total.amount', '5280.00');
+
+        partnerOrderTestQuote($this->geo['gazipur'], $this->geo['dhaka_division'])
+            ->assertOk()
+            ->assertJsonPath('data.delivery_area.code', 'outside_dhaka')
+            ->assertJsonPath('data.total.amount', '5260.00');
+
+        // A district that does not belong to the division picked is refused.
+        partnerOrderTestQuote($this->geo['chattogram'], $this->geo['dhaka_division'])->assertJsonValidationErrors('district_id');
+    });
+
+    it('shows and charges a rate set to zero as free delivery', function () {
+        app(ManageDeliveryCharges::class)->set(testPlatformStaff(PlatformRole::SuperAdmin), FeeType::WebsiteDelivery, Money::fromDecimal('0.00'));
+
+        partnerOrderTestQuote($this->chain['district'])
+            ->assertOk()
+            ->assertJsonPath('data.delivery.amount', '0.00')
+            ->assertJsonPath('data.delivery_free', true);
+
+        $this->actingAs($this->partner)->post(route('store-orders.store'), partnerOrderTestBody());
+
+        expect(partnerOrderTestOrders()->sole()->hasFreeDelivery())->toBeTrue();
+    });
+
+    it('ignores a delivery charge the browser sends', function () {
+        $this->actingAs($this->partner)->post(route('store-orders.store'), partnerOrderTestBody([
+            'delivery' => '0.00', 'shipping' => '0.00', 'total' => '1.00',
+        ]));
+
+        expect(partnerOrderTestOrders()->sole()->delivery->toDecimal())->toBe('60.00');
+    });
+
+    it('fails closed when the area has no rate', function () {
+        FeeRule::query()->where('fee_type', FeeType::WebsiteDelivery->value)->update(['is_active' => false]);
+
+        partnerOrderTestQuote($this->chain['district'])->assertJsonValidationErrors('items');
+
+        $this->actingAs($this->partner)
+            ->post(route('store-orders.store'), partnerOrderTestBody())
+            ->assertSessionHasErrors(['items' => 'Delivery charge is not configured. Please try again later.']);
+
+        expect(partnerOrderTestOrders()->exists())->toBeFalse();
+    });
+
+    it('asks the partner to look again when the total moved since they saw it', function () {
+        $this->actingAs($this->partner)
+            ->post(route('store-orders.store'), partnerOrderTestBody(['expected_total' => '5200.00']))
+            ->assertSessionHasErrors(['expected_total' => __('store_orders.create.total_changed')]);
+
+        expect(partnerOrderTestOrders()->exists())->toBeFalse();
+
+        $this->actingAs($this->partner)
+            ->post(route('store-orders.store'), partnerOrderTestBody(['expected_total' => '5260.00']))
+            ->assertSessionHasNoErrors();
+
+        expect(partnerOrderTestOrders()->count())->toBe(1);
+    });
+
+    it('keeps an order\'s delivery charge when the rate changes afterwards', function () {
+        $this->actingAs($this->partner)->post(route('store-orders.store'), partnerOrderTestBody());
+        $order = partnerOrderTestOrders()->sole();
+
+        app(ManageDeliveryCharges::class)->set(testPlatformStaff(PlatformRole::SuperAdmin), FeeType::WebsiteDelivery, Money::fromDecimal('90.00'));
+
+        $order->refresh();
+
+        expect($order->delivery->toDecimal())->toBe('60.00')
+            ->and($order->total->toDecimal())->toBe('5260.00')
+            ->and($order->delivery_area)->toBe(DeliveryArea::OutsideDhaka)
+            // Its own savepoint, so the refused update does not abort the test's transaction.
+            ->and(fn () => DB::transaction(fn () => $order->forceFill(['delivery_area' => DeliveryArea::InsideDhaka])->save()))->toThrow(QueryException::class);
+
+        // The next order pays the new rate.
+        $this->actingAs($this->partner)->post(route('store-orders.store'), partnerOrderTestBody(['token' => (string) Str::uuid()]));
+
+        expect(partnerOrderTestOrders()->latest('id')->first()->delivery->toDecimal())->toBe('90.00');
+    });
+});
 
 describe('placing the order', function () {
     it('takes a cash-on-delivery order at the ERP\'s own price and holds the stock', function () {
@@ -257,6 +408,7 @@ describe('what the form is told', function () {
         $this->actingAs($this->partner)->postJson(route('store-orders.quote'), [
             'storefront' => $this->website->public_id,
             'items' => [['sku' => $this->selection->product->sku, 'quantity' => 2]],
+            'district_id' => $this->chain['district']->id,
             'total' => '1.00',
         ])->assertOk()
             ->assertJsonPath('data.subtotal.amount', '5200.00')
@@ -268,6 +420,7 @@ describe('what the form is told', function () {
         $this->actingAs($this->partner)->postJson(route('store-orders.quote'), [
             'storefront' => $this->website->public_id,
             'items' => [['sku' => $this->selection->product->sku, 'quantity' => 2]],
+            'district_id' => $this->chain['district']->id,
             'discount' => '200.00',
         ])->assertOk()
             ->assertJsonPath('data.discount.amount', '200.00')

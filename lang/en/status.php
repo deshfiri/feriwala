@@ -11,6 +11,10 @@
  */
 
 return [
+    'delivery_area' => [
+        'inside_dhaka' => 'Inside Dhaka',
+        'outside_dhaka' => 'Outside Dhaka',
+    ],
     'account' => [
         'registered' => 'Registered',
         'mobile_verification_pending' => 'Mobile verification pending',

@@ -1,6 +1,6 @@
 import { useForm, useHttp } from '@inertiajs/react';
 import { Plus, Trash2 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
 import LocationPicker from '@/components/address-book/location-picker';
 import type { LocationChain } from '@/components/address-book/location-picker';
@@ -34,9 +34,15 @@ type Quote = {
     }[];
     subtotal: Money;
     discount: Money;
-    delivery: Money;
+    /** Null until a district is picked: the charge depends on it (D37). */
+    delivery: Money | null;
+    /** Inside or Outside Dhaka, from the picked district; never worked out here. */
+    delivery_area: { code: string; label: string } | null;
+    /** A rule set the delivery charge to zero on purpose. */
+    delivery_free: boolean;
     tax: Money;
-    total: Money;
+    /** Null until the delivery charge is known. */
+    total: Money | null;
 };
 
 type Line = { sku: string; label: string | null; quantity: string };
@@ -106,9 +112,22 @@ export default function NewStoreOrderDialog({
             storefront: string;
             discount: string;
             items: { sku: string; quantity: number }[];
+            division_id: number | '';
+            district_id: number | '';
         },
         { data: Quote }
-    >({ storefront: '', discount: '', items: [] });
+    >({
+        storefront: '',
+        discount: '',
+        items: [],
+        division_id: '',
+        district_id: '',
+    });
+    // Each quote request is numbered; only the newest one's answer is shown,
+    // so a slow earlier answer can never overwrite a later one.
+    const quoteSequence = useRef(0);
+    // Bumped to ask for a fresh quote when placing found the total had moved.
+    const [requote, setRequote] = useState(0);
 
     const errors = form.errors as Record<string, string | undefined>;
     const quoteErrors = quoting.errors as Record<string, string | undefined>;
@@ -133,7 +152,11 @@ export default function NewStoreOrderDialog({
         [urls.products, storefront],
     );
 
-    // The price: asked of the server whenever what is being bought changes.
+    const divisionId = place?.division?.id ?? '';
+    const districtId = place?.district?.id ?? '';
+
+    // The price: asked of the server whenever what is bought, or where it
+    // goes, changes. The district decides the delivery charge (D37).
     useEffect(() => {
         if (!open || storefront === '' || picked.length === 0) {
             return;
@@ -143,22 +166,43 @@ export default function NewStoreOrderDialog({
             storefront,
             discount: discountText,
             items: picked,
+            division_id: divisionId,
+            district_id: districtId,
         }));
+
+        const sequence = ++quoteSequence.current;
 
         const timer = window.setTimeout(async () => {
             try {
                 const answer = await quoting.post(urls.quote);
-                setQuote(answer.data);
+
+                if (sequence === quoteSequence.current) {
+                    setQuote(answer.data);
+                }
             } catch {
-                setQuote(null);
+                if (sequence === quoteSequence.current) {
+                    setQuote(null);
+                }
             }
         }, 300);
 
         return () => window.clearTimeout(timer);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [open, storefront, pickedKey, discountText]);
+    }, [
+        open,
+        storefront,
+        pickedKey,
+        discountText,
+        divisionId,
+        districtId,
+        requote,
+    ]);
 
     const shownQuote = picked.length === 0 ? null : quote;
+    // Ready to place only on a complete, current quote: delivery included and
+    // no newer quote still on its way.
+    const quoteReady =
+        shownQuote !== null && shownQuote.total !== null && !quoting.processing;
 
     const setLine = (index: number, patch: Partial<Line>) =>
         setLines((previous) =>
@@ -191,9 +235,19 @@ export default function NewStoreOrderDialog({
             upazila_id: place?.upazila?.id ?? '',
             union_id: place?.union?.id ?? '',
             items: picked,
+            // Only compared by the server: a different total asks the
+            // Partner to look again instead of placing a figure they did not see.
+            expected_total: shownQuote?.total?.amount ?? '',
         }));
 
-        form.post(urls.store, { preserveScroll: true });
+        form.post(urls.store, {
+            preserveScroll: true,
+            onError: (formErrors) => {
+                if ('expected_total' in formErrors) {
+                    setRequote((count) => count + 1);
+                }
+            },
+        });
     };
 
     const field = (
@@ -507,14 +561,26 @@ export default function NewStoreOrderDialog({
                                             </dd>
                                         </div>
                                     )}
-                                    <div className="flex justify-between">
+                                    <div className="flex justify-between gap-3">
                                         <dt className="text-muted-foreground">
                                             {t('store_orders.create.delivery')}
+                                            {shownQuote.delivery_area &&
+                                                ` (${shownQuote.delivery_area.label})`}
                                         </dt>
-                                        <dd>
-                                            <MoneyAmount
-                                                amount={shownQuote.delivery}
-                                            />
+                                        <dd className="text-end">
+                                            {shownQuote.delivery === null ? (
+                                                <span className="text-muted-foreground text-xs">
+                                                    {t(
+                                                        'store_orders.create.delivery_pick_place',
+                                                    )}
+                                                </span>
+                                            ) : shownQuote.delivery_free ? (
+                                                t('delivery_charges.free')
+                                            ) : (
+                                                <MoneyAmount
+                                                    amount={shownQuote.delivery}
+                                                />
+                                            )}
                                         </dd>
                                     </div>
                                     <div className="flex justify-between">
@@ -527,19 +593,27 @@ export default function NewStoreOrderDialog({
                                             />
                                         </dd>
                                     </div>
-                                    <div className="flex items-center justify-between border-t pt-3 font-semibold">
-                                        <dt>
-                                            {t('store_orders.create.total')}
-                                        </dt>
-                                        <dd>
-                                            <MoneyAmount
-                                                amount={shownQuote.total}
-                                                size="large"
-                                            />
-                                        </dd>
-                                    </div>
+                                    {shownQuote.total !== null && (
+                                        <div className="flex items-center justify-between border-t pt-3 font-semibold">
+                                            <dt>
+                                                {t('store_orders.create.total')}
+                                            </dt>
+                                            <dd>
+                                                <MoneyAmount
+                                                    amount={shownQuote.total}
+                                                    size="large"
+                                                />
+                                            </dd>
+                                        </div>
+                                    )}
                                 </dl>
                             )}
+                            <InputError
+                                message={
+                                    errors.expected_total ??
+                                    quoteErrors.district_id
+                                }
+                            />
 
                             <div className="grid gap-1.5">
                                 <Label htmlFor="new-order-note">
@@ -574,7 +648,8 @@ export default function NewStoreOrderDialog({
                                         form.processing ||
                                         storefront === '' ||
                                         picked.length === 0 ||
-                                        place?.upazila == null
+                                        place?.upazila == null ||
+                                        !quoteReady
                                     }
                                     data-test="place-store-order"
                                 >

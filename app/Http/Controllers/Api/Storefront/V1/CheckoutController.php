@@ -78,8 +78,9 @@ class CheckoutController extends StorefrontController
         }
 
         $areaId = $input['delivery']['area_id'] ?? null;
+        $location = $areaId === null ? null : $this->areas->find($areaId);
 
-        if ($areaId !== null && $this->areas->find($areaId) === null) {
+        if ($areaId !== null && $location === null) {
             return $this->noStore(StorefrontError::respond($request, 422, 'validation_failed', 'No such delivery area.', [
                 'field' => 'delivery.area_id',
             ]));
@@ -90,7 +91,10 @@ class CheckoutController extends StorefrontController
             $this->rules->assertPaymentRequest($website, $input['payment_method']);
             $this->rules->assertNoCoupon($input['coupon_code'] ?? null);
 
-            $quote = $this->pricing->quote($website, $items);
+            // With a delivery area the quote is complete, delivery and grand
+            // total included (D37). Without one the goods are priced and the
+            // delivery says an address is needed.
+            $quote = $this->pricing->quote($website, $items, null, null, $location);
         } catch (WebsiteOrderRefused $refused) {
             return $this->noStore(StorefrontError::respond($request, $refused->status, $refused->errorCode, $refused->getMessage(), $refused->details));
         }
@@ -127,15 +131,19 @@ class CheckoutController extends StorefrontController
                 'tax' => $authoritative['tax'],
                 'tax_included' => $quote->tax->includedTotal()->jsonSerialize(),
                 'grand_total' => $authoritative['grand_total'],
+                // How delivery was priced, for the customer to see: the area
+                // (Inside or Outside Dhaka) and whether it is free, or that an
+                // address is still needed. Never a rule id (D37).
                 'delivery' => [
-                    'basis' => 'flat',
+                    'basis' => 'area',
                     'area_id' => $areaId,
+                    ...$authoritative['delivery'],
                 ],
                 'payment' => [
                     'methods' => $this->rules->paymentMethods($website, $quote->currency),
                     'cod' => [
                         'enabled' => $codEnabled,
-                        'eligible' => $this->rules->codAllows($website, $quote->total),
+                        'eligible' => $quote->isDeliveryPriced() && $this->rules->codAllows($website, $quote->total),
                         'maximum' => $codEnabled ? $codMaximum?->jsonSerialize() : null,
                     ],
                 ],

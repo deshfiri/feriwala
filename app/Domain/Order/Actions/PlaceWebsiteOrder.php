@@ -6,6 +6,7 @@ use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Billing\Actions\RecordPaymentFromQuote;
 use App\Domain\Billing\Actions\RecordPaymentLog;
 use App\Domain\Billing\Enums\PaymentPurpose;
+use App\Domain\Billing\Exceptions\DeliveryChargeRefused;
 use App\Domain\Billing\Models\Payment;
 use App\Domain\Billing\Models\PaymentLog;
 use App\Domain\Catalog\Models\ProductAttributeValue;
@@ -172,21 +173,17 @@ class PlaceWebsiteOrder
             throw WebsiteOrderRefused::keyReused();
         }
 
-        $quote = $this->pricing->quote($website, $submission->items, null, $submission->sellerDiscount);
-
-        if (! $quote->matches($submission->claimedUnitPrices, $submission->claimedTotals)) {
-            throw WebsiteOrderRefused::priceMismatch(
-                $quote->authoritative(),
-                $submission->claimedTotals['grand_total'],
-            );
-        }
-
-        if (! $quote->total->isPositive()) {
-            throw WebsiteOrderRefused::priceMismatch($quote->authoritative(), $submission->claimedTotals['grand_total']);
-        }
-
         try {
-            $order = $this->database->transaction(fn () => $this->write($website, $submission, $quote, $key));
+            // Priced again inside the transaction that writes the order: the
+            // products, the quantity, the delivery address's district and the
+            // delivery rate in force (D37) are the ones the order is written
+            // with, and a claim that no longer matches them is refused with the
+            // fresh figures, never placed at a different amount.
+            $order = $this->database->transaction(function () use ($website, $submission, $key) {
+                $quote = $this->authoritativeQuote($website, $submission);
+
+                return $this->write($website, $submission, $quote, $key);
+            });
 
             // The customer is asked to confirm only once the order is real —
             // and only where the shop (or the platform) asks for a code at all.
@@ -209,6 +206,31 @@ class PlaceWebsiteOrder
         }
 
         return [$order, true];
+    }
+
+    /**
+     * The order priced from the ERP's own data, held to the claim it came with.
+     *
+     * The submission's figures are only compared, never used: the delivery
+     * charge in particular comes from the address's district (D37), and an order
+     * with no resolvable delivery location is refused rather than priced
+     * without delivery.
+     *
+     * @throws WebsiteOrderRefused
+     */
+    protected function authoritativeQuote(Website $website, WebsiteOrderSubmission $submission): WebsiteOrderQuote
+    {
+        $quote = $this->pricing->quote($website, $submission->items, null, $submission->sellerDiscount, $submission->deliveryLocation);
+
+        if (! $quote->isDeliveryPriced()) {
+            throw WebsiteOrderRefused::fromDeliveryCharge(DeliveryChargeRefused::addressUnresolved());
+        }
+
+        if (! $quote->matches($submission->claimedUnitPrices, $submission->claimedTotals) || ! $quote->total->isPositive()) {
+            throw WebsiteOrderRefused::priceMismatch($quote->authoritative(), $submission->claimedTotals['grand_total']);
+        }
+
+        return $quote;
     }
 
     /**
@@ -344,6 +366,13 @@ class PlaceWebsiteOrder
             'subtotal' => $quote->subtotal,
             'discount' => $quote->discount,
             'delivery' => $quote->delivery,
+            // How the delivery charge was arrived at, frozen (D37): a later
+            // change to a rate never reaches an order already placed.
+            'delivery_area' => $quote->deliveryCharge?->area->value,
+            'delivery_district_id' => $quote->deliveryCharge?->district->id,
+            'delivery_fee_rule_id' => $quote->deliveryCharge?->rule->id,
+            'delivery_tax' => $quote->deliveryTax->tax,
+            'delivery_tax_mode' => $quote->deliveryTax->mode->value,
             'tax' => $quote->tax->addedTotal(),
             'tax_included' => $quote->tax->includedTotal(),
             'cod_fee' => Money::zero($quote->currency),

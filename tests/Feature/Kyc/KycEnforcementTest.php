@@ -90,6 +90,8 @@ function enforcementTestPlaceOrder(): array
     $unit = Money::fromDecimal('1300.00', Currency::BDT);
 
     return app(PlaceWebsiteOrder::class)->handle(test()->website, new WebsiteOrderSubmission(
+
+        deliveryLocation: deliveryTestLocation(),
         reference: 'SF-'.Str::upper(Str::random(8)),
         idempotencyKey: (string) Str::uuid(),
         customer: new WebsiteCustomerDetails(name: 'Karim Hossain', mobile: '+8801'.random_int(100000000, 999999999)),

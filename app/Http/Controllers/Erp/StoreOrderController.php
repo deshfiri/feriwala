@@ -4,10 +4,13 @@ namespace App\Http\Controllers\Erp;
 
 use App\Concerns\ResolvesBusinessAccount;
 use App\Domain\Account\Exceptions\ResendTooSoon;
+use App\Domain\Billing\Exceptions\DeliveryChargeRefused;
 use App\Domain\Cases\Queries\CaseLinks;
 use App\Domain\Cases\Queries\PartnerCasePayload;
 use App\Domain\Courier\Queries\StoreOrderCourierPanel;
 use App\Domain\Damage\Queries\DamageReportEligibility;
+use App\Domain\Location\Enums\BdLocationType;
+use App\Domain\Location\Models\BdLocation;
 use App\Domain\Location\Queries\DeliveryLocationSnapshot;
 use App\Domain\Order\Actions\CancelStoreOrder;
 use App\Domain\Order\Actions\ConfirmCodOrder;
@@ -197,15 +200,24 @@ class StoreOrderController extends Controller
             'items.*.sku' => ['required', 'string', 'max:64'],
             'items.*.quantity' => ['required', 'integer', 'min:1', 'max:10000'],
             'discount' => ['nullable', new DecimalAmountRule],
+            // The place picked so far: the delivery charge is priced from its
+            // district (D37) once one is chosen.
+            'division_id' => ['nullable', 'integer'],
+            'district_id' => ['nullable', 'integer'],
         ]);
 
         $website = $this->managedWebsite($request, $validated['storefront']);
+        $district = $this->pickedDistrict($validated['division_id'] ?? null, $validated['district_id'] ?? null);
 
         try {
-            $quote = $this->place->quote($website, $validated['items'], $this->discountFrom($website, $validated['discount'] ?? null));
+            $quote = $this->place->quote($website, $validated['items'], $this->discountFrom($website, $validated['discount'] ?? null), $district);
         } catch (WebsiteOrderRefused $refused) {
             throw ValidationException::withMessages([
-                ($refused->errorCode === 'discount_too_large' ? 'discount' : 'items') => $refused->getMessage(),
+                match ($refused->errorCode) {
+                    'discount_too_large' => 'discount',
+                    DeliveryChargeRefused::ADDRESS_UNRESOLVED => 'district_id',
+                    default => 'items',
+                } => $refused->getMessage(),
             ]);
         }
 
@@ -219,10 +231,39 @@ class StoreOrderController extends Controller
             ], $quote->lines),
             'subtotal' => $quote->subtotal->jsonSerialize(),
             'discount' => $quote->discount->jsonSerialize(),
-            'delivery' => $quote->delivery->jsonSerialize(),
+            // Until a district is picked there is no delivery charge and no
+            // total to show (D37): the form asks for the place instead.
+            'delivery' => $quote->isDeliveryPriced() ? $quote->delivery->jsonSerialize() : null,
+            'delivery_area' => $quote->deliverySummary()['area'],
+            'delivery_free' => $quote->deliveryCharge?->isFree() ?? false,
             'tax' => $quote->tax->addedTotal()->jsonSerialize(),
-            'total' => $quote->total->jsonSerialize(),
+            'total' => $quote->isDeliveryPriced() ? $quote->total->jsonSerialize() : null,
         ]]);
+    }
+
+    /**
+     * The district a half-filled form has picked, checked against the
+     * directory (and against its division, when one is picked). Null while none
+     * is; refused when the pair does not belong together.
+     */
+    protected function pickedDistrict(?int $divisionId, ?int $districtId): ?BdLocation
+    {
+        if ($districtId === null) {
+            return null;
+        }
+
+        $district = BdLocation::query()
+            ->ofType(BdLocationType::District)
+            ->where('id', $districtId)
+            ->where('is_active', true)
+            ->when($divisionId !== null, fn ($query) => $query->where('parent_id', $divisionId))
+            ->first();
+
+        if ($district === null) {
+            throw ValidationException::withMessages(['district_id' => __('store_orders.create.bad_location')]);
+        }
+
+        return $district;
     }
 
     /**
@@ -264,14 +305,19 @@ class StoreOrderController extends Controller
                 $validated['token'],
                 $validated['note'] ?? null,
                 $this->discountFrom($website, $validated['discount'] ?? null),
+                // The district of the validated chain prices the delivery (D37).
+                BdLocation::query()->find((int) $shipping['district_id']),
+                isset($validated['expected_total']) ? DecimalAmount::parse($validated['expected_total']) : null,
             );
         } catch (WebsiteOrderRefused $refused) {
             throw ValidationException::withMessages([
                 match ($refused->errorCode) {
                     'invalid_mobile_number' => 'customer_phone',
                     'discount_too_large' => 'discount',
+                    'price_mismatch' => 'expected_total',
+                    DeliveryChargeRefused::ADDRESS_UNRESOLVED => 'district_id',
                     default => 'items',
-                } => $refused->getMessage(),
+                } => $refused->errorCode === 'price_mismatch' ? __('store_orders.create.total_changed') : $refused->getMessage(),
             ]);
         }
 

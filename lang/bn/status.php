@@ -1,6 +1,10 @@
 <?php
 
 return [
+    'delivery_area' => [
+        'inside_dhaka' => 'ঢাকার ভেতরে',
+        'outside_dhaka' => 'ঢাকার বাইরে',
+    ],
     'account' => [
         'registered' => 'নিবন্ধিত',
         'mobile_verification_pending' => 'মোবাইল যাচাইয়ের অপেক্ষায়',

@@ -268,11 +268,14 @@ class OrderController extends StorefrontController
 
         $shipping = $this->address($input['shipping_address']);
 
-        // Kept beside the address only when sent, so an order without one is
-        // written exactly as before. It describes where the order goes; the
-        // delivery charge stays the flat per-package fee (P2 H3, H4).
+        // The structured delivery area, kept beside the address. It is what the
+        // delivery charge is priced from (D37): its district decides Inside or
+        // Outside Dhaka. An order without one is refused at pricing.
+        $location = null;
+
         if (isset($input['shipping_address']['area_id'])) {
             $shipping['area_id'] = (string) $input['shipping_address']['area_id'];
+            $location = $this->areas->find($shipping['area_id']);
         }
 
         return new WebsiteOrderSubmission(
@@ -302,6 +305,7 @@ class OrderController extends StorefrontController
             returnUrl: $input['payment']['return_url'] ?? null,
             couponCode: $input['coupon_code'] ?? null,
             customerNote: $input['customer_note'] ?? null,
+            deliveryLocation: $location,
         );
     }
 

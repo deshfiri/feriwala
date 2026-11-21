@@ -77,6 +77,7 @@ import { index as paymentLog } from '@/routes/admin/payments';
 import { index as referralCommissions } from '@/routes/admin/referral-commissions';
 import { index as referralSettings } from '@/routes/admin/referral-settings';
 import { index as adminCases } from '@/routes/admin/cases';
+import { index as deliveryCharges } from '@/routes/admin/delivery-charges';
 import { index as partnerCases } from '@/routes/cases';
 import { index as myDamages } from '@/routes/damages';
 import { index as roles } from '@/routes/admin/roles';
@@ -528,13 +529,17 @@ export function useNavigation(): {
                       ]
                     : []),
 
-                ...(permissions['order.view'] || canWorkCases
+                ...(permissions['order.view'] ||
+                canWorkCases ||
+                permissions['payment.view']
                     ? [
                           {
                               title: t('nav.sections.orders'),
                               href: permissions['order.view']
                                   ? adminOrders()
-                                  : adminCases(),
+                                  : canWorkCases
+                                    ? adminCases()
+                                    : deliveryCharges(),
                               icon: ClipboardList,
                               items: [
                                   ...(permissions['order.view']
@@ -556,6 +561,18 @@ export function useNavigation(): {
                                             {
                                                 title: t('nav.cases'),
                                                 href: adminCases(),
+                                            },
+                                        ]
+                                      : []),
+                                  // The one delivery charge per order that
+                                  // checkout adds; same permission as Billing.
+                                  ...(permissions['payment.view']
+                                      ? [
+                                            {
+                                                title: t(
+                                                    'nav.delivery_charges',
+                                                ),
+                                                href: deliveryCharges(),
                                             },
                                         ]
                                       : []),

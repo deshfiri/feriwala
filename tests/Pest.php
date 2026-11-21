@@ -44,6 +44,7 @@ use App\Domain\Kyc\Enums\KycStatus;
 use App\Domain\Kyc\Models\KycSubmission;
 use App\Domain\Location\Enums\BdLocationType;
 use App\Domain\Location\Models\BdLocation;
+use App\Domain\Location\Queries\DeliveryAreas;
 use App\Domain\Order\Actions\PlaceWebsiteOrder;
 use App\Domain\Order\Data\WebsiteOrderSubmission;
 use App\Domain\Order\Enums\OrderSource;
@@ -93,6 +94,7 @@ use App\Integrations\Store\Support\ExactJson;
 use App\Models\User;
 use App\Support\Money\Currency;
 use App\Support\Money\Money;
+use Carbon\CarbonInterface;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Database\Eloquent\Builder;
@@ -909,6 +911,103 @@ function supplierTestConnect(Product $product): array
  */
 
 /**
+ * The district every fixture customer order is delivered to (D37): Outside
+ * Dhaka, with an Outside Dhaka rate in force. The rate is an explicit ৳0 dated
+ * a year back unless the test set its own (`websiteTestFee(WebsiteDelivery,
+ * …)`), which wins as the later rule -- so fixtures keep the totals they always
+ * had, and every order still carries a real, resolvable location.
+ */
+function deliveryTestLocation(): BdLocation
+{
+    deliveryTestRate(FeeType::WebsiteDelivery, '0.00', now()->subYear());
+
+    /** @var BdLocation|null $existing */
+    $existing = BdLocation::query()->ofType(BdLocationType::District)->where('source_id', 'delivery-test-district')->first();
+
+    if ($existing !== null) {
+        return $existing;
+    }
+
+    $division = BdLocation::create([
+        'type' => BdLocationType::Division,
+        'source_id' => 'delivery-test-division',
+        'name_en' => 'Delivery Test Division',
+        'name_bn' => 'ডেলিভারি টেস্ট বিভাগ',
+        'is_active' => true,
+    ]);
+
+    return BdLocation::create([
+        'type' => BdLocationType::District,
+        'parent_id' => $division->id,
+        'source_id' => 'delivery-test-district',
+        'source_parent_id' => $division->source_id,
+        'name_en' => 'Delivery Test District',
+        'name_bn' => 'ডেলিভারি টেস্ট জেলা',
+        'is_active' => true,
+    ]);
+}
+
+/**
+ * The storefront `area_id` of {@see deliveryTestLocation()}: what a storefront
+ * sends as `shipping_address.area_id` or `delivery.area_id`.
+ */
+function deliveryTestAreaId(): string
+{
+    return DeliveryAreas::publicId(deliveryTestLocation());
+}
+
+/**
+ * A global delivery rate in force, unless one already is (D37).
+ */
+function deliveryTestRate(FeeType $type, string $amount, ?CarbonInterface $from = null): void
+{
+    if (FeeRule::query()->where('fee_type', $type->value)->whereNull('package_id')->effectiveAt(now()->toImmutable())->exists()) {
+        return;
+    }
+
+    FeeRule::create([
+        'fee_type' => $type->value,
+        'currency_code' => 'BDT',
+        'amount' => Money::fromDecimal($amount),
+        'effective_from' => $from ?? now()->subDay(),
+    ]);
+}
+
+/**
+ * Real-shaped geography for the Inside / Outside Dhaka rule (D37): Dhaka
+ * division with Dhaka district (natural key 26) and its Dhaka North City
+ * Corporation upazila, Gazipur -- another district of Dhaka division -- and
+ * Chattogram district in another division.
+ *
+ * @return array{dhaka_division: BdLocation, dhaka: BdLocation, dhaka_north: BdLocation, gazipur: BdLocation, chattogram_division: BdLocation, chattogram: BdLocation}
+ */
+function deliveryTestDhakaGeography(): array
+{
+    $place = fn (BdLocationType $type, string $source, string $name, ?BdLocation $parent) => BdLocation::create([
+        'type' => $type,
+        'parent_id' => $parent?->id,
+        'source_id' => $source,
+        'source_parent_id' => $parent?->source_id,
+        'name_en' => $name,
+        'name_bn' => $name,
+        'is_active' => true,
+    ]);
+
+    $dhakaDivision = $place(BdLocationType::Division, '30', 'Dhaka', null);
+    $dhaka = $place(BdLocationType::District, '26', 'Dhaka', $dhakaDivision);
+    $chattogramDivision = $place(BdLocationType::Division, '20', 'Chattogram', null);
+
+    return [
+        'dhaka_division' => $dhakaDivision,
+        'dhaka' => $dhaka,
+        'dhaka_north' => $place(BdLocationType::Upazila, '493', 'Dhaka North City Corporation', $dhaka),
+        'gazipur' => $place(BdLocationType::District, '41', 'Gazipur', $dhakaDivision),
+        'chattogram_division' => $chattogramDivision,
+        'chattogram' => $place(BdLocationType::District, '15', 'Chattogram', $chattogramDivision),
+    ];
+}
+
+/**
  * A valid, saved four-level `BdLocation` chain, independent of every other
  * test's — each call mints its own random source ids, so tests may build as
  * many chains as they need without colliding.
@@ -1281,6 +1380,8 @@ function partnerCheckoutPlace(string $method = 'online', ?string $gateway = null
     $shipping = Money::fromDecimal('60.00', Currency::BDT);
 
     [$order] = app(PlaceWebsiteOrder::class)->handle(test()->website, new WebsiteOrderSubmission(
+
+        deliveryLocation: deliveryTestLocation(),
         reference: 'SF-PC-'.Str::upper(Str::random(6)),
         idempotencyKey: (string) Str::uuid(),
         customer: new WebsiteCustomerDetails(name: 'Ayesha Rahman', mobile: '+88017'.random_int(10000000, 99999999)),

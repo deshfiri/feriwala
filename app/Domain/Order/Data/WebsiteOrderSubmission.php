@@ -3,6 +3,7 @@
 namespace App\Domain\Order\Data;
 
 use App\Domain\Inventory\Enums\ReservationKind;
+use App\Domain\Location\Models\BdLocation;
 use App\Domain\Website\Data\WebsiteCustomerDetails;
 use App\Support\Money\Money;
 
@@ -39,6 +40,12 @@ readonly class WebsiteOrderSubmission
         public ?string $customerNote = null,
         /** A discount the seller gives when taking the order for a customer; a storefront's own order has none. */
         public ?Money $sellerDiscount = null,
+        /**
+         * The address's structured location, already resolved from its canonical
+         * id (never its text). The delivery charge is priced from its district
+         * (D37); without one the order is refused.
+         */
+        public ?BdLocation $deliveryLocation = null,
     ) {}
 
     public function isCashOnDelivery(): bool

@@ -36,6 +36,9 @@ class PlaceStoreOrderRequest extends FormRequest
             'postcode' => ['nullable', 'string', 'max:20'],
             'note' => ['nullable', 'string', 'max:1000'],
             'discount' => ['nullable', new DecimalAmountRule],
+            // The total the Partner was shown. Only compared with the ERP's own
+            // figure, never used to price: a difference asks them to look again.
+            'expected_total' => ['nullable', new DecimalAmountRule],
             'items' => ['required', 'array', 'min:1', 'max:100'],
             'items.*.sku' => ['required', 'string', 'max:64'],
             'items.*.quantity' => ['required', 'integer', 'min:1', 'max:10000'],

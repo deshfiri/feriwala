@@ -2,6 +2,7 @@
 
 return [
     'store_orders' => 'Store Orders',
+    'delivery_charges' => 'Delivery Charges',
     'cases' => 'Returns, Exchanges & Damages',
     'returns_exchanges' => 'Returns & Exchanges',
     'my_damages' => 'My Damages',

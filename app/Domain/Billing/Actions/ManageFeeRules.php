@@ -95,11 +95,12 @@ class ManageFeeRules
     }
 
     /**
-     * Close a rule from now, leaving what it priced intact.
+     * Close a rule from now (or from `$at`, so a replacement can open at the
+     * very same instant), leaving what it priced intact.
      */
-    public function close(User $actor, FeeRule $rule): FeeRule
+    public function close(User $actor, FeeRule $rule, ?CarbonImmutable $at = null): FeeRule
     {
-        return $this->database->transaction(function () use ($actor, $rule) {
+        return $this->database->transaction(function () use ($actor, $rule, $at) {
             /** @var FeeRule $locked */
             $locked = FeeRule::query()->lockForUpdate()->findOrFail($rule->id);
 
@@ -111,7 +112,7 @@ class ManageFeeRules
                 'is_active' => false,
                 // Dated as well as deactivated, so a quote resolved against an
                 // earlier moment still finds it in force then.
-                'effective_until' => $locked->effective_until ?? now(),
+                'effective_until' => $locked->effective_until ?? $at ?? now(),
             ])->save();
 
             $this->audit->handle(new AuditEntry(

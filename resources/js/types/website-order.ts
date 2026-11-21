@@ -89,6 +89,10 @@ export type WebsiteOrderDetail = WebsiteOrderRow & {
         subtotal: Money;
         discount: Money;
         delivery: Money;
+        /** A delivery-charge rule set it to zero on purpose. */
+        delivery_free: boolean;
+        /** The area the frozen charge was priced for, already translated. */
+        delivery_area: string | null;
         tax: Money;
         total: Money;
     };

@@ -257,9 +257,17 @@ export default function WebsiteOrder({
                             <div key={key} className="flex justify-between">
                                 <dt className="text-muted-foreground">
                                     {t(`website.orders.totals.${key}`)}
+                                    {key === 'delivery' &&
+                                        order.totals.delivery_area &&
+                                        ` (${order.totals.delivery_area})`}
                                 </dt>
                                 <dd>
-                                    <MoneyAmount amount={amount} />
+                                    {key === 'delivery' &&
+                                    order.totals.delivery_free ? (
+                                        t('delivery_charges.free')
+                                    ) : (
+                                        <MoneyAmount amount={amount} />
+                                    )}
                                 </dd>
                             </div>
                         ))}
