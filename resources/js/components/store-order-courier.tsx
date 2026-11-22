@@ -12,6 +12,8 @@ import type { StatusTone } from '@/lib/status';
 
 export type StaffCourierData = {
     enabled: boolean;
+    /** On in Settings; enabled is false despite it only when this server has not loaded Steadfast. */
+    switched_on?: boolean;
     booking: {
         id: string;
         status: 'pending' | 'booked' | 'failed' | 'uncertain';
@@ -119,7 +121,11 @@ export function StaffCourierPanel({ courier }: { courier: StaffCourierData }) {
             <div className="space-y-4">
                 {!courier.enabled && !shipment && (
                     <p className="text-muted-foreground text-sm">
-                        {t('steadfast.panel.disabled')}
+                        {t(
+                            courier.switched_on
+                                ? 'steadfast.panel.not_loaded'
+                                : 'steadfast.panel.disabled',
+                        )}
                     </p>
                 )}
 

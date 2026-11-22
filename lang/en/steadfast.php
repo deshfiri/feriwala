@@ -36,6 +36,7 @@ return [
     'panel' => [
         'title' => 'Steadfast Courier',
         'disabled' => 'Steadfast is not switched on. Turn it on under Settings → Steadfast Courier.',
+        'not_loaded' => 'Steadfast is switched on in Settings, but this server has not loaded it yet. Run php artisan optimize:clear on the server, then reopen this page.',
         'not_booked' => 'Not booked with Steadfast yet.',
         'book' => 'Book with Steadfast',
         'book_confirm' => 'This asks Steadfast to collect a real parcel and may be charged. Continue?',

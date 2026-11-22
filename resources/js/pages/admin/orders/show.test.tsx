@@ -228,6 +228,10 @@ describe('admin order page', () => {
         expect(
             screen.getByRole('button', { name: 'Start Packing' }),
         ).toBeInTheDocument();
+        // No free status changes, and no pointer to a page that no longer exists.
+        expect(
+            screen.queryByText('orders.admin.status_update.title'),
+        ).not.toBeInTheDocument();
         // The store-order cancel, even though the unpaid-order cancel is not offered.
         expect(
             screen.getByRole('button', { name: 'orders.admin.cancel' }),

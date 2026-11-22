@@ -23,7 +23,6 @@ import {
 } from '@/pages/admin/orders/order-lifecycle';
 import type { OrderShipment } from '@/pages/admin/orders/shipments-panel';
 import { show as shipmentShow } from '@/routes/admin/shipments';
-import { show as storeOrderShow } from '@/routes/admin/store-orders';
 
 /**
  * Changing an order's status, by hand, on the track that changed.
@@ -34,20 +33,17 @@ import { show as storeOrderShow } from '@/routes/admin/store-orders';
  * from the state machine, and a refusal from the server is shown here, beside
  * the form, rather than lost.
  *
- * A Store Order is the exception: it moves through its own named steps on its
- * own page, so this says so and links there instead of offering moves the
- * server would refuse.
+ * Not shown for a Store Order: it moves through its own named steps, shown on the
+ * same order page instead (StoreOrderStepsPanel).
  */
 export default function OrderStatusUpdate({
     orderId,
     lifecycle,
-    isStoreOrder,
     shipments,
     canManageShipments,
 }: {
     orderId: string;
     lifecycle: OrderLifecycle;
-    isStoreOrder: boolean;
     shipments: OrderShipment[];
     canManageShipments: boolean;
 }) {
@@ -144,304 +140,281 @@ export default function OrderStatusUpdate({
             title={t('orders.admin.status_update.title')}
             description={t('orders.admin.status_update.description')}
         >
-            {isStoreOrder ? (
-                <Notice
-                    tone="info"
-                    role="note"
-                    inset
-                    title={t('orders.admin.status_update.store_order_title')}
-                    action={
-                        <Button asChild size="sm" variant="outline">
-                            <Link href={storeOrderShow(orderId)}>
-                                {t(
-                                    'orders.admin.status_update.store_order_link',
-                                )}
-                            </Link>
-                        </Button>
-                    }
+            <div className="space-y-5">
+                <div
+                    role="group"
+                    aria-label={t('orders.admin.status_update.track')}
+                    className="grid grid-cols-[repeat(auto-fit,minmax(9.5rem,1fr))] gap-2"
                 >
-                    <p>{t('orders.admin.status_update.store_order_body')}</p>
-                </Notice>
-            ) : (
-                <div className="space-y-5">
-                    <div
-                        role="group"
-                        aria-label={t('orders.admin.status_update.track')}
-                        className="grid grid-cols-[repeat(auto-fit,minmax(9.5rem,1fr))] gap-2"
-                    >
-                        {AXES.map((candidate, position) => (
-                            <button
-                                key={candidate}
-                                type="button"
-                                aria-pressed={candidate === axis}
-                                disabled={form.processing}
-                                onClick={() => chooseAxis(candidate)}
-                                className={cn(
-                                    'focus-visible:ring-ring flex flex-col items-start gap-1 rounded-lg border px-3 py-2 text-start focus-visible:ring-2 focus-visible:outline-none disabled:opacity-60',
-                                    candidate === axis
-                                        ? 'border-primary bg-surface-subtle'
-                                        : 'hover:bg-surface-subtle',
-                                )}
-                            >
-                                <span className="flex w-full flex-wrap items-center justify-between gap-x-2 gap-y-0.5 text-sm font-medium">
-                                    <span>
-                                        {position + 1}.{' '}
-                                        {t(AXIS_LABEL_KEY[candidate])}
-                                    </span>
-                                    {lifecycle[candidate].locked_reason && (
-                                        <span className="text-muted-foreground flex items-center gap-1 text-xs font-normal">
-                                            <Lock
-                                                className="size-3"
-                                                aria-hidden="true"
-                                            />
-                                            {t(
-                                                'orders.admin.status_update.locked_tag',
-                                            )}
-                                        </span>
-                                    )}
-                                </span>
-                                <span className="text-muted-foreground text-xs">
-                                    {lifecycle[candidate].status_label}
-                                </span>
-                            </button>
-                        ))}
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-muted-foreground text-sm">
-                            {t('orders.admin.status_update.current')}
-                        </span>
-                        <StatusPill
-                            tone={summary.status_tone}
-                            label={summary.status_label}
-                        />
-                    </div>
-                    <p className="text-muted-foreground text-sm">
-                        {t(`orders.admin.status_update.axis.${axis}`)}
-                    </p>
-
-                    {(axis === 'courier' || axis === 'delivery') && (
-                        <CourierContext
-                            shipments={shipments}
-                            canManageShipments={canManageShipments}
-                        />
-                    )}
-
-                    {summary.locked_reason && (
-                        <Notice
-                            tone="warning"
-                            role="note"
-                            inset
-                            title={t(
-                                'orders.admin.status_update.locked_title',
-                                { track: t(AXIS_LABEL_KEY[axis]) },
+                    {AXES.map((candidate, position) => (
+                        <button
+                            key={candidate}
+                            type="button"
+                            aria-pressed={candidate === axis}
+                            disabled={form.processing}
+                            onClick={() => chooseAxis(candidate)}
+                            className={cn(
+                                'focus-visible:ring-ring flex flex-col items-start gap-1 rounded-lg border px-3 py-2 text-start focus-visible:ring-2 focus-visible:outline-none disabled:opacity-60',
+                                candidate === axis
+                                    ? 'border-primary bg-surface-subtle'
+                                    : 'hover:bg-surface-subtle',
                             )}
-                            action={
-                                <Button
-                                    type="button"
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => chooseAxis('fulfillment')}
-                                >
-                                    {t('orders.admin.status_update.go_to', {
-                                        track: t(AXIS_LABEL_KEY.fulfillment),
-                                    })}
-                                </Button>
-                            }
                         >
-                            <p>{summary.locked_reason}</p>
-                        </Notice>
-                    )}
+                            <span className="flex w-full flex-wrap items-center justify-between gap-x-2 gap-y-0.5 text-sm font-medium">
+                                <span>
+                                    {position + 1}.{' '}
+                                    {t(AXIS_LABEL_KEY[candidate])}
+                                </span>
+                                {lifecycle[candidate].locked_reason && (
+                                    <span className="text-muted-foreground flex items-center gap-1 text-xs font-normal">
+                                        <Lock
+                                            className="size-3"
+                                            aria-hidden="true"
+                                        />
+                                        {t(
+                                            'orders.admin.status_update.locked_tag',
+                                        )}
+                                    </span>
+                                )}
+                            </span>
+                            <span className="text-muted-foreground text-xs">
+                                {lifecycle[candidate].status_label}
+                            </span>
+                        </button>
+                    ))}
+                </div>
 
-                    {canContinue && following && (
-                        <Notice
-                            tone="success"
-                            role="status"
-                            inset
-                            title={t(
-                                'orders.admin.status_update.continue_title',
-                                { track: t(AXIS_LABEL_KEY[following]) },
-                            )}
-                            action={
-                                <Button
-                                    type="button"
-                                    size="sm"
-                                    onClick={() => chooseAxis(following)}
-                                >
-                                    {t(
-                                        'orders.admin.status_update.continue_to',
-                                        { track: t(AXIS_LABEL_KEY[following]) },
-                                    )}
-                                </Button>
-                            }
-                        />
-                    )}
+                <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-muted-foreground text-sm">
+                        {t('orders.admin.status_update.current')}
+                    </span>
+                    <StatusPill
+                        tone={summary.status_tone}
+                        label={summary.status_label}
+                    />
+                </div>
+                <p className="text-muted-foreground text-sm">
+                    {t(`orders.admin.status_update.axis.${axis}`)}
+                </p>
 
-                    {/*
+                {(axis === 'courier' || axis === 'delivery') && (
+                    <CourierContext
+                        shipments={shipments}
+                        canManageShipments={canManageShipments}
+                    />
+                )}
+
+                {summary.locked_reason && (
+                    <Notice
+                        tone="warning"
+                        role="note"
+                        inset
+                        title={t('orders.admin.status_update.locked_title', {
+                            track: t(AXIS_LABEL_KEY[axis]),
+                        })}
+                        action={
+                            <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={() => chooseAxis('fulfillment')}
+                            >
+                                {t('orders.admin.status_update.go_to', {
+                                    track: t(AXIS_LABEL_KEY.fulfillment),
+                                })}
+                            </Button>
+                        }
+                    >
+                        <p>{summary.locked_reason}</p>
+                    </Notice>
+                )}
+
+                {canContinue && following && (
+                    <Notice
+                        tone="success"
+                        role="status"
+                        inset
+                        title={t('orders.admin.status_update.continue_title', {
+                            track: t(AXIS_LABEL_KEY[following]),
+                        })}
+                        action={
+                            <Button
+                                type="button"
+                                size="sm"
+                                onClick={() => chooseAxis(following)}
+                            >
+                                {t('orders.admin.status_update.continue_to', {
+                                    track: t(AXIS_LABEL_KEY[following]),
+                                })}
+                            </Button>
+                        }
+                    />
+                )}
+
+                {/*
                       Outside the form on purpose. A refusal often means the
                       page was out of date, and the answer then refreshes this
                       track — which may have no moves left, and no form to
                       carry the message.
                     */}
-                    {errors.status && (
-                        <Notice
-                            tone="danger"
-                            role="alert"
-                            inset
-                            title={t('orders.admin.status_update.refused')}
+                {errors.status && (
+                    <Notice
+                        tone="danger"
+                        role="alert"
+                        inset
+                        title={t('orders.admin.status_update.refused')}
+                    >
+                        <p>{errors.status}</p>
+                    </Notice>
+                )}
+
+                {!summary.can_manage ? (
+                    <Notice tone="neutral" role="note" inset>
+                        {t('orders.admin.status_update.no_permission')}
+                    </Notice>
+                ) : summary.available_actions.length === 0 ? (
+                    <Notice tone="neutral" role="note" inset>
+                        {t('orders.admin.status_update.final', {
+                            status: summary.status_label,
+                        })}
+                    </Notice>
+                ) : (
+                    <form onSubmit={save} className="space-y-4" noValidate>
+                        <fieldset
+                            disabled={form.processing}
+                            className="min-w-0 space-y-2"
                         >
-                            <p>{errors.status}</p>
-                        </Notice>
-                    )}
+                            <legend className="mb-2 text-sm font-medium">
+                                {t('orders.admin.status_update.move_to')}
+                            </legend>
 
-                    {!summary.can_manage ? (
-                        <Notice tone="neutral" role="note" inset>
-                            {t('orders.admin.status_update.no_permission')}
-                        </Notice>
-                    ) : summary.available_actions.length === 0 ? (
-                        <Notice tone="neutral" role="note" inset>
-                            {t('orders.admin.status_update.final', {
-                                status: summary.status_label,
-                            })}
-                        </Notice>
-                    ) : (
-                        <form onSubmit={save} className="space-y-4" noValidate>
-                            <fieldset
-                                disabled={form.processing}
-                                className="min-w-0 space-y-2"
-                            >
-                                <legend className="mb-2 text-sm font-medium">
-                                    {t('orders.admin.status_update.move_to')}
-                                </legend>
+                            {summary.available_actions.map((status) => {
+                                const noteRequired =
+                                    REASON_REQUIRED[axis].includes(status);
 
-                                {summary.available_actions.map((status) => {
-                                    const noteRequired =
-                                        REASON_REQUIRED[axis].includes(status);
-
-                                    return (
-                                        <label
-                                            key={status}
-                                            className={cn(
-                                                'flex cursor-pointer items-start gap-3 rounded-lg border px-3 py-2.5',
-                                                'has-[:focus-visible]:ring-ring has-[:focus-visible]:ring-2',
-                                                target === status
-                                                    ? 'border-primary bg-surface-subtle'
-                                                    : 'hover:bg-surface-subtle',
-                                            )}
-                                        >
-                                            <input
-                                                type="radio"
-                                                name="status"
-                                                value={status}
-                                                checked={target === status}
-                                                onChange={() => choose(status)}
-                                                className="mt-1"
-                                            />
-                                            <span className="min-w-0 space-y-0.5">
-                                                <span className="flex flex-wrap items-center gap-2">
-                                                    <span className="text-sm font-medium">
+                                return (
+                                    <label
+                                        key={status}
+                                        className={cn(
+                                            'flex cursor-pointer items-start gap-3 rounded-lg border px-3 py-2.5',
+                                            'has-[:focus-visible]:ring-ring has-[:focus-visible]:ring-2',
+                                            target === status
+                                                ? 'border-primary bg-surface-subtle'
+                                                : 'hover:bg-surface-subtle',
+                                        )}
+                                    >
+                                        <input
+                                            type="radio"
+                                            name="status"
+                                            value={status}
+                                            checked={target === status}
+                                            onChange={() => choose(status)}
+                                            className="mt-1"
+                                        />
+                                        <span className="min-w-0 space-y-0.5">
+                                            <span className="flex flex-wrap items-center gap-2">
+                                                <span className="text-sm font-medium">
+                                                    {t(
+                                                        `status.${group}.${status}`,
+                                                    )}
+                                                </span>
+                                                {status === usual && (
+                                                    <span className="text-info text-xs font-medium">
                                                         {t(
-                                                            `status.${group}.${status}`,
+                                                            'orders.admin.status_update.usual_next',
                                                         )}
                                                     </span>
-                                                    {status === usual && (
-                                                        <span className="text-info text-xs font-medium">
-                                                            {t(
-                                                                'orders.admin.status_update.usual_next',
-                                                            )}
-                                                        </span>
-                                                    )}
-                                                    {noteRequired && (
-                                                        <span className="text-muted-foreground text-xs">
-                                                            {t(
-                                                                'orders.admin.status_update.note_required_tag',
-                                                            )}
-                                                        </span>
-                                                    )}
-                                                </span>
-                                                <span className="text-muted-foreground block text-xs">
-                                                    {t(
-                                                        `orders.admin.status_update.effects.${group}.${status}`,
-                                                    )}
-                                                </span>
+                                                )}
+                                                {noteRequired && (
+                                                    <span className="text-muted-foreground text-xs">
+                                                        {t(
+                                                            'orders.admin.status_update.note_required_tag',
+                                                        )}
+                                                    </span>
+                                                )}
                                             </span>
-                                        </label>
-                                    );
-                                })}
-                            </fieldset>
+                                            <span className="text-muted-foreground block text-xs">
+                                                {t(
+                                                    `orders.admin.status_update.effects.${group}.${status}`,
+                                                )}
+                                            </span>
+                                        </span>
+                                    </label>
+                                );
+                            })}
+                        </fieldset>
 
-                            {target !== '' && (
-                                <FormField
-                                    label={t('orders.admin.status_update.note')}
-                                    required={needsNote}
-                                    description={t(
-                                        needsNote
-                                            ? 'orders.admin.status_update.note_help_required'
-                                            : 'orders.admin.status_update.note_help_optional',
-                                    )}
-                                    error={errors.reason}
-                                >
-                                    {(field) => (
-                                        <TextArea
-                                            {...field}
-                                            rows={3}
-                                            maxLength={1000}
-                                            value={form.data.reason}
-                                            onChange={(event) =>
-                                                form.setData(
-                                                    'reason',
-                                                    event.target.value,
-                                                )
-                                            }
-                                        />
-                                    )}
-                                </FormField>
-                            )}
-
-                            <div className="flex flex-wrap items-center justify-end gap-2">
-                                {target !== '' && (
-                                    <Button
-                                        type="button"
-                                        variant="ghost"
-                                        disabled={form.processing}
-                                        onClick={() => {
-                                            form.reset();
-                                            form.clearErrors();
-                                        }}
-                                    >
-                                        {t('orders.admin.status_update.clear')}
-                                    </Button>
+                        {target !== '' && (
+                            <FormField
+                                label={t('orders.admin.status_update.note')}
+                                required={needsNote}
+                                description={t(
+                                    needsNote
+                                        ? 'orders.admin.status_update.note_help_required'
+                                        : 'orders.admin.status_update.note_help_optional',
                                 )}
+                                error={errors.reason}
+                            >
+                                {(field) => (
+                                    <TextArea
+                                        {...field}
+                                        rows={3}
+                                        maxLength={1000}
+                                        value={form.data.reason}
+                                        onChange={(event) =>
+                                            form.setData(
+                                                'reason',
+                                                event.target.value,
+                                            )
+                                        }
+                                    />
+                                )}
+                            </FormField>
+                        )}
+
+                        <div className="flex flex-wrap items-center justify-end gap-2">
+                            {target !== '' && (
                                 <Button
-                                    type="submit"
-                                    variant={
-                                        target === 'cancelled'
-                                            ? 'destructive'
-                                            : 'default'
-                                    }
-                                    disabled={
-                                        target === '' ||
-                                        noteMissing ||
-                                        form.processing
-                                    }
-                                    aria-busy={form.processing || undefined}
+                                    type="button"
+                                    variant="ghost"
+                                    disabled={form.processing}
+                                    onClick={() => {
+                                        form.reset();
+                                        form.clearErrors();
+                                    }}
                                 >
-                                    {form.processing && <Spinner />}
-                                    {target === ''
-                                        ? t(
-                                              'orders.admin.status_update.save_choose',
-                                          )
-                                        : t('orders.admin.status_update.save', {
-                                              status: t(
-                                                  `status.${group}.${target}`,
-                                              ),
-                                          })}
+                                    {t('orders.admin.status_update.clear')}
                                 </Button>
-                            </div>
-                        </form>
-                    )}
-                </div>
-            )}
+                            )}
+                            <Button
+                                type="submit"
+                                variant={
+                                    target === 'cancelled'
+                                        ? 'destructive'
+                                        : 'default'
+                                }
+                                disabled={
+                                    target === '' ||
+                                    noteMissing ||
+                                    form.processing
+                                }
+                                aria-busy={form.processing || undefined}
+                            >
+                                {form.processing && <Spinner />}
+                                {target === ''
+                                    ? t(
+                                          'orders.admin.status_update.save_choose',
+                                      )
+                                    : t('orders.admin.status_update.save', {
+                                          status: t(
+                                              `status.${group}.${target}`,
+                                          ),
+                                      })}
+                            </Button>
+                        </div>
+                    </form>
+                )}
+            </div>
         </SectionCard>
     );
 }

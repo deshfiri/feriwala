@@ -62,7 +62,6 @@ function panel(props: Partial<Parameters<typeof OrderStatusUpdate>[0]> = {}) {
         <OrderStatusUpdate
             orderId="01ORDER"
             lifecycle={lifecycle()}
-            isStoreOrder={false}
             shipments={[]}
             canManageShipments={false}
             {...props}
@@ -340,7 +339,6 @@ describe('saving', () => {
             <OrderStatusUpdate
                 orderId="01ORDER"
                 lifecycle={lifecycle({ fulfillment: axis('fulfilled', []) })}
-                isStoreOrder={false}
                 shipments={[]}
                 canManageShipments={false}
             />,
@@ -364,7 +362,6 @@ describe('saving', () => {
                 lifecycle={lifecycle({
                     fulfillment: axis('picking', ['on_hold']),
                 })}
-                isStoreOrder={false}
                 shipments={[]}
                 canManageShipments={false}
             />,
@@ -439,23 +436,6 @@ describe('when there is nothing to change', () => {
             screen.getByText('orders.admin.status_update.no_permission'),
         ).toBeInTheDocument();
         expect(screen.queryAllByRole('radio')).toHaveLength(0);
-    });
-
-    it('sends a Store Order to its own page instead of offering moves the server would refuse', () => {
-        panel({ isStoreOrder: true });
-
-        expect(
-            screen.getByText('orders.admin.status_update.store_order_title'),
-        ).toBeInTheDocument();
-        expect(
-            screen.getByRole('link', {
-                name: 'orders.admin.status_update.store_order_link',
-            }),
-        ).toHaveAttribute('href', expect.stringContaining('01ORDER'));
-        expect(screen.queryAllByRole('radio')).toHaveLength(0);
-        expect(
-            screen.queryByRole('button', { name: /status_update\.save/ }),
-        ).not.toBeInTheDocument();
     });
 });
 
@@ -557,7 +537,6 @@ describe('one step at a time', () => {
                         locked_reason: locked,
                     }),
                 })}
-                isStoreOrder={false}
                 shipments={[]}
                 canManageShipments={false}
             />,

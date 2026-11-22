@@ -61,6 +61,25 @@ beforeEach(() => {
 });
 
 describe('the staff panel', () => {
+    it('says why Steadfast cannot be used: off in Settings, or on but not loaded by this server', () => {
+        const { rerender } = render(
+            <StaffCourierPanel
+                courier={staff({ enabled: false, switched_on: false })}
+            />,
+        );
+
+        expect(screen.getByText('steadfast.panel.disabled')).toBeVisible();
+
+        rerender(
+            <StaffCourierPanel
+                courier={staff({ enabled: false, switched_on: true })}
+            />,
+        );
+
+        expect(screen.getByText('steadfast.panel.not_loaded')).toBeVisible();
+        expect(screen.queryByText('steadfast.panel.disabled')).toBeNull();
+    });
+
     it('offers booking only when booking is allowed, and asks first', () => {
         const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
 

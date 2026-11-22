@@ -187,6 +187,7 @@ describe('the order page', function () {
             ->assertOk()
             ->assertInertia(fn ($page) => $page
                 ->where('store_order.courier.enabled', true)
+                ->where('store_order.courier.switched_on', true)
                 ->where('store_order.courier.shipment.tracking_number', '15BAEB8A')
                 ->where('store_order.courier.shipment.consignment_id', $shipment->external_id)
                 ->where('store_order.courier.shipment.raw_status', 'in_review')
@@ -194,6 +195,19 @@ describe('the order page', function () {
                 ->where('store_order.courier.shipment.status', 'assigned')
                 ->where('store_order.courier.shipment.charge.amount', '65.00')
                 ->where('store_order.courier.shipment.can_sync', true)
+                ->where('store_order.courier.can.book', false));
+    });
+
+    it('tells staff when Steadfast is switched on but this server has not loaded its driver', function () {
+        $order = steadfastFixtureOrder();
+        // What a stale configuration cache looks like: the row is on, the driver unknown.
+        config(['courier.drivers.steadfast' => null]);
+
+        $this->actingAs($this->superAdmin)
+            ->get(route('admin.orders.show', $order->public_id))
+            ->assertInertia(fn ($page) => $page
+                ->where('store_order.courier.enabled', false)
+                ->where('store_order.courier.switched_on', true)
                 ->where('store_order.courier.can.book', false));
     });
 

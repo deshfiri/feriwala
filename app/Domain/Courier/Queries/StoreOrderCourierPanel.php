@@ -53,6 +53,9 @@ class StoreOrderCourierPanel
 
         return [
             'enabled' => $this->couriers->isAvailable(CourierProviderCode::Steadfast),
+            // Switched on in Settings, whether or not this server has loaded the
+            // driver: the two differ only when the cached configuration is stale.
+            'switched_on' => $this->couriers->isEnabled(CourierProviderCode::Steadfast),
             'booking' => $attempt === null ? null : [
                 'id' => $attempt->public_id,
                 'status' => $attempt->status->value,

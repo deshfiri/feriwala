@@ -301,17 +301,17 @@ export default function AdminOrder({
                     <div className="min-w-0 space-y-6">
                         <OrderProgress lifecycle={order.lifecycle} />
 
-                        {store_order && (
+                        {/* A storefront order moves by its named steps; every other order by its tracks. */}
+                        {store_order ? (
                             <StoreOrderStepsPanel steps={store_order} />
+                        ) : (
+                            <OrderStatusUpdate
+                                orderId={order.id}
+                                lifecycle={order.lifecycle}
+                                shipments={order.shipments}
+                                canManageShipments={can.manage_shipments}
+                            />
                         )}
-
-                        <OrderStatusUpdate
-                            orderId={order.id}
-                            lifecycle={order.lifecycle}
-                            isStoreOrder={order.source === 'website'}
-                            shipments={order.shipments}
-                            canManageShipments={can.manage_shipments}
-                        />
 
                         {can.manage_shipments && (
                             <ShipmentsPanel
