@@ -183,40 +183,40 @@ describe('the order page', function () {
         $shipment = steadfastFixtureShipment(null, ['provider_status' => 'in_review', 'provider_charge' => '65.00']);
 
         $this->actingAs($this->superAdmin)
-            ->get(route('admin.store-orders.show', $shipment->order->public_id))
+            ->get(route('admin.orders.show', $shipment->order->public_id))
             ->assertOk()
             ->assertInertia(fn ($page) => $page
-                ->where('courier.enabled', true)
-                ->where('courier.shipment.tracking_number', '15BAEB8A')
-                ->where('courier.shipment.consignment_id', $shipment->external_id)
-                ->where('courier.shipment.raw_status', 'in_review')
-                ->where('courier.shipment.raw_status_label', 'In review')
-                ->where('courier.shipment.status', 'assigned')
-                ->where('courier.shipment.charge.amount', '65.00')
-                ->where('courier.shipment.can_sync', true)
-                ->where('courier.can.book', false));
+                ->where('store_order.courier.enabled', true)
+                ->where('store_order.courier.shipment.tracking_number', '15BAEB8A')
+                ->where('store_order.courier.shipment.consignment_id', $shipment->external_id)
+                ->where('store_order.courier.shipment.raw_status', 'in_review')
+                ->where('store_order.courier.shipment.raw_status_label', 'In review')
+                ->where('store_order.courier.shipment.status', 'assigned')
+                ->where('store_order.courier.shipment.charge.amount', '65.00')
+                ->where('store_order.courier.shipment.can_sync', true)
+                ->where('store_order.courier.can.book', false));
     });
 
     it('offers booking only for a dispatched order with nothing live', function () {
         $order = steadfastFixtureOrder();
 
         $this->actingAs($this->superAdmin)
-            ->get(route('admin.store-orders.show', $order->public_id))
+            ->get(route('admin.orders.show', $order->public_id))
             ->assertInertia(fn ($page) => $page
-                ->where('courier.can.book', true)
-                ->where('courier.shipment', null)
-                ->where('courier.booking', null));
+                ->where('store_order.courier.can.book', true)
+                ->where('store_order.courier.shipment', null)
+                ->where('store_order.courier.booking', null));
     });
 
     it('shows an unrecognised status as such, beside the raw value', function () {
         $shipment = steadfastFixtureShipment(null, ['provider_status' => 'out_for_delivery', 'needs_review' => true]);
 
         $this->actingAs($this->superAdmin)
-            ->get(route('admin.store-orders.show', $shipment->order->public_id))
+            ->get(route('admin.orders.show', $shipment->order->public_id))
             ->assertInertia(fn ($page) => $page
-                ->where('courier.shipment.raw_status', 'out_for_delivery')
-                ->where('courier.shipment.raw_status_label', null)
-                ->where('courier.shipment.needs_review', true));
+                ->where('store_order.courier.shipment.raw_status', 'out_for_delivery')
+                ->where('store_order.courier.shipment.raw_status_label', null)
+                ->where('store_order.courier.shipment.needs_review', true));
     });
 
     it('gives the Partner only the courier, the tracking code and Banij\'s own status', function () {

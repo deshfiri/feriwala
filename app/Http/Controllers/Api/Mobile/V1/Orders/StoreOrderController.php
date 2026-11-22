@@ -12,6 +12,7 @@ use App\Domain\Order\Enums\OrderSource;
 use App\Domain\Order\Enums\StoreOrderStep;
 use App\Domain\Order\Exceptions\StoreOrderRefused;
 use App\Domain\Order\Models\Order;
+use App\Domain\Order\Queries\OrderCustomerDetails;
 use App\Domain\Order\Queries\ReturnEligibility;
 use App\Domain\Order\Queries\StoreOrderIndex;
 use App\Domain\Order\Queries\StoreOrderTimeline;
@@ -124,6 +125,8 @@ class StoreOrderController extends MobileController
         return new JsonResponse([
             'data' => $this->index->row($order, forStaff: false) + [
                 'customer_phone' => $order->customer['mobile'] ?? null,
+                // Additive: name, phone, email and the address as printable lines.
+                'customer_details' => OrderCustomerDetails::of($order),
                 'shipping_address' => $order->shipping_address,
                 'cancellation_reason' => $order->cancellation_reason,
                 'items' => $order->items->map(fn ($item) => [

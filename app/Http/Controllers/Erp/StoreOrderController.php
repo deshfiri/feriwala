@@ -24,6 +24,7 @@ use App\Domain\Order\Exceptions\StoreOrderRefused;
 use App\Domain\Order\Exceptions\WebsiteOrderRefused;
 use App\Domain\Order\Models\Order;
 use App\Domain\Order\Queries\CreatableStorefronts;
+use App\Domain\Order\Queries\OrderCustomerDetails;
 use App\Domain\Order\Queries\ReturnEligibility;
 use App\Domain\Order\Queries\StoreOrderIndex;
 use App\Domain\Order\Queries\StoreOrderTimeline;
@@ -104,6 +105,8 @@ class StoreOrderController extends Controller
         return Inertia::render('store-orders/show', [
             'order' => $this->index->row($record, forStaff: false) + [
                 'customer_phone' => $record->customer['mobile'] ?? null,
+                // Who the order is for and where it goes, read once for every screen.
+                'customer_details' => OrderCustomerDetails::of($record),
                 'shipping_address' => $record->shipping_address,
                 'cancellation_reason' => $record->cancellation_reason,
                 'items' => $record->items->map(fn ($item) => [

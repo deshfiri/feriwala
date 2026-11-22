@@ -5,6 +5,8 @@ import OrderController from '@/actions/App/Http/Controllers/Admin/OrderControlle
 import InputError from '@/components/input-error';
 import ExchangeOriginNotice from '@/components/cases/exchange-origin';
 import MoneyAmount from '@/components/money-amount';
+import OrderCustomerCard from '@/components/order-customer-card';
+import type { OrderCustomerDetails } from '@/components/order-customer-card';
 import type { ExchangeOrigin } from '@/types/cases';
 import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
@@ -34,6 +36,8 @@ import OrderActivity from '@/pages/admin/orders/order-activity';
 import type { OrderLifecycle } from '@/pages/admin/orders/order-lifecycle';
 import OrderProgress from '@/pages/admin/orders/order-progress';
 import OrderStatusUpdate from '@/pages/admin/orders/order-status-update';
+import StoreOrderStepsPanel from '@/pages/admin/orders/store-order-steps';
+import type { StoreOrderSteps } from '@/pages/admin/orders/store-order-steps';
 import ShipmentsPanel, {
     type CourierProviderOption,
     type OrderShipment,
@@ -81,6 +85,8 @@ export type AdminOrderDetail = {
     held_at: string | null;
     hold_reason: string | null;
     customer_note: string | null;
+    /** Who the order is for and where it goes, as the server reads it. */
+    customer_details: OrderCustomerDetails;
     intended_resale_channel: string | null;
     coupon_code: string | null;
     /** The server's own breakdown; optional lines are null when nothing is on them. */
@@ -205,6 +211,8 @@ type Props = {
         record_cod_collection: boolean;
     };
     exchange_origin?: ExchangeOrigin | null;
+    /** A storefront order's steps (D34), shown on this page; null for every other order. */
+    store_order?: StoreOrderSteps | null;
 };
 
 const controlClass =
@@ -218,9 +226,17 @@ const controlClass =
  * in words. The one action is cancelling an order nobody has paid for, with a
  * reason; resolving a held order is said plainly to be done elsewhere.
  */
-export default function AdminOrder({ order, can, exchange_origin }: Props) {
+export default function AdminOrder({
+    order,
+    can,
+    exchange_origin,
+    store_order = null,
+}: Props) {
     const { t, locale } = useTranslation();
     const [cancelling, setCancelling] = useState(false);
+    // A storefront order is cancelled as a store order: before it leaves the
+    // warehouse, paid or not. Every other order keeps the unpaid-order cancel.
+    const mayCancel = store_order ? store_order.can.cancel : can.cancel;
     const [allocating, setAllocating] = useState<AllocationLine | null>(null);
     const [recordingCod, setRecordingCod] = useState<{
         id: string;
@@ -252,7 +268,7 @@ export default function AdminOrder({ order, can, exchange_origin }: Props) {
                                 tone={order.status_tone}
                                 label={t(`orders.statuses.${order.status}`)}
                             />
-                            {can.cancel && (
+                            {mayCancel && (
                                 <Button
                                     variant="outline"
                                     onClick={() => setCancelling(true)}
@@ -284,6 +300,10 @@ export default function AdminOrder({ order, can, exchange_origin }: Props) {
                 <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
                     <div className="min-w-0 space-y-6">
                         <OrderProgress lifecycle={order.lifecycle} />
+
+                        {store_order && (
+                            <StoreOrderStepsPanel steps={store_order} />
+                        )}
 
                         <OrderStatusUpdate
                             orderId={order.id}
@@ -525,6 +545,8 @@ export default function AdminOrder({ order, can, exchange_origin }: Props) {
                     </div>
 
                     <div className="space-y-6">
+                        <OrderCustomerCard customer={order.customer_details} />
+
                         <SectionCard
                             title={t('orders.admin.sections.overview')}
                         >
@@ -847,7 +869,7 @@ export default function AdminOrder({ order, can, exchange_origin }: Props) {
                 </div>
             </PageContainer>
 
-            {can.cancel && cancelling && (
+            {mayCancel && cancelling && (
                 <Dialog
                     open
                     onOpenChange={(next) => !next && setCancelling(false)}
@@ -865,7 +887,12 @@ export default function AdminOrder({ order, can, exchange_origin }: Props) {
                         </DialogHeader>
 
                         <Form
-                            {...OrderController.cancel.form(order.id)}
+                            {...(store_order
+                                ? {
+                                      action: store_order.urls.cancel,
+                                      method: 'post' as const,
+                                  }
+                                : OrderController.cancel.form(order.id))}
                             options={{ preserveScroll: true }}
                             onSuccess={() => setCancelling(false)}
                             className="space-y-4"

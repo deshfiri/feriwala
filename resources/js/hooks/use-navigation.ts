@@ -1,5 +1,4 @@
 import { index as storeOrders } from '@/routes/store-orders';
-import { index as adminStoreOrders } from '@/routes/admin/store-orders';
 import { usePage } from '@inertiajs/react';
 import {
     Banknote,
@@ -544,13 +543,10 @@ export function useNavigation(): {
                               items: [
                                   ...(permissions['order.view']
                                       ? [
+                                            // One list for every order, storefront orders included.
                                             {
                                                 title: t('nav.orders'),
                                                 href: adminOrders(),
-                                            },
-                                            {
-                                                title: t('nav.store_orders'),
-                                                href: adminStoreOrders(),
                                             },
                                         ]
                                       : []),

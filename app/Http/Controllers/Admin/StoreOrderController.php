@@ -2,9 +2,6 @@
 
 namespace App\Http\Controllers\Admin;
 
-use App\Domain\Account\Models\BusinessAccount;
-use App\Domain\Billing\Enums\PaymentStatus;
-use App\Domain\Courier\Queries\StoreOrderCourierPanel;
 use App\Domain\Order\Actions\AdvanceStoreOrder;
 use App\Domain\Order\Actions\CancelStoreOrder;
 use App\Domain\Order\Enums\OrderSource;
@@ -12,9 +9,6 @@ use App\Domain\Order\Enums\StoreOrderAction;
 use App\Domain\Order\Enums\StoreOrderStep;
 use App\Domain\Order\Exceptions\StoreOrderRefused;
 use App\Domain\Order\Models\Order;
-use App\Domain\Order\Queries\StoreOrderIndex;
-use App\Domain\Order\Queries\StoreOrderTimeline;
-use App\Domain\Website\Models\Website;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
@@ -22,11 +16,11 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
-use Inertia\Response;
 
 /**
- * Store Orders, platform-wide (D34): every Partner's storefront orders, with who
- * and which shop, and the one next action each can take.
+ * A storefront order's moves, platform-wide (D34). The order is listed on the one
+ * Orders page and worked on its own order page, where its steps are shown; these
+ * routes take the next step or cancel it.
  *
  * Reading is `order.view`; every move is `order.edit` and is a named action, not a
  * chosen status. The route can be called by hand, so the action refuses anything
@@ -35,78 +29,40 @@ use Inertia\Response;
 class StoreOrderController extends Controller
 {
     public function __construct(
-        protected StoreOrderIndex $index,
-        protected StoreOrderTimeline $timeline,
         protected AdvanceStoreOrder $advance,
         protected CancelStoreOrder $cancel,
-        protected StoreOrderCourierPanel $courier,
     ) {}
 
-    public function index(Request $request): Response
+    /**
+     * Store orders are listed with every other order now (one Orders page, with
+     * the source filter set to storefront orders). The old address still works:
+     * it opens that list, carrying over a search and the storefront chosen.
+     */
+    public function index(Request $request): RedirectResponse
     {
         $actor = $this->actor($request);
 
         Gate::forUser($actor)->authorize('viewAny', Order::class);
 
-        $orders = $this->index->query($request)
-            ->paginate(StoreOrderIndex::PER_PAGE)
-            ->withQueryString()
-            ->through(fn (Order $order) => $this->index->row($order, forStaff: true));
-
-        return Inertia::render('admin/store-orders/index', [
-            'orders' => $orders,
-            'filters' => $request->only(['partner', 'storefront', 'step', 'payment', 'from', 'to', 'search']),
-            'steps' => array_map(fn (StoreOrderStep $step) => ['value' => $step->value, 'label' => $step->label()], StoreOrderStep::cases()),
-            'payments' => array_map(fn (PaymentStatus $status) => $status->value, PaymentStatus::cases()),
-            'partners' => BusinessAccount::query()
-                ->whereIn('id', Website::query()->select('business_account_id'))
-                ->orderBy('name')
-                ->get(['public_id', 'name'])
-                ->map(fn (BusinessAccount $account) => ['value' => $account->public_id, 'label' => $account->name])
-                ->all(),
-            'storefronts' => Website::query()->orderBy('name')->get(['public_id', 'name'])
-                ->map(fn (Website $website) => ['value' => $website->public_id, 'label' => $website->name])
-                ->all(),
-        ]);
+        return redirect()->route('admin.orders.index', array_filter([
+            'source' => OrderSource::Website->value,
+            'search' => $request->string('search')->toString() ?: null,
+            'website' => $request->string('storefront')->toString() ?: null,
+        ]));
     }
 
-    public function show(Request $request, string $order): Response
+    /**
+     * A storefront order is worked on its own order page, steps and all. The
+     * old address still works: it opens that page.
+     */
+    public function show(Request $request, string $order): RedirectResponse
     {
         $actor = $this->actor($request);
         $record = $this->order($order);
 
         Gate::forUser($actor)->authorize('view', $record);
 
-        $record->load(['businessAccount:id,public_id,name', 'website:id,public_id,name', 'items', 'payment']);
-
-        $timeline = $this->timeline->for($record);
-        $mayMove = Gate::forUser($actor)->allows('transition', $record);
-
-        return Inertia::render('admin/store-orders/show', [
-            'order' => $this->index->row($record, forStaff: true) + [
-                'customer_phone' => $record->customer['mobile'] ?? null,
-                'shipping_address' => $record->shipping_address,
-                'cancellation_reason' => $record->cancellation_reason,
-                'items' => $record->items->map(fn ($item) => [
-                    'sku' => $item->sku,
-                    'name' => $item->product_name,
-                    'variant' => $item->variant_label,
-                    'quantity' => $item->quantity,
-                    'line_total' => $item->line_total->jsonSerialize(),
-                ])->all(),
-            ],
-            'timeline' => $timeline,
-            'courier' => $this->courier->forStaff($record, $actor),
-            'urls' => [
-                'back' => route('admin.store-orders.index'),
-                'cancel' => route('admin.store-orders.cancel', $record->public_id),
-                'advance' => route('admin.store-orders.advance', [$record->public_id, '__action__']),
-            ],
-            'can' => [
-                'advance' => $mayMove && $timeline['next_action'] !== null,
-                'cancel' => $mayMove && ! $timeline['cancelled'] && $this->cancellable($record),
-            ],
-        ]);
+        return redirect()->route('admin.orders.show', $record->public_id);
     }
 
     public function advance(Request $request, string $order, string $action): RedirectResponse
@@ -153,7 +109,11 @@ class StoreOrderController extends Controller
         return back();
     }
 
-    protected function cancellable(Order $order): bool
+    /**
+     * Whether a storefront order may still be cancelled: not once it has left
+     * the warehouse, and not from a state that already ends it.
+     */
+    public static function cancellable(Order $order): bool
     {
         return ! StoreOrderStep::hasDispatched($order->status)
             && ! in_array($order->status->value, ['cancelled', 'refund_pending', 'refunded', 'on_hold', 'courier_assigned'], true);

@@ -82,6 +82,14 @@ function order(overrides: Partial<AdminOrderDetail> = {}): AdminOrderDetail {
         held_at: null,
         hold_reason: null,
         customer_note: null,
+        customer_details: {
+            name: 'Nusrat Jahan',
+            phone: '+8801711000001',
+            email: null,
+            business_name: 'Karim Traders',
+            is_guest: null,
+            address: ['Shop 4, New Market', 'Dhaka'],
+        },
         intended_resale_channel: null,
         coupon_code: null,
         totals: {
@@ -163,6 +171,93 @@ describe('admin order page', () => {
         expect(
             screen.queryByText('orders.summary.discount'),
         ).not.toBeInTheDocument();
+    });
+
+    it('shows who the order is for and where it goes, with a phone to call', () => {
+        render(
+            <AdminOrder
+                order={order()}
+                can={{
+                    cancel: false,
+                    manage_shipments: false,
+                    record_cod_collection: false,
+                }}
+            />,
+        );
+
+        expect(
+            screen.getByText('orders.customer_card.title'),
+        ).toBeInTheDocument();
+        expect(screen.getByText('Nusrat Jahan')).toBeInTheDocument();
+        expect(
+            screen.getByRole('link', { name: '+8801711000001' }),
+        ).toHaveAttribute('href', 'tel:+8801711000001');
+        expect(screen.getByText('Shop 4, New Market')).toBeInTheDocument();
+    });
+
+    it("puts a storefront order's next step and its cancel on the same page", () => {
+        render(
+            <AdminOrder
+                order={order({ source: 'website' })}
+                can={{
+                    cancel: false,
+                    manage_shipments: false,
+                    record_cod_collection: false,
+                }}
+                store_order={{
+                    timeline: {
+                        steps: [],
+                        next_action: {
+                            key: 'start_processing',
+                            label: 'Start Packing',
+                        },
+                        exception: null,
+                        cancelled: false,
+                        payment: null,
+                    },
+                    courier: null,
+                    urls: {
+                        advance: '/admin/store-orders/01ORDER/__action__',
+                        cancel: '/admin/store-orders/01ORDER/cancel',
+                    },
+                    can: { advance: true, cancel: true },
+                }}
+            />,
+        );
+
+        expect(
+            screen.getByRole('button', { name: 'Start Packing' }),
+        ).toBeInTheDocument();
+        // The store-order cancel, even though the unpaid-order cancel is not offered.
+        expect(
+            screen.getByRole('button', { name: 'orders.admin.cancel' }),
+        ).toBeInTheDocument();
+    });
+
+    it('says plainly when the order recorded no customer details', () => {
+        render(
+            <AdminOrder
+                order={order({
+                    customer_details: {
+                        name: null,
+                        phone: null,
+                        email: null,
+                        business_name: null,
+                        is_guest: null,
+                        address: [],
+                    },
+                })}
+                can={{
+                    cancel: false,
+                    manage_shipments: false,
+                    record_cod_collection: false,
+                }}
+            />,
+        );
+
+        expect(
+            screen.getAllByText('orders.customer_card.not_given'),
+        ).toHaveLength(3);
     });
 
     it('offers cancelling an unpaid order only when the server allows it', () => {

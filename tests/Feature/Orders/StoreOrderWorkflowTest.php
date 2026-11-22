@@ -423,7 +423,7 @@ describe('who sees and who moves', function () {
         expect($order->refresh()->status)->toBe(OrderStatus::Confirmed);
     });
 
-    it('shows staff every partner and storefront, filtered', function () {
+    it('lists store orders on the one Orders page, narrowed by partner, storefront or status', function () {
         storeOrderPlace(codeNeeded: false);
         $other = websiteTestAccount(extra: [PackageFeature::DropshippingEnabled->value => '1', PackageFeature::ProductPublishLimit->value => null]);
         $otherSite = Website::factory()->forAccount($other)->active()->create(['name' => 'Beta shop']);
@@ -433,15 +433,68 @@ describe('who sees and who moves', function () {
         storeOrderAdvance($beta, [StoreOrderAction::StartProcessing]);
 
         $staff = testPlatformStaff(PlatformRole::SuperAdmin);
+        $storefrontOrders = ['source' => 'website'];
 
-        $this->actingAs($staff)->get(route('admin.store-orders.index'))
-            ->assertInertia(fn ($page) => $page->has('orders.data', 2));
-        $this->actingAs($staff)->get(route('admin.store-orders.index', ['partner' => $other->public_id]))
-            ->assertInertia(fn ($page) => $page->has('orders.data', 1)->where('orders.data.0.storefront.name', 'Beta shop')->where('orders.data.0.partner.name', $other->name));
-        $this->actingAs($staff)->get(route('admin.store-orders.index', ['storefront' => $this->website->public_id]))
-            ->assertInertia(fn ($page) => $page->has('orders.data', 1)->where('orders.data.0.storefront.name', 'Alpha shop'));
-        $this->actingAs($staff)->get(route('admin.store-orders.index', ['step' => 'processing']))
+        $this->actingAs($staff)->get(route('admin.orders.index', $storefrontOrders))
+            ->assertInertia(fn ($page) => $page->component('admin/orders/index')->has('orders.data', 2)
+                ->has('partners')->has('storefronts'));
+        $this->actingAs($staff)->get(route('admin.orders.index', $storefrontOrders + ['partner' => $other->public_id]))
+            ->assertInertia(fn ($page) => $page->has('orders.data', 1)->where('orders.data.0.website', 'Beta shop')->where('orders.data.0.account', $other->name));
+        $this->actingAs($staff)->get(route('admin.orders.index', $storefrontOrders + ['website' => $this->website->public_id]))
+            ->assertInertia(fn ($page) => $page->has('orders.data', 1)->where('orders.data.0.website', 'Alpha shop'));
+        $this->actingAs($staff)->get(route('admin.orders.index', $storefrontOrders + ['status' => $beta->refresh()->status->value]))
             ->assertInertia(fn ($page) => $page->has('orders.data', 1)->where('orders.data.0.reference', $beta->reference));
+    });
+
+    it('sends the old Store Orders address to the one Orders list, keeping the search and storefront', function () {
+        $staff = testPlatformStaff(PlatformRole::SuperAdmin);
+
+        $this->actingAs($staff)->get(route('admin.store-orders.index', ['search' => 'SF-1', 'storefront' => $this->website->public_id]))
+            ->assertRedirect(route('admin.orders.index', ['source' => 'website', 'search' => 'SF-1', 'website' => $this->website->public_id]));
+    });
+
+    it('finds an order by its customer and names the customer on each row', function () {
+        $order = storeOrderPlace(codeNeeded: false);
+        $phone = $order->customer['mobile'];
+        $staff = testPlatformStaff(PlatformRole::SuperAdmin);
+
+        foreach (['Ayesha', substr($phone, -6)] as $term) {
+            $this->actingAs($staff)->get(route('admin.orders.index', ['source' => 'website', 'search' => $term]))
+                ->assertInertia(fn ($page) => $page->has('orders.data', 1)
+                    ->where('orders.data.0.customer', 'Ayesha Rahman')
+                    ->where('orders.data.0.customer_phone', $phone));
+        }
+    });
+
+    it('works a store order on its one order page: customer, steps and cancel together', function () {
+        $order = storeOrderPlace(codeNeeded: false);
+        $staff = testPlatformStaff(PlatformRole::SuperAdmin);
+        $expected = fn ($page, string $prefix) => $page
+            ->where("{$prefix}.name", 'Ayesha Rahman')
+            ->where("{$prefix}.phone", $order->customer['mobile'])
+            ->where("{$prefix}.address", ['House 12', 'Dhaka']);
+
+        $this->actingAs($staff)->get(route('admin.orders.show', $order->public_id))
+            ->assertInertia(fn ($page) => $expected($page->component('admin/orders/show'), 'order.customer_details')
+                ->where('store_order.can.advance', true)
+                ->where('store_order.can.cancel', true)
+                ->where('store_order.urls.cancel', route('admin.store-orders.cancel', $order->public_id))
+                ->has('store_order.timeline.steps'));
+
+        // The old Store Order address opens the same page.
+        $this->actingAs($staff)->get(route('admin.store-orders.show', $order->public_id))
+            ->assertRedirect(route('admin.orders.show', $order->public_id));
+
+        $this->actingAs($this->account->owner)->get(route('store-orders.show', $order->public_id))
+            ->assertInertia(fn ($page) => $expected($page, 'order.customer_details'));
+    });
+
+    it('gives a wholesale order no store-order steps', function () {
+        $staff = testPlatformStaff(PlatformRole::SuperAdmin);
+        $wholesale = Order::factory()->create(['business_account_id' => $this->account->id]);
+
+        $this->actingAs($staff)->get(route('admin.orders.show', $wholesale->public_id))
+            ->assertInertia(fn ($page) => $page->where('store_order', null));
     });
 
     it('lets staff take only the next step through the route, and refuses the rest on the server', function () {
@@ -452,11 +505,11 @@ describe('who sees and who moves', function () {
             ->assertSessionHasErrors('action');
         $this->actingAs($staff)->post(route('admin.store-orders.advance', [$order->public_id, 'start_processing']))
             ->assertSessionHasNoErrors();
-        $this->actingAs($staff)->get(route('admin.store-orders.show', $order->public_id))
+        $this->actingAs($staff)->get(route('admin.orders.show', $order->public_id))
             ->assertInertia(fn ($page) => $page
-                ->where('timeline.next_action.label', 'Start Packing')
-                ->where('timeline.steps.2.state', 'current')
-                ->where('timeline.steps.3.state', 'upcoming'));
+                ->where('store_order.timeline.next_action.label', 'Start Packing')
+                ->where('store_order.timeline.steps.2.state', 'current')
+                ->where('store_order.timeline.steps.3.state', 'upcoming'));
 
         expect($order->refresh()->status)->toBe(OrderStatus::Processing);
     });

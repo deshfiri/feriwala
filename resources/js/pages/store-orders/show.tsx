@@ -3,6 +3,8 @@ import { ArrowLeft } from 'lucide-react';
 import type { FormEvent } from 'react';
 import InputError from '@/components/input-error';
 import MoneyAmount from '@/components/money-amount';
+import OrderCustomerCard from '@/components/order-customer-card';
+import type { OrderCustomerDetails } from '@/components/order-customer-card';
 import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
 import SectionCard from '@/components/section-card';
@@ -27,6 +29,8 @@ import ExchangeOriginNotice from '@/components/cases/exchange-origin';
 export type StoreOrderDetail = StoreOrderRow & {
     customer_phone: string | null;
     shipping_address: Record<string, string | null> | null;
+    /** Who the order is for and where it goes, as the server reads it. */
+    customer_details: OrderCustomerDetails;
     cancellation_reason: string | null;
     items: {
         sku: string;
@@ -265,6 +269,8 @@ export default function StoreOrderShow({
                     </div>
 
                     <div className="space-y-4">
+                        <OrderCustomerCard customer={order.customer_details} />
+
                         {can.confirm_with_code && urls.confirm && (
                             <SectionCard
                                 title={t('store_orders.create.confirm_title')}

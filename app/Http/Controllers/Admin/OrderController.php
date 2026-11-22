@@ -5,9 +5,11 @@ namespace App\Http\Controllers\Admin;
 use App\Domain\Access\Enums\PermissionAction;
 use App\Domain\Access\Enums\PermissionModule;
 use App\Domain\Access\PermissionCatalogue;
+use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Billing\Enums\PaymentStatus;
 use App\Domain\Cases\Queries\CaseLinks;
 use App\Domain\Courier\Models\Shipment;
+use App\Domain\Courier\Queries\StoreOrderCourierPanel;
 use App\Domain\Order\Actions\AdvanceOrderCourierStatus;
 use App\Domain\Order\Actions\AdvanceOrderDeliveryStatus;
 use App\Domain\Order\Actions\AdvanceOrderFulfilmentStatus;
@@ -34,12 +36,15 @@ use App\Domain\Order\Models\OrderItemAllocation;
 use App\Domain\Order\Models\OrderStatusChange;
 use App\Domain\Order\Queries\AllocationSourceCandidates;
 use App\Domain\Order\Queries\CodConfirmationState;
+use App\Domain\Order\Queries\OrderCustomerDetails;
 use App\Domain\Order\Queries\SearchAllocationSources;
+use App\Domain\Order\Queries\StoreOrderTimeline;
 use App\Domain\Supplier\Actions\AdvanceSupplierFulfilmentCommitment;
 use App\Domain\Supplier\Enums\FulfilmentCommitmentStatus;
 use App\Domain\Supplier\Enums\SupplierStatusChangeSource;
 use App\Domain\Supplier\Enums\SupplyMode;
 use App\Domain\Supplier\Models\SupplierFulfilmentCommitment;
+use App\Domain\Website\Models\Website;
 use App\Http\Controllers\Controller;
 use App\Integrations\Courier\CourierManager;
 use App\Models\User;
@@ -99,6 +104,8 @@ class OrderController extends Controller
         protected DispatchGate $dispatchGate,
         protected CourierManager $courier,
         protected CaseLinks $caseLinks,
+        protected StoreOrderTimeline $storeTimeline,
+        protected StoreOrderCourierPanel $storeCourier,
     ) {}
 
     public function index(Request $request): Response
@@ -116,11 +123,17 @@ class OrderController extends Controller
             ->when($filters['source'] !== null, fn (Builder $query) => $query->where('source', $filters['source']))
             ->when($filters['website'] !== null, fn (Builder $query) => $query
                 ->whereHas('website', fn (Builder $website) => $website->where('public_id', $filters['website'])))
+            ->when($filters['partner'] !== null, fn (Builder $query) => $query
+                ->whereHas('businessAccount', fn (Builder $account) => $account->where('public_id', $filters['partner'])))
             ->when($term !== null, fn (Builder $query) => $query->where(fn (Builder $inner) => $inner
                 ->where('reference', 'ilike', "%{$term}%")
                 ->orWhere('storefront_order_reference', 'ilike', "%{$term}%")
                 ->orWhereHas('businessAccount', fn (Builder $account) => $account->where('name', 'ilike', "%{$term}%"))
-                ->orWhereHas('website', fn (Builder $website) => $website->where('name', 'ilike', "%{$term}%"))))
+                ->orWhereHas('website', fn (Builder $website) => $website->where('name', 'ilike', "%{$term}%"))
+                // The customer, by the name or number they gave.
+                ->orWhere('customer->name', 'ilike', "%{$term}%")
+                ->orWhere('customer->mobile', 'ilike', "%{$term}%")
+                ->orWhere('customer->contact_name', 'ilike', "%{$term}%")))
             // What somebody has to act on first: held orders, then waiting ones.
             ->orderByRaw("CASE status WHEN 'on_hold' THEN 0 WHEN 'payment_pending' THEN 1 ELSE 2 END")
             ->orderByDesc('placed_at')
@@ -135,6 +148,9 @@ class OrderController extends Controller
                 // Which shop took it, for an order that came through one (§18.5).
                 'website' => $order->website?->name,
                 'storefront_reference' => $order->storefront_order_reference,
+                // Who it is for, so staff can find an order by its customer.
+                'customer' => OrderCustomerDetails::of($order)['name'],
+                'customer_phone' => OrderCustomerDetails::of($order)['phone'],
                 'status' => $order->status->value,
                 'status_tone' => $order->status->tone(),
                 'payment_status' => $order->payment?->status->value,
@@ -149,6 +165,16 @@ class OrderController extends Controller
             'filters' => $filters,
             'statuses' => array_map(fn (OrderStatus $status) => $status->value, OrderStatus::cases()),
             'sources' => array_map(fn (OrderSource $source) => $source->value, OrderSource::cases()),
+            // For narrowing storefront orders: which Partner, which storefront.
+            'partners' => BusinessAccount::query()
+                ->whereIn('id', Website::query()->select('business_account_id'))
+                ->orderBy('name')
+                ->get(['public_id', 'name'])
+                ->map(fn (BusinessAccount $account) => ['value' => $account->public_id, 'label' => $account->name])
+                ->all(),
+            'storefronts' => Website::query()->orderBy('name')->get(['public_id', 'name'])
+                ->map(fn (Website $website) => ['value' => $website->public_id, 'label' => $website->name])
+                ->all(),
         ]);
     }
 
@@ -239,6 +265,8 @@ class OrderController extends Controller
                 // Whether Banij's share of a Partner-gateway order has been collected (D36); null for every other order.
                 'partner_collection' => $record->receivableCollection?->state()->toArray(),
                 'customer' => $record->customer,
+                // The customer and address in one reading, for the Customer card.
+                'customer_details' => OrderCustomerDetails::of($record),
                 'addresses' => [
                     'billing' => $record->billing_address,
                     'shipping' => $record->shipping_address,
@@ -382,7 +410,35 @@ class OrderController extends Controller
             ],
             // For an Exchange Order: the case that sent it and the Order it replaces goods of.
             'exchange_origin' => $this->caseLinks->exchangeOriginForStaff($actor, $record),
+            // A storefront order's steps (D34) on this same page: no second page to open.
+            'store_order' => $record->source === OrderSource::Website ? $this->storeOrderSteps($record, $actor) : null,
         ]);
+    }
+
+    /**
+     * A storefront order's step-by-step progress, its one next action, the
+     * courier booking, and whether it may still be cancelled -- what the
+     * separate Store Order page used to hold.
+     *
+     * @return array<string, mixed>
+     */
+    protected function storeOrderSteps(Order $record, User $actor): array
+    {
+        $timeline = $this->storeTimeline->for($record);
+        $mayMove = Gate::forUser($actor)->allows('transition', $record);
+
+        return [
+            'timeline' => $timeline,
+            'courier' => $this->storeCourier->forStaff($record, $actor),
+            'urls' => [
+                'advance' => route('admin.store-orders.advance', [$record->public_id, '__action__']),
+                'cancel' => route('admin.store-orders.cancel', $record->public_id),
+            ],
+            'can' => [
+                'advance' => $mayMove && $timeline['next_action'] !== null,
+                'cancel' => $mayMove && ! $timeline['cancelled'] && StoreOrderController::cancellable($record),
+            ],
+        ];
     }
 
     /**
@@ -982,12 +1038,13 @@ class OrderController extends Controller
     }
 
     /**
-     * @return array{search: string|null, status: string|null, source: string|null, website: string|null}
+     * @return array{search: string|null, status: string|null, source: string|null, website: string|null, partner: string|null}
      */
     protected function filters(Request $request): array
     {
         $search = trim($request->string('search')->toString());
         $website = trim($request->string('website')->toString());
+        $partner = trim($request->string('partner')->toString());
 
         return [
             'search' => $search === '' ? null : mb_substr($search, 0, 120),
@@ -995,6 +1052,8 @@ class OrderController extends Controller
             'source' => OrderSource::tryFrom($request->string('source')->toString())?->value,
             // One storefront, by its public id: the link from a website's own admin page.
             'website' => preg_match('/^[0-9A-Za-z]{26}$/', $website) === 1 ? $website : null,
+            // One Partner, by its public id (what the Store Orders list filtered by).
+            'partner' => preg_match('/^[0-9A-Za-z]{26}$/', $partner) === 1 ? $partner : null,
         ];
     }
 

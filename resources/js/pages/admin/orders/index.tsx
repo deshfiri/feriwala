@@ -20,6 +20,9 @@ type OrderRow = {
     source: string;
     website: string | null;
     storefront_reference: string | null;
+    /** Who the order is for, as the order recorded them. */
+    customer: string | null;
+    customer_phone: string | null;
     status: string;
     status_tone: StatusTone;
     payment_status: string | null;
@@ -36,32 +39,48 @@ type Props = {
         source: string | null;
         /** One storefront's public id, from a website's own admin page. */
         website?: string | null;
+        /** One Partner's public id. */
+        partner?: string | null;
     };
     statuses: string[];
     sources: string[];
+    /** Partners and storefronts, for narrowing storefront orders. */
+    partners: Option[];
+    storefronts: Option[];
 };
+
+type Option = { value: string; label: string };
 
 const selectClass =
     'border-input bg-background focus-visible:ring-ring h-9 rounded-lg border px-3 text-sm focus-visible:ring-2 focus-visible:outline-none';
 
 /**
- * Every order on the platform, for the staff who review them (§18.4).
+ * Every order on the platform, for the staff who review them (§18.4) — storefront
+ * orders included, so there is one list to work from rather than two.
  *
  * Held orders come first, then orders waiting for payment, because those are the
  * ones somebody may have to act on. "Needs attention" is said in words beside the
- * status, never by colour alone.
+ * status, never by colour alone. With storefront orders chosen, they can be
+ * narrowed to one Partner or one storefront, as the old Store Orders list could.
  */
 export default function AdminOrders({
     orders,
     filters,
     statuses,
     sources,
+    partners,
+    storefronts,
 }: Props) {
     const { t, locale } = useTranslation();
     const { setFilter } = useTableQuery({ only: ['orders', 'filters'] });
     const filtered = Boolean(
-        filters.search || filters.status || filters.source || filters.website,
+        filters.search ||
+        filters.status ||
+        filters.source ||
+        filters.website ||
+        filters.partner,
     );
+    const storefrontOrders = filters.source === 'website';
 
     const status = (row: OrderRow) => (
         <div className="min-w-0 space-y-1">
@@ -93,6 +112,22 @@ export default function AdminOrders({
                 >
                     {row.reference}
                 </Link>
+            ),
+        },
+        {
+            key: 'customer',
+            header: t('orders.customer_card.title'),
+            cell: (row) => (
+                <div className="min-w-0">
+                    <div className="truncate text-sm">
+                        {row.customer ?? '—'}
+                    </div>
+                    {row.customer_phone && (
+                        <div className="text-muted-foreground truncate font-mono text-xs">
+                            {row.customer_phone}
+                        </div>
+                    )}
+                </div>
             ),
         },
         {
@@ -195,6 +230,60 @@ export default function AdminOrders({
                                     </option>
                                 ))}
                             </select>
+                            {storefrontOrders && (
+                                <>
+                                    <select
+                                        aria-label={t(
+                                            'orders.admin.filter_partner',
+                                        )}
+                                        value={filters.partner ?? ''}
+                                        onChange={(event) =>
+                                            setFilter(
+                                                'partner',
+                                                event.target.value || undefined,
+                                            )
+                                        }
+                                        className={selectClass}
+                                    >
+                                        <option value="">
+                                            {t('orders.admin.all_partners')}
+                                        </option>
+                                        {partners.map((option) => (
+                                            <option
+                                                key={option.value}
+                                                value={option.value}
+                                            >
+                                                {option.label}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <select
+                                        aria-label={t(
+                                            'orders.admin.filter_storefront',
+                                        )}
+                                        value={filters.website ?? ''}
+                                        onChange={(event) =>
+                                            setFilter(
+                                                'website',
+                                                event.target.value || undefined,
+                                            )
+                                        }
+                                        className={selectClass}
+                                    >
+                                        <option value="">
+                                            {t('orders.admin.all_storefronts')}
+                                        </option>
+                                        {storefronts.map((option) => (
+                                            <option
+                                                key={option.value}
+                                                value={option.value}
+                                            >
+                                                {option.label}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </>
+                            )}
                         </>
                     }
                     renderCard={(row) => (
@@ -208,7 +297,9 @@ export default function AdminOrders({
                                         {row.reference}
                                     </Link>
                                     <div className="text-muted-foreground truncate text-xs">
-                                        {row.account}
+                                        {row.customer
+                                            ? `${row.customer}${row.customer_phone ? ` · ${row.customer_phone}` : ''}`
+                                            : row.account}
                                     </div>
                                 </div>
                                 <MoneyAmount amount={row.total} />

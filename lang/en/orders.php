@@ -397,6 +397,18 @@ return [
         ],
     ],
 
+    // Who an order is for and where it goes: the same card on every order page.
+    'customer_card' => [
+        'title' => 'Customer',
+        'business' => 'Business',
+        'name' => 'Name',
+        'phone' => 'Phone',
+        'email' => 'Email',
+        'address' => 'Delivery address',
+        'guest' => 'Guest',
+        'not_given' => 'Not given',
+    ],
+
     'admin' => [
         'title' => 'Orders',
         'description' => 'Every order on the platform. Held orders and orders waiting for payment come first.',
@@ -406,6 +418,10 @@ return [
         'all_statuses' => 'Any status',
         'filter_source' => 'Source',
         'all_sources' => 'Any source',
+        'filter_partner' => 'Partner',
+        'all_partners' => 'Any partner',
+        'filter_storefront' => 'Storefront',
+        'all_storefronts' => 'Any storefront',
         'empty' => 'No orders yet',
         'empty_help' => 'Orders appear here once businesses place them.',
         'no_matches' => 'No orders match',
