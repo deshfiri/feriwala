@@ -102,7 +102,7 @@ Route::prefix('storefront/v1')
                  * The code is sent to the customer's own number and is never
                  * carried on this surface.
                  */
-                
+
                 Route::post('orders/{order}/confirmation/code', [OrderController::class, 'confirmationCode'])
                     ->name('orders.confirmation.code');
                 Route::post('orders/{order}/confirmation', [OrderController::class, 'confirm'])
