@@ -44,6 +44,10 @@ import ShipmentsPanel, {
 } from '@/pages/admin/orders/shipments-panel';
 import { index } from '@/routes/admin/orders';
 import ReasonTextarea from '@/components/forms/reason-textarea';
+import EditableOrderDetails, {
+    type OrderRevisionPanel,
+} from '@/pages/admin/orders/editable-order-details';
+import RevisionHistory from '@/pages/admin/orders/revision-history';
 
 export type SupplierPayableSummary = {
     id: string;
@@ -213,6 +217,8 @@ type Props = {
     exchange_origin?: ExchangeOrigin | null;
     /** A storefront order's steps (D34), shown on this page; null for every other order. */
     store_order?: StoreOrderSteps | null;
+    /** Correcting the order through revisions, and its revision history (D38). */
+    revision?: OrderRevisionPanel | null;
 };
 
 const controlClass =
@@ -231,9 +237,13 @@ export default function AdminOrder({
     can,
     exchange_origin,
     store_order = null,
+    revision = null,
 }: Props) {
     const { t, locale } = useTranslation();
     const [cancelling, setCancelling] = useState(false);
+    const mayRevise =
+        revision !== null &&
+        (revision.can.edit_customer || revision.can.edit_address);
     // A storefront order is cancelled as a store order: before it leaves the
     // warehouse, paid or not. Every other order keeps the unpaid-order cancel.
     const mayCancel = store_order ? store_order.can.cancel : can.cancel;
@@ -281,6 +291,13 @@ export default function AdminOrder({
                 />
 
                 <ExchangeOriginNotice origin={exchange_origin} />
+
+                {mayRevise && revision?.blocker_message && (
+                    <Notice
+                        title={t('orders.revision.blocked_title')}
+                        body={revision.blocker_message}
+                    />
+                )}
 
                 {order.hold_reason && (
                     <Notice
@@ -542,10 +559,24 @@ export default function AdminOrder({
                             history={order.history}
                             lifecycle={order.lifecycle}
                         />
+
+                        {revision && (
+                            <RevisionHistory history={revision.history} />
+                        )}
                     </div>
 
                     <div className="space-y-6">
-                        <OrderCustomerCard customer={order.customer_details} />
+                        {/* Each value editable in place, as a revision (D38), for staff who may. */}
+                        {revision && mayRevise ? (
+                            <EditableOrderDetails
+                                orderId={order.id}
+                                revision={revision}
+                            />
+                        ) : (
+                            <OrderCustomerCard
+                                customer={order.customer_details}
+                            />
+                        )}
 
                         <SectionCard
                             title={t('orders.admin.sections.overview')}

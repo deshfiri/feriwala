@@ -31,6 +31,7 @@ use App\Http\Controllers\Admin\KycUploadOnBehalfController;
 use App\Http\Controllers\Admin\ManagedAccountController;
 use App\Http\Controllers\Admin\ManagedSupplierController;
 use App\Http\Controllers\Admin\OrderController;
+use App\Http\Controllers\Admin\OrderRevisionController;
 use App\Http\Controllers\Admin\OrderReturnController;
 use App\Http\Controllers\Admin\PackageAssignmentController;
 use App\Http\Controllers\Admin\PackageController;
@@ -1578,6 +1579,16 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('orders.show');
         Route::post('orders/{order}/cancellation', [OrderController::class, 'cancel'])
             ->name('orders.cancellation.store');
+
+        /*
+         * Order revisions (D38): correcting an order only through an applied,
+         * append-only revision. Each part answers to its own `order.*`
+         * permission, checked in the action; a reason is always required
+         * (config/reasons.php).
+         */
+        Route::post('orders/{order}/revisions/details', [OrderRevisionController::class, 'details'])
+            ->middleware('throttle:20,1')
+            ->name('orders.revisions.details');
 
         /*
          * Staff source allocation (§5-§8 of the allocation batch, D25).

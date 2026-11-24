@@ -17,7 +17,9 @@ use App\Domain\Order\Actions\AllocateOrderLineSource;
 use App\Domain\Order\Actions\CancelUnpaidOrderByStaff;
 use App\Domain\Order\Actions\EvaluateOrderProceedsEligibility;
 use App\Domain\Order\Actions\RecordCodCollection;
+use App\Domain\Order\Actions\ReviseOrderDetails;
 use App\Domain\Order\Data\AllocationCandidate;
+use App\Domain\Order\Data\RevisableOrderState;
 use App\Domain\Order\DispatchGate;
 use App\Domain\Order\Enums\AllocationSourceType;
 use App\Domain\Order\Enums\OrderCourierStatus;
@@ -33,10 +35,12 @@ use App\Domain\Order\Models\OrderDeliveryStatusChange;
 use App\Domain\Order\Models\OrderFulfillmentStatusChange;
 use App\Domain\Order\Models\OrderItem;
 use App\Domain\Order\Models\OrderItemAllocation;
+use App\Domain\Order\Models\OrderRevision;
 use App\Domain\Order\Models\OrderStatusChange;
 use App\Domain\Order\Queries\AllocationSourceCandidates;
 use App\Domain\Order\Queries\CodConfirmationState;
 use App\Domain\Order\Queries\OrderCustomerDetails;
+use App\Domain\Order\Queries\OrderRevisionEligibility;
 use App\Domain\Order\Queries\SearchAllocationSources;
 use App\Domain\Order\Queries\StoreOrderTimeline;
 use App\Domain\Supplier\Actions\AdvanceSupplierFulfilmentCommitment;
@@ -106,6 +110,7 @@ class OrderController extends Controller
         protected CaseLinks $caseLinks,
         protected StoreOrderTimeline $storeTimeline,
         protected StoreOrderCourierPanel $storeCourier,
+        protected OrderRevisionEligibility $revisionEligibility,
     ) {}
 
     public function index(Request $request): Response
@@ -412,7 +417,101 @@ class OrderController extends Controller
             'exchange_origin' => $this->caseLinks->exchangeOriginForStaff($actor, $record),
             // A storefront order's steps (D34) on this same page: no second page to open.
             'store_order' => $record->source === OrderSource::Website ? $this->storeOrderSteps($record, $actor) : null,
+            // Correcting the order through revisions, and every revision so far (D38).
+            'revision' => $this->revisionPanel($record, $actor),
         ]);
+    }
+
+    /**
+     * What the Edit order dialog needs — the fields this order actually has,
+     * whether this person may change them, why not when the order's state
+     * forbids it — and the revision history, newest last (D38).
+     *
+     * @return array<string, mixed>
+     */
+    protected function revisionPanel(Order $record, User $actor): array
+    {
+        $blocker = $this->revisionEligibility->blocker($record);
+        $editable = fn (?array $values, array $fields) => $values === null ? null : array_intersect_key(
+            $values,
+            array_flip(array_values(array_intersect($fields, array_keys($values)))),
+        );
+
+        $record->load('revisions.appliedBy:id,name');
+
+        return [
+            'number' => $record->revision_number,
+            'blocker' => $blocker,
+            'blocker_message' => $blocker === null ? null : __("orders.revision.blocked.{$blocker}"),
+            'can' => [
+                'edit_customer' => $actor->can('order.edit_customer'),
+                'edit_address' => $actor->can('order.edit_address'),
+            ],
+            'form' => [
+                'customer' => $editable($record->customer, ReviseOrderDetails::CUSTOMER_FIELDS),
+                'shipping_address' => $editable($record->shipping_address, ReviseOrderDetails::ADDRESS_FIELDS),
+                'billing_address' => $editable($record->billing_address, ReviseOrderDetails::ADDRESS_FIELDS),
+                'customer_note' => $record->customer_note,
+            ],
+            'history' => $record->revisions->map(fn (OrderRevision $revision) => [
+                'id' => $revision->public_id,
+                'number' => $revision->revision_number,
+                'status_label' => $revision->status->label(),
+                'applied_at' => $revision->applied_at?->toIso8601String(),
+                'actor' => $revision->appliedBy?->name,
+                'reason' => $revision->reason,
+                'internal_note' => $revision->internal_note,
+                'sections' => $revision->sections,
+                'payment_consequence' => $revision->payment_consequence->label(),
+                'courier_consequence' => $revision->courier_consequence->label(),
+                'total_difference' => $revision->total_difference->jsonSerialize(),
+                'changes' => $this->revisionChanges($revision),
+                'is_current' => $revision->revision_number === $record->revision_number,
+            ])->all(),
+        ];
+    }
+
+    /**
+     * Field by field, what a revision changed: the order's own columns and the
+     * customer's note, each before and after. Staff-only, on the page that
+     * already shows the customer.
+     *
+     * @return list<array{field: string, before: string|null, after: string|null}>
+     */
+    protected function revisionChanges(OrderRevision $revision): array
+    {
+        $before = (array) ($revision->before_snapshot['order'] ?? []);
+        $after = (array) ($revision->final_snapshot['order'] ?? []);
+        $changes = [];
+
+        foreach (RevisableOrderState::changedColumns($before, $after) as $column) {
+            $old = $before[$column] ?? null;
+            $new = $after[$column] ?? null;
+
+            if (is_array($old) || is_array($new)) {
+                foreach (array_unique([...array_keys((array) $old), ...array_keys((array) $new)]) as $key) {
+                    $was = ((array) $old)[$key] ?? null;
+                    $now = ((array) $new)[$key] ?? null;
+
+                    if ($was !== $now) {
+                        $changes[] = ['field' => "{$column}.{$key}", 'before' => is_scalar($was) ? (string) $was : null, 'after' => is_scalar($now) ? (string) $now : null];
+                    }
+                }
+
+                continue;
+            }
+
+            $changes[] = ['field' => $column, 'before' => $old === null ? null : (string) $old, 'after' => $new === null ? null : (string) $new];
+        }
+
+        $noteBefore = $revision->before_snapshot['customer_note'] ?? null;
+        $noteAfter = $revision->final_snapshot['customer_note'] ?? null;
+
+        if ($noteBefore !== $noteAfter) {
+            $changes[] = ['field' => 'customer_note', 'before' => $noteBefore, 'after' => $noteAfter];
+        }
+
+        return $changes;
     }
 
     /**

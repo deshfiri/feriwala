@@ -27,6 +27,8 @@ return [
     // suspension, verification done by hand, and money moved or corrected by
     // hand. These keep demanding a reason.
     'required_for' => [
+        // Every order revision says why it was made (D38).
+        'admin.orders.revisions.*',
         'admin.roles.*',
         'admin.permissions.*',
         'admin.staff.*',
