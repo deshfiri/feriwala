@@ -59,6 +59,7 @@ class SensitiveActionRequest
             PermissionAction::ReverseTransaction,
             PermissionAction::ConvertBalance,
             PermissionAction::SettleManually,
+            PermissionAction::ReviseFinancials,
             PermissionAction::ManageBackups,
             PermissionAction::ManageIntegrations,
         ], true);

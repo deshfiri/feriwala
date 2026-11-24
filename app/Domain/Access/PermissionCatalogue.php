@@ -153,6 +153,10 @@ class PermissionCatalogue
                 Action::View, Action::Create, Action::Edit,
                 Action::Approve, Action::Reject, Action::Verify,
                 Action::Archive, Action::Export, Action::ManageSettings,
+                // Order revisions (D38): granted to no role; the Super Admin
+                // holds them through Gate::before.
+                Action::EditCustomer, Action::EditAddress, Action::ReviseItems,
+                Action::ReviseFinancials, Action::Replace,
             ],
 
             Module::Fulfillment->value => [

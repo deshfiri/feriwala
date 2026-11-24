@@ -1724,3 +1724,137 @@ needs: an order without a resolvable area is refused, and a quote without one pr
 
 **Not changed.** Wholesale purchases keep one flat delivery charge (`wholesale_delivery`), set on the
 same screen.
+
+## D38 — Admin order revisions: an order changes only through append-only revisions (2026-11-24) 🔒 — **narrowly supersedes the "order snapshots are never rewritten" rule**
+
+**Approved by the Project Owner on 2026-11-24**, including the architecture change it needs
+(financial ledger, payment direction and product ownership are touched; nothing about merchant of
+record, storefront separation, account structure, wallet settlement or referral rewards changes).
+
+### What this supersedes
+
+Since P6-1 an order and its lines have been snapshots the database refuses to change
+(`orders_locked_columns`, `orders_delivery_snapshot_locked`, `order_items_history_guard`). That still
+holds for every writer **except one**: an applied **order revision**. Authorised staff may correct an
+order's customer, addresses, lines, prices and delivery — but only by writing an append-only revision
+that records what the order was, what was asked for, what the server calculated, and every
+compensating entry it caused. Nothing else may change those columns, and the identity of the order
+never changes at all.
+
+### Never revisable
+
+Reference, public id, source, business account, website/storefront, storefront reference and return
+URL, website customer, placement time, idempotency key, checkout fingerprint, currency, payment link,
+account type, wholesale payment model, intended resale channel, exchange links — and the identities of
+existing payment, ledger, stock-movement, reservation, allocation, payable and audit rows. Staff who
+need a different account, storefront or source use **Replace order**: a new, correctly linked order
+placed through the normal placement path, after which the original is cancelled or superseded through
+its existing cancellation rules. The original's identity is never rewritten.
+
+### How the database holds it
+
+- **Revisable order columns** — `customer`, `billing_address`, `shipping_address`, `subtotal`,
+  `discount`, `delivery`, the D37 delivery snapshot (`delivery_area`, `delivery_district_id`,
+  `delivery_fee_rule_id`, `delivery_tax`, `delivery_tax_mode`), `tax`, `tax_included`, `cod_fee`,
+  `total`, `coupon_code` — sit behind one trigger. A change is accepted only when `revision_number`
+  rises by exactly one in the same statement **and** an applied `order_revisions` row exists for that
+  order and number whose `before_snapshot.order` equals the old values and whose
+  `final_snapshot.order` equals the new ones, column by column. Every other update of those columns
+  is refused exactly as before. The identity columns keep `orders_locked_columns` unchanged in kind.
+- **Order lines are never updated or deleted.** A revised line is _superseded_: its
+  `superseded_by_revision_id` may be set once, from empty, to an applied revision of the same order
+  that names the line in its own `order_revision_lines`. The corrected line is a new `order_items`
+  row with `introduced_by_revision_id`. `Order::items()` reads the effective lines; the whole history
+  stays in `order_items`, and `Order::allItems()` reads it.
+- `order_revisions`, `order_revision_lines` and `order_revision_adjustments` are append-only by
+  trigger, with no exception. A revision's follow-up (a balance-due payment, a refund request, a
+  courier reconciliation) is its own record with its own state; the revision row points at it and
+  never changes.
+
+### What each revision records
+
+Order, revision number, requested and applied actor, a required reason, an optional internal staff
+note, the before snapshot (order columns and effective lines), the requested edits, the final
+server-calculated snapshot, the monetary difference, the stock difference, the payment consequence,
+the courier consequence, the sections it changed, timestamps, a preview fingerprint and an
+idempotency key. The order page shows every revision and names the effective one.
+
+### State rules
+
+| Order state | Allowed |
+| --- | --- |
+| Before dispatch: no non-cancelled shipment, no live courier booking, delivery `not_shipped`, not terminal | Full revision: customer, addresses, lines, prices, delivery, COD fee |
+| Courier booked or assigned, not picked up | Changes that do not reach the parcel (internal note). Anything the courier holds — name, phone, address, COD amount, contents — is **refused** while a booking is live, with instructions. Steadfast has **no cancel or update API** (requirements/06-steadfast-courier.md): staff cancel the parcel in the Steadfast merchant panel, record the attempt as not booked through the existing route, then revise and book again. A manual-courier shipment is cancelled first through its existing workflow. Banij never says Steadfast was updated. |
+| Picked up, in transit, out for delivery | No order column changes. A contact-note correction may be recorded and is labelled as **not** sent to the courier. Corrections go through recall/return and Replace order. |
+| Delivered or completed | Refused. Money corrections are refunds or charges; goods corrections are the D35 Return, Exchange and Damage workflows. The original invoice stands. |
+| Cancelled, expired, returned, refunded | Refused. Replace order where appropriate. |
+
+### Server-authoritative recalculation
+
+The browser sends intended edits only. The server prices them with the same machinery placement uses
+(`PriceWebsiteOrder` for storefront and Partner-entered orders, the wholesale resolver for wholesale
+orders), re-resolves D37 delivery from the structured district, recalculates delivery tax, tax, COD
+fee and totals, and re-evaluates stock, allocation, supplier payable and partner profit inputs. A
+staff price override is a recorded, reasoned input that the same rules (minimum/maximum selling price
+for a Non-Conditional store) still bound. The preview carries a fingerprint of the calculated result;
+if prices, stock, rules or the order change before apply, apply returns `revision_changed` with a new
+preview and nothing is written.
+
+### Payments
+
+- **Not yet paid** (payment `draft` or `initiated`, window open, not Partner-owned): the payment's
+  amount and components are re-recorded under the payment's settle lock, and the old gateway attempt
+  is discarded as `ChangeOrderPaymentMethod` already does, so the customer pays the new amount. A
+  payment in flight at a gateway (`pending`) refuses the revision until it resolves. A COD order's
+  amount follows the same path and the shop's COD limit is checked again.
+- **Paid, total rises:** the original payment is untouched. A new `order_balance_due` payment is
+  opened for the difference, linked to the order, and dispatch waits for it.
+- **Paid, total falls:** a refund request for the exact difference goes through the existing refund
+  pipeline (approval, then `ProcessRefund` with its own password, two-factor and reason controls). A
+  wallet-paid order is refunded to the wallet in the kinds it was paid from. Nothing is shown as
+  refunded until the gateway or the authorised manual process confirms it.
+- **Partner-owned gateway (D36):** the platform receivable is frozen and append-only, and Feriwala
+  never refunds through a Partner's gateway. Any revision that changes money or lines is refused, with
+  the Partner-settlement and Replace-order instructions; a correction that leaves every amount
+  unchanged is allowed.
+- **Wallet:** only new debit, credit, reversal or adjustment entries, preserving platform credit vs
+  withdrawable. No ledger entry is edited or deleted (non-negotiable 2).
+- **Invoices** are never edited; a paid order's financial revision issues an adjustment document.
+- Code that assumed `payment.amount == order.total` reads the order's settled payments net of
+  refunds instead.
+
+### Stock, allocation and payables
+
+One transaction under a per-order distributed lock, then row locks in a fixed order: order, payment,
+reservations and stock in (product, variant) order. Reservations of superseded lines are released and
+new lines reserved inside that transaction, so a shortfall rolls the whole revision back and nothing
+is applied; row locks are held until commit, so released units cannot be taken by another order in
+between. A committed (paid) central reservation's removed quantity returns from processing through a
+recorded movement; sold stock is never restored by a revision. Allocations on superseded lines are
+stood down and their pending supplier payables cancelled; new lines go back to source allocation with
+a stated reason. Stock movement, reservation and payable histories stay append-only.
+
+### Permissions and confirmation
+
+`order.edit_customer`, `order.edit_address`, `order.revise_items`, `order.revise_financials`,
+`order.replace`. Granted to no role; the Super Admin has them through `Gate::before`.
+`order.revise_financials` is sensitive: password confirmation on the route, two-factor through the
+existing `SensitiveActionGuard` (the project's control is that the account has confirmed two-factor;
+there is no per-action code re-entry anywhere in the project today), and a reason. A business identity
+can never use them (the existing `order.*` refusal). Revision routes are listed in
+`config/reasons.php` `required_for`, so a blank reason is refused rather than defaulted.
+
+### Audit and notifications
+
+Each revision writes one audit entry with references, amounts, sections and consequences, and no
+customer name, phone, address, gateway secret or evidence filename. The Partner is told when their
+order's total, lines, payment requirement or delivery address changes; staff holding the relevant
+permission are told when payment, stock or courier follow-up is needed. Customers are told only
+through an approved channel: none exists for order changes today (no SMS template, and the Storefront
+contract is frozen at v1), so none is sent.
+
+### Delivery
+
+Seven focused commits: decision, schema and permissions; calculation and preview;
+customer/address/note revision; lines, quantities and stock; payment, wallet, payable and invoice
+adjustments; courier and Replace order; admin UI, translations, notifications and browser checks.

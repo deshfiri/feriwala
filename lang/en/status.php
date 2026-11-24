@@ -266,6 +266,49 @@ return [
         'cancelled' => 'Cancelled',
     ],
 
+    // Order revisions (D38).
+    'order_revision' => [
+        'applied' => 'Applied',
+    ],
+
+    'revision_payment' => [
+        'none' => 'No change to the amount',
+        'payment_amount_updated' => 'Payment amount updated',
+        'cod_amount_updated' => 'Cash-on-delivery amount updated',
+        'balance_due' => 'Balance due from the customer',
+        'refund_due' => 'Refund due to the customer',
+    ],
+
+    'revision_courier' => [
+        'none' => 'Courier not affected',
+        'not_booked' => 'No courier booked yet',
+        'recorded_not_sent' => 'Recorded only; the courier was not updated',
+    ],
+
+    'revision_line' => [
+        'added' => 'Added',
+        'removed' => 'Removed',
+        'quantity_changed' => 'Quantity changed',
+        'variant_changed' => 'Variation changed',
+        'price_changed' => 'Price changed',
+    ],
+
+    'revision_adjustment' => [
+        'payment_amount_updated' => 'Payment amount re-recorded',
+        'balance_due_payment' => 'Balance-due payment opened',
+        'refund_request' => 'Refund requested',
+        'wallet_debit' => 'Wallet debited',
+        'wallet_credit' => 'Wallet credited',
+        'stock_released' => 'Stock released',
+        'stock_reserved' => 'Stock reserved',
+        'stock_returned_from_processing' => 'Stock returned from processing',
+        'allocation_stood_down' => 'Source allocation stood down',
+        'supplier_payable_cancelled' => 'Supplier payable cancelled',
+        'supplier_payable_accrued' => 'Supplier payable recorded',
+        'invoice_adjustment' => 'Invoice adjustment issued',
+        'courier_follow_up' => 'Courier follow-up needed',
+    ],
+
     'user' => [
         'active' => 'Active',
         'locked' => 'Locked',

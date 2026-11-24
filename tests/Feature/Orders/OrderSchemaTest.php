@@ -230,18 +230,21 @@ describe('the figures', function () {
         'a negative delivery charge' => [['delivery' => Money::fromDecimal('-0.01'), 'total' => Money::fromDecimal('999.99')], 'orders_amounts_not_negative'],
     ]);
 
-    it('fixes what was bought, for how much and where it goes, once the order is placed', function (array $change) {
+    it('fixes what was bought, for how much and where it goes, once the order is placed', function (array $change, string $refusal) {
         $order = Order::factory()->create();
 
         expect(fn () => DB::table('orders')->where('id', $order->id)->update($change))
-            ->toThrow(QueryException::class, 'cannot be changed once written');
+            ->toThrow(QueryException::class, $refusal);
     })->with([
-        'the total' => [['subtotal' => '0.01', 'total' => '0.01']],
-        'the shipping address' => [['shipping_address' => json_encode(['city' => 'Elsewhere'])]],
-        'the payment' => [['payment_id' => null]],
-        'the source' => [['source' => 'website', 'payment_id' => null]],
-        'the reference' => [['reference' => 'ORD-REWRITTEN']],
-        'the account' => [['business_account_id' => 999999]],
+        // What was bought and where it goes change only through an applied
+        // revision (D38) — see OrderRevisionSchemaTest — and never otherwise.
+        'the total' => [['subtotal' => '0.01', 'total' => '0.01'], 'changes only through its next applied revision'],
+        'the shipping address' => [['shipping_address' => json_encode(['city' => 'Elsewhere'])], 'changes only through its next applied revision'],
+        // What the order is never changes at all.
+        'the payment' => [['payment_id' => null], 'cannot be changed once written'],
+        'the source' => [['source' => 'website', 'payment_id' => null], 'cannot be changed once written'],
+        'the reference' => [['reference' => 'ORD-REWRITTEN'], 'cannot be changed once written'],
+        'the account' => [['business_account_id' => 999999], 'cannot be changed once written'],
     ]);
 });
 

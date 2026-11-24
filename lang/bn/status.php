@@ -250,6 +250,49 @@ return [
         'cancelled' => 'বাতিল',
     ],
 
+    // অর্ডার সংশোধন (D38)।
+    'order_revision' => [
+        'applied' => 'প্রয়োগ করা হয়েছে',
+    ],
+
+    'revision_payment' => [
+        'none' => 'পরিমাণে কোনো পরিবর্তন নেই',
+        'payment_amount_updated' => 'পেমেন্টের পরিমাণ হালনাগাদ হয়েছে',
+        'cod_amount_updated' => 'ক্যাশ অন ডেলিভারির পরিমাণ হালনাগাদ হয়েছে',
+        'balance_due' => 'গ্রাহকের কাছে বাকি পাওনা',
+        'refund_due' => 'গ্রাহককে রিফান্ড দিতে হবে',
+    ],
+
+    'revision_courier' => [
+        'none' => 'কুরিয়ারে প্রভাব নেই',
+        'not_booked' => 'এখনো কোনো কুরিয়ার বুক করা হয়নি',
+        'recorded_not_sent' => 'শুধু নথিভুক্ত; কুরিয়ারকে হালনাগাদ করা হয়নি',
+    ],
+
+    'revision_line' => [
+        'added' => 'যোগ করা হয়েছে',
+        'removed' => 'সরানো হয়েছে',
+        'quantity_changed' => 'পরিমাণ পরিবর্তিত',
+        'variant_changed' => 'ভ্যারিয়েশন পরিবর্তিত',
+        'price_changed' => 'মূল্য পরিবর্তিত',
+    ],
+
+    'revision_adjustment' => [
+        'payment_amount_updated' => 'পেমেন্টের পরিমাণ পুনরায় নথিভুক্ত',
+        'balance_due_payment' => 'বাকি পাওনার পেমেন্ট খোলা হয়েছে',
+        'refund_request' => 'রিফান্ডের অনুরোধ করা হয়েছে',
+        'wallet_debit' => 'ওয়ালেট থেকে কাটা হয়েছে',
+        'wallet_credit' => 'ওয়ালেটে জমা হয়েছে',
+        'stock_released' => 'স্টক অবমুক্ত হয়েছে',
+        'stock_reserved' => 'স্টক সংরক্ষিত হয়েছে',
+        'stock_returned_from_processing' => 'প্রসেসিং থেকে স্টক ফেরত',
+        'allocation_stood_down' => 'উৎস বরাদ্দ প্রত্যাহার',
+        'supplier_payable_cancelled' => 'সরবরাহকারীর পাওনা বাতিল',
+        'supplier_payable_accrued' => 'সরবরাহকারীর পাওনা নথিভুক্ত',
+        'invoice_adjustment' => 'ইনভয়েস সমন্বয় জারি হয়েছে',
+        'courier_follow_up' => 'কুরিয়ারের বিষয়ে পদক্ষেপ দরকার',
+    ],
+
     'user' => [
         'active' => 'সক্রিয়',
         'locked' => 'লক করা হয়েছে',

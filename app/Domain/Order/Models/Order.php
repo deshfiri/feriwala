@@ -44,8 +44,11 @@ use LogicException;
  * One order, from whichever source it came (§18, P6-1).
  *
  * A record of a sale: what was bought and for how much are snapshots taken when
- * it was placed and are never rewritten — the database refuses it — and an order
- * is never deleted. Its status moves only through `transitionTo()` along
+ * it was placed, and an order is never deleted. The one way those snapshots
+ * change is an applied {@see OrderRevision} (D38): the database refuses any
+ * other change, and refuses that one unless it matches the revision exactly.
+ * Its identity — reference, source, account, storefront, payment, placement —
+ * never changes at all. Its status moves only through `transitionTo()` along
  * {@see OrderStatus}, and the database holds it to the same map.
  *
  * Whether it has been paid is the payment's answer, read through its payment
@@ -56,6 +59,7 @@ use LogicException;
  * @property string $reference
  * @property OrderSource $source
  * @property OrderStatus $status
+ * @property int $revision_number how many revisions have been applied; 0 is the order as placed (D38)
  * @property int $business_account_id
  * @property AccountType $account_type the placing account's type, snapshotted at placement (D-new)
  * @property int|null $placed_by
@@ -107,6 +111,8 @@ use LogicException;
  * @property-read Cart|null $cart
  * @property-read Payment|null $payment
  * @property-read Collection<int, OrderItem> $items
+ * @property-read Collection<int, OrderItem> $allItems
+ * @property-read Collection<int, OrderRevision> $revisions
  * @property-read Collection<int, OrderStatusChange> $statusHistory
  * @property-read Collection<int, OrderFulfillmentStatusChange> $fulfillmentStatusHistory
  * @property-read Collection<int, OrderDeliveryStatusChange> $deliveryStatusHistory
@@ -238,11 +244,36 @@ class Order extends Model
     }
 
     /**
+     * The order's effective lines: every line no applied revision has
+     * superseded (D38). For an order never revised, every line it has.
+     *
      * @return HasMany<OrderItem, $this>
      */
     public function items(): HasMany
     {
+        return $this->hasMany(OrderItem::class)->whereNull('superseded_by_revision_id')->orderBy('line_number');
+    }
+
+    /**
+     * Every line the order has ever had, superseded ones included, oldest
+     * first — the history a revision never erases (D38).
+     *
+     * @return HasMany<OrderItem, $this>
+     */
+    public function allItems(): HasMany
+    {
         return $this->hasMany(OrderItem::class)->orderBy('line_number');
+    }
+
+    /**
+     * Every applied revision, oldest first (D38). The last one is the order as
+     * it now stands; with none, the order is as it was placed.
+     *
+     * @return HasMany<OrderRevision, $this>
+     */
+    public function revisions(): HasMany
+    {
+        return $this->hasMany(OrderRevision::class)->orderBy('revision_number');
     }
 
     /**

@@ -1,5 +1,6 @@
 <?php
 
+use App\Domain\Access\Data\SensitiveActionRequest;
 use App\Domain\Access\Enums\PermissionAction;
 use App\Domain\Access\Enums\PermissionModule;
 use App\Domain\Access\Enums\PlatformRole;
@@ -18,8 +19,10 @@ describe('the specification', function () {
         // Assign liability and Dispatch added for return, exchange and damage
         // cases (D35) — each a job of its own, so no one person need be trusted
         // with the whole chain — and Finalize, View own and Request delivery for
-        // posting a damage loss and a Partner's own damaged items.
-        expect(PermissionAction::cases())->toHaveCount(36);
+        // posting a damage loss and a Partner's own damaged items — and Edit
+        // customer details, Edit addresses, Revise items, Revise financials and
+        // Replace for order revisions (D38).
+        expect(PermissionAction::cases())->toHaveCount(41);
     });
 
     it('defines exactly the twenty-one administrative roles in §32.1', function () {
@@ -203,6 +206,25 @@ describe('role grants', function () {
         }
     });
 
+    it('grants the order revision permissions to no role but the Super Admin (D38)', function () {
+        $revision = [
+            'order.edit_customer', 'order.edit_address', 'order.revise_items',
+            'order.revise_financials', 'order.replace',
+        ];
+
+        foreach ($revision as $permission) {
+            expect(PermissionCatalogue::exists($permission))->toBeTrue($permission);
+        }
+
+        foreach (PlatformRole::cases() as $role) {
+            if ($role === PlatformRole::SuperAdmin) {
+                continue;
+            }
+
+            expect(array_intersect($role->permissions(), $revision))->toBe([], "{$role->value} holds an order revision permission");
+        }
+    });
+
     it('gives the report viewer no access to sensitive columns', function () {
         expect(PlatformRole::ReportViewer->permissions())
             ->not->toContain('report.view_sensitive_data');
@@ -223,6 +245,17 @@ describe('sensitive actions', function () {
             ->and(PermissionAction::ConvertBalance->isSensitive())->toBeTrue()
             ->and(PermissionAction::ViewKycDocuments->isSensitive())->toBeTrue()
             ->and(PermissionAction::ManageBackups->isSensitive())->toBeTrue();
+    });
+
+    it('escalates a financial order revision like a refund, and leaves the others ordinary (D38)', function () {
+        $financial = new SensitiveActionRequest(PermissionModule::Order, PermissionAction::ReviseFinancials);
+
+        expect(PermissionAction::ReviseFinancials->isSensitive())->toBeTrue()
+            ->and($financial->requiresTwoFactor())->toBeTrue()
+            ->and($financial->requiresReason())->toBeTrue()
+            ->and(PermissionAction::EditCustomer->isSensitive())->toBeFalse()
+            ->and(PermissionAction::EditAddress->isSensitive())->toBeFalse()
+            ->and(PermissionAction::ReviseItems->isSensitive())->toBeFalse();
     });
 
     it('does not burden ordinary reads with escalation', function () {

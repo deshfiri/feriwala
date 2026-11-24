@@ -120,6 +120,33 @@ enum PermissionAction: string
     /** A Partner asking for their own damaged item to be delivered, and paying for it (D35). Authorized as `view_self` is. */
     case RequestDelivery = 'request_delivery';
 
+    /**
+     * Correcting who an order is for — name, phone, email, note — through a
+     * revision (D38). Its own verb, apart from `edit`, which moves an order
+     * along its workflow and never changes what it says.
+     */
+    case EditCustomer = 'edit_customer';
+
+    /** Correcting an order's delivery and billing addresses through a revision (D38). */
+    case EditAddress = 'edit_address';
+
+    /** Adding, removing or changing an order's lines and quantities, with the stock that follows (D38). */
+    case ReviseItems = 'revise_items';
+
+    /**
+     * Correcting an order's prices, discount, delivery charge, COD fee or
+     * payment method (D38). Sensitive: a revision that changes what someone
+     * pays opens a payment or a refund.
+     */
+    case ReviseFinancials = 'revise_financials';
+
+    /**
+     * Placing a replacement for an order that needs a different account,
+     * storefront or source — the fields no revision may change — and
+     * superseding the original (D38).
+     */
+    case Replace = 'replace';
+
     public function label(): string
     {
         return match ($this) {
@@ -159,6 +186,11 @@ enum PermissionAction: string
             self::Finalize => 'Finalize',
             self::ViewSelf => 'View own',
             self::RequestDelivery => 'Request delivery',
+            self::EditCustomer => 'Edit customer details',
+            self::EditAddress => 'Edit addresses',
+            self::ReviseItems => 'Revise items',
+            self::ReviseFinancials => 'Revise financials',
+            self::Replace => 'Replace',
         };
     }
 
@@ -195,6 +227,9 @@ enum PermissionAction: string
              */
             self::Reactivate,
             self::SettleManually,
+            // A revision that changes what someone pays opens a payment or a
+            // refund (D38): password, two factor and a reason, like a refund.
+            self::ReviseFinancials,
             self::Delete => true,
             default => false,
         };

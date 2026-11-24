@@ -27,7 +27,9 @@ use LogicException;
  * A snapshot. The product may be renamed, repriced or withdrawn tomorrow; this
  * line goes on saying what was sold, at what price, with what discount and tax.
  * Written once, with the order, and never changed or removed — here and in the
- * database.
+ * database. A correction never edits it either (D38): an applied
+ * {@see OrderRevision} marks it superseded, once, and writes the corrected line
+ * as a new row that names the revision which introduced it.
  *
  * @property int $id
  * @property string $public_id
@@ -68,8 +70,12 @@ use LogicException;
  * @property int|null $sourcing_group_id legacy: set only on lines written while sourcing groups drove allocation; never written now
  * @property int|null $sourcing_canonical_product_id legacy, see above
  * @property int|null $sourcing_canonical_variant_id legacy, see above
+ * @property int|null $superseded_by_revision_id the applied revision that replaced or removed this line (D38); null while it is part of the order
+ * @property int|null $introduced_by_revision_id the applied revision that wrote this line (D38); null for a line written at placement
  * @property CarbonImmutable|null $created_at
  * @property-read Order $order
+ * @property-read OrderRevision|null $supersededBy
+ * @property-read OrderRevision|null $introducedBy
  * @property-read Product|null $product
  * @property-read ProductVariant|null $variant
  * @property-read StockReservation|null $stockReservation
@@ -242,13 +248,18 @@ class OrderItem extends Model
     protected static function booted(): void
     {
         static::updating(function (OrderItem $item): void {
-            // The one exception: an exchange line has no stock held until the
-            // returned goods are approved, so its empty reservation may be filled.
+            // An exchange line has no stock held until the returned goods are
+            // approved, so its empty reservation may be filled.
             $fillsExchangeReservation = array_keys($item->getDirty()) === ['stock_reservation_id']
                 && $item->getOriginal('stock_reservation_id') === null
                 && $item->order()->value('source') === OrderSource::Exchange;
 
-            if (! $fillsExchangeReservation) {
+            // An applied revision supersedes the line, once (D38). The database
+            // checks that the revision is applied, is this order's and names the line.
+            $supersededByRevision = array_keys($item->getDirty()) === ['superseded_by_revision_id']
+                && $item->getOriginal('superseded_by_revision_id') === null;
+
+            if (! $fillsExchangeReservation && ! $supersededByRevision) {
                 throw new LogicException('An order line is a snapshot of what was bought and cannot be changed.');
             }
         });
@@ -285,5 +296,27 @@ class OrderItem extends Model
     public function stockReservation(): BelongsTo
     {
         return $this->belongsTo(StockReservation::class);
+    }
+
+    /**
+     * @return BelongsTo<OrderRevision, $this>
+     */
+    public function supersededBy(): BelongsTo
+    {
+        return $this->belongsTo(OrderRevision::class, 'superseded_by_revision_id');
+    }
+
+    /**
+     * @return BelongsTo<OrderRevision, $this>
+     */
+    public function introducedBy(): BelongsTo
+    {
+        return $this->belongsTo(OrderRevision::class, 'introduced_by_revision_id');
+    }
+
+    /** Whether this line is still part of the order (D38). */
+    public function isEffective(): bool
+    {
+        return $this->superseded_by_revision_id === null;
     }
 }

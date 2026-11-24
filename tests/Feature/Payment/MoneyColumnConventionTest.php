@@ -61,6 +61,11 @@ const MONEY_COLUMN_INVENTORY = [
         'exchange_additional_due', 'exchange_refund_due',
     ],
     'order_return_charges' => ['amount'],
+    // Applied order revisions (D38): what the order came to before and after,
+    // each changed line both ways, and each compensating record's amount.
+    'order_revision_adjustments' => ['amount'],
+    'order_revision_lines' => ['unit_price_before', 'unit_price_after', 'line_total_before', 'line_total_after'],
+    'order_revisions' => ['total_before', 'total_after', 'total_difference'],
     'orders' => ['subtotal', 'discount', 'delivery', 'delivery_tax', 'tax', 'tax_included', 'cod_fee', 'total'],
     'package_charges' => ['amount'],
     'packages' => ['fee', 'registration_fee', 'renewal_fee', 'required_deposit', 'minimum_balance'],
