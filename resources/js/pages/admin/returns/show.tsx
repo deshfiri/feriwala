@@ -1,5 +1,6 @@
 import { Form, Head, Link } from '@inertiajs/react';
 import { AlertTriangle, ArrowLeft } from 'lucide-react';
+import ConfirmButton from '@/components/confirm/confirm-button';
 import FormField from '@/components/forms/form-field';
 import InputError from '@/components/input-error';
 import MoneyAmount from '@/components/money-amount';
@@ -112,6 +113,18 @@ export default function AdminReturn({
     const { t, locale } = useTranslation();
     const at = (value: string | null) =>
         value ? new Date(value).toLocaleString(locale) : '—';
+
+    // Money is about to move: the confirmation names how much.
+    const refundAmount = orderReturn.refund.amount;
+    const refundConfirmDescription = refundAmount ? (
+        <>
+            {t('common.confirm.description')}{' '}
+            <span className="text-foreground font-medium">
+                {t('returns.admin.fields.amount')}:{' '}
+                <MoneyAmount amount={refundAmount} direction="credit" />
+            </span>
+        </>
+    ) : undefined;
 
     const reasonField = (error?: string) => (
         <FormField
@@ -366,11 +379,16 @@ export default function AdminReturn({
                                             {({ processing, errors }) => (
                                                 <>
                                                     {reasonField(errors.reason)}
-                                                    <Button
+                                                    <ConfirmButton
                                                         type="submit"
                                                         size="sm"
                                                         variant="destructive"
                                                         disabled={processing}
+                                                        confirm={{
+                                                            confirmLabel: t(
+                                                                'returns.admin.reject',
+                                                            ),
+                                                        }}
                                                     >
                                                         {processing && (
                                                             <Spinner />
@@ -378,7 +396,7 @@ export default function AdminReturn({
                                                         {t(
                                                             'returns.admin.reject',
                                                         )}
-                                                    </Button>
+                                                    </ConfirmButton>
                                                 </>
                                             )}
                                         </Form>
@@ -722,16 +740,23 @@ export default function AdminReturn({
                                                         'returns.admin.start_refund_help',
                                                     )}
                                                 </p>
-                                                <Button
+                                                <ConfirmButton
                                                     type="submit"
                                                     size="sm"
                                                     disabled={processing}
+                                                    confirm={{
+                                                        description:
+                                                            refundConfirmDescription,
+                                                        confirmLabel: t(
+                                                            'returns.admin.start_refund',
+                                                        ),
+                                                    }}
                                                 >
                                                     {processing && <Spinner />}
                                                     {t(
                                                         'returns.admin.start_refund',
                                                     )}
-                                                </Button>
+                                                </ConfirmButton>
                                                 <InputError
                                                     message={errors.refund}
                                                 />
@@ -788,7 +813,7 @@ export default function AdminReturn({
                                                                 />
                                                             )}
                                                         </FormField>
-                                                        <Button
+                                                        <ConfirmButton
                                                             type="submit"
                                                             size="sm"
                                                             variant={
@@ -800,6 +825,19 @@ export default function AdminReturn({
                                                             disabled={
                                                                 processing
                                                             }
+                                                            confirm={{
+                                                                description:
+                                                                    decision ===
+                                                                    'approve'
+                                                                        ? refundConfirmDescription
+                                                                        : undefined,
+                                                                confirmLabel: t(
+                                                                    decision ===
+                                                                        'reject'
+                                                                        ? 'returns.admin.reject_refund'
+                                                                        : 'returns.admin.approve_refund',
+                                                                ),
+                                                            }}
                                                         >
                                                             {processing && (
                                                                 <Spinner />
@@ -810,7 +848,7 @@ export default function AdminReturn({
                                                                     ? 'returns.admin.reject_refund'
                                                                     : 'returns.admin.approve_refund',
                                                             )}
-                                                        </Button>
+                                                        </ConfirmButton>
                                                         <InputError
                                                             message={
                                                                 errors.refund
@@ -849,10 +887,17 @@ export default function AdminReturn({
                                                             }
                                                         </p>
                                                     )}
-                                                    <Button
+                                                    <ConfirmButton
                                                         type="submit"
                                                         size="sm"
                                                         disabled={processing}
+                                                        confirm={{
+                                                            description:
+                                                                refundConfirmDescription,
+                                                            confirmLabel: t(
+                                                                'returns.admin.send_refund',
+                                                            ),
+                                                        }}
                                                     >
                                                         {processing && (
                                                             <Spinner />
@@ -860,7 +905,7 @@ export default function AdminReturn({
                                                         {t(
                                                             'returns.admin.send_refund',
                                                         )}
-                                                    </Button>
+                                                    </ConfirmButton>
                                                     <InputError
                                                         message={errors.refund}
                                                     />
@@ -905,14 +950,21 @@ export default function AdminReturn({
                                                         />
                                                     )}
                                                 </FormField>
-                                                <Button
+                                                <ConfirmButton
                                                     type="submit"
                                                     size="sm"
                                                     disabled={processing}
+                                                    confirm={{
+                                                        description:
+                                                            refundConfirmDescription,
+                                                        confirmLabel: t(
+                                                            'returns.admin.settle',
+                                                        ),
+                                                    }}
                                                 >
                                                     {processing && <Spinner />}
                                                     {t('returns.admin.settle')}
-                                                </Button>
+                                                </ConfirmButton>
                                             </>
                                         )}
                                     </Form>

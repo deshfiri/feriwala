@@ -21,6 +21,7 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { useConfirm } from '@/hooks/use-confirm';
 import { useTranslation } from '@/hooks/use-translation';
 import type { Money } from '@/lib/money';
 
@@ -77,6 +78,7 @@ export default function DeliveryChargesIndex({
     can_manage: canManage,
 }: Props) {
     const { t, locale } = useTranslation();
+    const confirm = useConfirm();
     const [editing, setEditing] = useState<DeliveryRate | null>(null);
 
     const since = (value: string) =>
@@ -86,10 +88,12 @@ export default function DeliveryChargesIndex({
             }),
         });
 
-    const deactivate = (rate: DeliveryRate) => {
+    const deactivate = async (rate: DeliveryRate) => {
         if (
             rate.rule &&
-            window.confirm(t('delivery_charges.actions.deactivate_confirm'))
+            (await confirm({
+                description: t('delivery_charges.actions.deactivate_confirm'),
+            }))
         ) {
             router.delete(DeliveryChargeController.destroy.url(rate.rule.id), {
                 preserveScroll: true,
@@ -171,7 +175,7 @@ export default function DeliveryChargesIndex({
                                     type="button"
                                     size="sm"
                                     variant="ghost"
-                                    onClick={() => deactivate(rate)}
+                                    onClick={() => void deactivate(rate)}
                                 >
                                     {t('delivery_charges.actions.deactivate')}
                                 </Button>

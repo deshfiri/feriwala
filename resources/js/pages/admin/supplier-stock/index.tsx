@@ -1,6 +1,8 @@
 import { Form, Head } from '@inertiajs/react';
 import { Boxes } from 'lucide-react';
+import ConfirmButton from '@/components/confirm/confirm-button';
 import SubmitButton from '@/components/forms/submit-button';
+import { Spinner } from '@/components/ui/spinner';
 import DataTable from '@/components/data-table/data-table';
 import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
@@ -73,19 +75,42 @@ export default function AdminSupplierStockIndex({
                                 })}
                                 options={{ preserveScroll: true }}
                             >
-                                {({ processing }) => (
-                                    <SubmitButton
-                                        processing={processing}
-                                        size="sm"
-                                        variant={
-                                            outcome === 'approve'
-                                                ? 'default'
-                                                : 'outline'
-                                        }
-                                    >
-                                        {t(`supplier.admin.stock.${outcome}`)}
-                                    </SubmitButton>
-                                )}
+                                {({ processing }) =>
+                                    outcome === 'reject' ? (
+                                        <ConfirmButton
+                                            type="submit"
+                                            size="sm"
+                                            variant="outline"
+                                            className="gap-2"
+                                            disabled={processing}
+                                            aria-busy={processing || undefined}
+                                            confirm={{
+                                                confirmLabel: t(
+                                                    'supplier.admin.stock.reject',
+                                                ),
+                                            }}
+                                        >
+                                            {processing && (
+                                                <Spinner className="size-3.5" />
+                                            )}
+                                            {t('supplier.admin.stock.reject')}
+                                        </ConfirmButton>
+                                    ) : (
+                                        <SubmitButton
+                                            processing={processing}
+                                            size="sm"
+                                            variant={
+                                                outcome === 'approve'
+                                                    ? 'default'
+                                                    : 'outline'
+                                            }
+                                        >
+                                            {t(
+                                                `supplier.admin.stock.${outcome}`,
+                                            )}
+                                        </SubmitButton>
+                                    )
+                                }
                             </Form>
                         ))}
                     </div>

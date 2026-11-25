@@ -17,6 +17,7 @@ import SectionCard from '@/components/section-card';
 import StatusPill from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { useConfirm } from '@/hooks/use-confirm';
 import { useTranslation } from '@/hooks/use-translation';
 
 type AssetState = {
@@ -51,9 +52,15 @@ export default function AdminBranding({
     background,
 }: Props) {
     const { t } = useTranslation();
+    const confirm = useConfirm();
 
-    const restore = (asset: AssetState) => {
-        if (!window.confirm(t('branding.restore_confirm'))) {
+    const restore = async (asset: AssetState) => {
+        if (
+            !(await confirm({
+                description: t('branding.restore_confirm'),
+                confirmLabel: t('branding.restore'),
+            }))
+        ) {
             return;
         }
 

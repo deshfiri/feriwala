@@ -12,6 +12,7 @@ import SectionCard from '@/components/section-card';
 import StatusPill from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { useConfirm } from '@/hooks/use-confirm';
 import { useTranslation } from '@/hooks/use-translation';
 import type { Money } from '@/lib/money';
 import type { StatusTone } from '@/lib/status';
@@ -105,6 +106,7 @@ export default function AdminSupplierListingShow({
     history,
 }: Props) {
     const { t, locale } = useTranslation();
+    const confirm = useConfirm();
 
     const correctionForm = useForm({ feedback: '', internal_reason: '' });
 
@@ -138,8 +140,15 @@ export default function AdminSupplierListingShow({
             ),
         );
 
-    const submit = (event: FormEvent) => {
+    const submit = async (event: FormEvent) => {
         event.preventDefault();
+
+        if (
+            form.data.items.some((item) => item.decision === 'reject') &&
+            !(await confirm())
+        ) {
+            return;
+        }
 
         form.transform((data) => ({
             reason: data.reason,
@@ -402,7 +411,10 @@ export default function AdminSupplierListingShow({
                                 {t('supplier.admin.listings.cannot_decide')}
                             </p>
                         ) : (
-                            <form onSubmit={submit} className="space-y-6">
+                            <form
+                                onSubmit={(event) => void submit(event)}
+                                className="space-y-6"
+                            >
                                 {listing.connected_product_summary ? (
                                     <ProductConnectField
                                         value={null}

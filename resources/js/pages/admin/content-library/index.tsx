@@ -12,6 +12,7 @@ import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
 import EmptyState from '@/components/states/empty-state';
 import { Button } from '@/components/ui/button';
+import { useConfirm } from '@/hooks/use-confirm';
 import { useTableQuery } from '@/hooks/use-table-query';
 import { useTranslation } from '@/hooks/use-translation';
 import { create, edit } from '@/routes/admin/content-library';
@@ -30,12 +31,16 @@ type Props = {
 export default function ContentLibraryIndex({ items, can }: Props) {
     const { t } = useTranslation();
     const { search } = useTableQuery({ only: ['items'] });
+    const confirm = useConfirm();
 
-    const remove = (row: LibraryRow) => {
+    const remove = async (row: LibraryRow) => {
         if (
-            !window.confirm(
-                t('content_library.delete_confirm', { title: row.title }),
-            )
+            !(await confirm({
+                description: t('content_library.delete_confirm', {
+                    title: row.title,
+                }),
+                confirmLabel: t('common.actions.delete'),
+            }))
         ) {
             return;
         }

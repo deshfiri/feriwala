@@ -2,6 +2,7 @@ import { Head, router } from '@inertiajs/react';
 import { Archive, Package as PackageIcon, Pencil, Plus } from 'lucide-react';
 import { useState } from 'react';
 import PackageController from '@/actions/App/Http/Controllers/Admin/PackageController';
+import ConfirmButton from '@/components/confirm/confirm-button';
 import MoneyAmount from '@/components/money-amount';
 import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
@@ -9,6 +10,7 @@ import EmptyState from '@/components/states/empty-state';
 import PermissionDeniedState from '@/components/states/permission-denied-state';
 import StatusPill from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
+import { useConfirm } from '@/hooks/use-confirm';
 import { useTranslation } from '@/hooks/use-translation';
 import type { PackageFeatureDefinition, PackageRow } from '@/types';
 import PackageDialog from './package-dialog';
@@ -157,6 +159,7 @@ function PackageCard({
     onEdit?: () => void;
 }) {
     const { t } = useTranslation();
+    const confirm = useConfirm();
 
     const blockers = [
         ...(row.blockers.kyc_requirements?.length
@@ -265,13 +268,22 @@ function PackageCard({
                     <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() =>
+                        onClick={async () => {
+                            if (
+                                row.is_active &&
+                                !(await confirm({
+                                    confirmLabel: t('package.actions.pause'),
+                                }))
+                            ) {
+                                return;
+                            }
+
                             router.patch(
                                 PackageController.setActive.url(row.id),
                                 { is_active: !row.is_active },
                                 { preserveScroll: true },
-                            )
-                        }
+                            );
+                        }}
                     >
                         {row.is_active
                             ? t('package.actions.pause')
@@ -285,9 +297,12 @@ function PackageCard({
                  * mysterious.
                  */}
                 {row.can.archive && blockers.length === 0 && (
-                    <Button
+                    <ConfirmButton
                         variant="ghost"
                         size="sm"
+                        confirm={{
+                            confirmLabel: t('package.actions.archive'),
+                        }}
                         onClick={() =>
                             router.post(
                                 PackageController.archive.url(row.id),
@@ -298,7 +313,7 @@ function PackageCard({
                     >
                         <Archive className="size-4" />
                         {t('package.actions.archive')}
-                    </Button>
+                    </ConfirmButton>
                 )}
             </div>
         </li>

@@ -1,5 +1,6 @@
 import { Form } from '@inertiajs/react';
 import { useState } from 'react';
+import ConfirmButton from '@/components/confirm/confirm-button';
 import FormField from '@/components/forms/form-field';
 import SubmitButton from '@/components/forms/submit-button';
 import TextArea from '@/components/forms/text-area';
@@ -14,6 +15,7 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { Spinner } from '@/components/ui/spinner';
 import { useTranslation } from '@/hooks/use-translation';
 
 export type ContactChannelState = {
@@ -154,6 +156,7 @@ export default function ContactVerificationCard({
                             target={revokeLinkForm}
                             label={t('managed_accounts.revoke_link')}
                             variant="outline"
+                            asksFirst
                         />
                     </div>
                 )}
@@ -291,10 +294,13 @@ function ReasonForm({
     target,
     label,
     variant = 'default',
+    asksFirst = false,
 }: {
     target: FormTarget;
     label: string;
     variant?: 'default' | 'outline';
+    /** Ask "Are you sure?" before submitting: for undoing something, like revoking a link. */
+    asksFirst?: boolean;
 }) {
     const { t } = useTranslation();
 
@@ -314,9 +320,23 @@ function ReasonForm({
                     >
                         {(field) => <Input {...field} name="reason" required />}
                     </FormField>
-                    <SubmitButton processing={processing} variant={variant}>
-                        {label}
-                    </SubmitButton>
+                    {asksFirst ? (
+                        <ConfirmButton
+                            type="submit"
+                            variant={variant}
+                            disabled={processing}
+                            aria-busy={processing || undefined}
+                            className="gap-2"
+                            confirm={{ confirmLabel: label }}
+                        >
+                            {processing && <Spinner className="size-3.5" />}
+                            {label}
+                        </ConfirmButton>
+                    ) : (
+                        <SubmitButton processing={processing} variant={variant}>
+                            {label}
+                        </SubmitButton>
+                    )}
                 </>
             )}
         </Form>

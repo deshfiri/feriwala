@@ -1,7 +1,8 @@
 import { Form, Head, Link } from '@inertiajs/react';
 import { ArrowLeft } from 'lucide-react';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import SupplierWithdrawalController from '@/actions/App/Http/Controllers/Admin/SupplierWithdrawalController';
+import ConfirmButton from '@/components/confirm/confirm-button';
 import InputError from '@/components/input-error';
 import MoneyAmount from '@/components/money-amount';
 import PageContainer from '@/components/page-container';
@@ -81,6 +82,17 @@ export default function AdminSupplierWithdrawalShow({
     const { t, locale } = useTranslation();
     const [rejecting, setRejecting] = useState(false);
     const [failing, setFailing] = useState(false);
+
+    // Money is about to move: the confirmation names which withdrawal and how much.
+    const confirmDescription = (
+        <>
+            {t('common.confirm.description')}{' '}
+            <span className="text-foreground font-medium">
+                {withdrawal.reference} ·{' '}
+                <MoneyAmount amount={withdrawal.amount} />
+            </span>
+        </>
+    );
 
     return (
         <>
@@ -202,15 +214,22 @@ export default function AdminSupplierWithdrawalShow({
                                         options={{ preserveScroll: true }}
                                     >
                                         {({ processing }) => (
-                                            <Button
+                                            <ConfirmButton
                                                 type="submit"
                                                 disabled={processing}
+                                                confirm={{
+                                                    description:
+                                                        confirmDescription,
+                                                    confirmLabel: t(
+                                                        'supplier.admin.withdrawals.approve',
+                                                    ),
+                                                }}
                                             >
                                                 {processing && <Spinner />}
                                                 {t(
                                                     'supplier.admin.withdrawals.approve',
                                                 )}
-                                            </Button>
+                                            </ConfirmButton>
                                         )}
                                     </Form>
                                 )}
@@ -234,15 +253,21 @@ export default function AdminSupplierWithdrawalShow({
                                     options={{ preserveScroll: true }}
                                 >
                                     {({ processing }) => (
-                                        <Button
+                                        <ConfirmButton
                                             type="submit"
                                             disabled={processing}
+                                            confirm={{
+                                                description: confirmDescription,
+                                                confirmLabel: t(
+                                                    'supplier.admin.withdrawals.process',
+                                                ),
+                                            }}
                                         >
                                             {processing && <Spinner />}
                                             {t(
                                                 'supplier.admin.withdrawals.process',
                                             )}
-                                        </Button>
+                                        </ConfirmButton>
                                     )}
                                 </Form>
                             )}
@@ -252,6 +277,7 @@ export default function AdminSupplierWithdrawalShow({
                                 (passwordConfirmed ? (
                                     <MarkPaidForm
                                         withdrawalId={withdrawal.id}
+                                        confirmDescription={confirmDescription}
                                     />
                                 ) : (
                                     <Button variant="outline" asChild>
@@ -332,7 +358,13 @@ export default function AdminSupplierWithdrawalShow({
     );
 }
 
-function MarkPaidForm({ withdrawalId }: { withdrawalId: string }) {
+function MarkPaidForm({
+    withdrawalId,
+    confirmDescription,
+}: {
+    withdrawalId: string;
+    confirmDescription: ReactNode;
+}) {
     const { t } = useTranslation();
 
     return (
@@ -356,10 +388,19 @@ function MarkPaidForm({ withdrawalId }: { withdrawalId: string }) {
                         />
                         <InputError message={errors.external_reference} />
                     </div>
-                    <Button type="submit" disabled={processing}>
+                    <ConfirmButton
+                        type="submit"
+                        disabled={processing}
+                        confirm={{
+                            description: confirmDescription,
+                            confirmLabel: t(
+                                'supplier.admin.withdrawals.mark_paid',
+                            ),
+                        }}
+                    >
                         {processing && <Spinner />}
                         {t('supplier.admin.withdrawals.mark_paid')}
-                    </Button>
+                    </ConfirmButton>
                 </>
             )}
         </Form>

@@ -1,5 +1,6 @@
 import { Form, Head, Link, setLayoutProps } from '@inertiajs/react';
 import { FolderTree } from 'lucide-react';
+import ConfirmButton from '@/components/confirm/confirm-button';
 import FormField from '@/components/forms/form-field';
 import InputError from '@/components/input-error';
 import PageContainer from '@/components/page-container';
@@ -177,22 +178,31 @@ export default function WebsiteCategories({
                                                     : 1,
                                             })}
                                         >
-                                            {({ processing }) => (
-                                                <Button
-                                                    type="submit"
-                                                    size="sm"
-                                                    variant="outline"
-                                                    disabled={processing}
-                                                >
-                                                    {category.is_active
-                                                        ? t(
-                                                              'website.categories.hide',
-                                                          )
-                                                        : t(
-                                                              'website.categories.show',
-                                                          )}
-                                                </Button>
-                                            )}
+                                            {({ processing }) =>
+                                                category.is_active ? (
+                                                    <ConfirmButton
+                                                        type="submit"
+                                                        size="sm"
+                                                        variant="outline"
+                                                        disabled={processing}
+                                                    >
+                                                        {t(
+                                                            'website.categories.hide',
+                                                        )}
+                                                    </ConfirmButton>
+                                                ) : (
+                                                    <Button
+                                                        type="submit"
+                                                        size="sm"
+                                                        variant="outline"
+                                                        disabled={processing}
+                                                    >
+                                                        {t(
+                                                            'website.categories.show',
+                                                        )}
+                                                    </Button>
+                                                )
+                                            }
                                         </Form>
 
                                         <Form
@@ -204,7 +214,7 @@ export default function WebsiteCategories({
                                         >
                                             {({ processing, errors }) => (
                                                 <div className="space-y-1">
-                                                    <Button
+                                                    <ConfirmButton
                                                         type="submit"
                                                         size="sm"
                                                         variant="ghost"
@@ -213,7 +223,7 @@ export default function WebsiteCategories({
                                                         {t(
                                                             'website.categories.remove',
                                                         )}
-                                                    </Button>
+                                                    </ConfirmButton>
                                                     <InputError
                                                         message={errors.website}
                                                     />

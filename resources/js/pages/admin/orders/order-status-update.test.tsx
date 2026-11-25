@@ -29,6 +29,8 @@ vi.mock('@inertiajs/react', async () => {
 });
 
 const { default: OrderStatusUpdate } = await import('./order-status-update');
+const { ConfirmProvider } =
+    await import('@/components/confirm/confirm-provider');
 
 function axis(
     status: string,
@@ -66,7 +68,17 @@ function panel(props: Partial<Parameters<typeof OrderStatusUpdate>[0]> = {}) {
             canManageShipments={false}
             {...props}
         />,
+        { wrapper: ConfirmProvider },
     );
+}
+
+/** Answers the open "Are you sure?" with its own confirm button. */
+async function statusUpdateConfirm(): Promise<void> {
+    await screen.findByText('common.confirm.title');
+    const buttons = screen.getAllByRole('button', {
+        name: /orders\.admin\.status_update\.save/,
+    });
+    fireEvent.click(buttons[buttons.length - 1]);
 }
 
 const save = () =>
@@ -202,7 +214,7 @@ describe('saving', () => {
         expect(requests[0].url).not.toBe(requests[1].url);
     });
 
-    it('asks for the note a move requires before it can be saved, and sends it trimmed', () => {
+    it('asks for the note a move requires before it can be saved, and sends it trimmed', async () => {
         panel();
 
         choose('on_hold');
@@ -223,11 +235,47 @@ describe('saving', () => {
         expect(save()).toBeEnabled();
 
         fireEvent.click(save());
+        await statusUpdateConfirm();
 
+        await vi.waitFor(() => expect(requests).toHaveLength(1));
         expect(requests[0].payload).toEqual({
             status: 'on_hold',
             reason: 'Waiting on a stock count',
         });
+    });
+
+    it('asks before a hold or a cancellation, and sends nothing when declined', async () => {
+        panel();
+
+        choose('on_hold');
+        fireEvent.change(screen.getByRole('textbox'), {
+            target: { value: 'Stock check' },
+        });
+        fireEvent.click(save());
+
+        expect(
+            await screen.findByText(
+                'orders.admin.status_update.effects.order_fulfillment.on_hold',
+                { selector: '[data-slot="dialog-description"]' },
+            ),
+        ).toBeInTheDocument();
+        fireEvent.click(
+            screen.getByRole('button', { name: 'common.actions.cancel' }),
+        );
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(requests).toHaveLength(0);
+        expect(save()).toBeEnabled();
+    });
+
+    it('does not ask about a routine step forward', () => {
+        panel();
+
+        choose('packing');
+        fireEvent.click(save());
+
+        expect(screen.queryByText('common.confirm.title')).toBeNull();
+        expect(requests).toHaveLength(1);
     });
 
     it('treats the note as optional where the server does', () => {
@@ -295,7 +343,7 @@ describe('saving', () => {
         expect(save()).toBeDisabled();
     });
 
-    it('shows the server’s refusal beside the form and keeps what was chosen', () => {
+    it('shows the server’s refusal beside the form and keeps what was chosen', async () => {
         panel();
 
         choose('on_hold');
@@ -303,6 +351,8 @@ describe('saving', () => {
             target: { value: 'Stock check' },
         });
         fireEvent.click(save());
+        await statusUpdateConfirm();
+        await vi.waitFor(() => expect(requests).toHaveLength(1));
         act(() =>
             requests[0].fail({
                 status: 'Cannot move from picking to on hold.',
@@ -560,7 +610,7 @@ describe('one step at a time', () => {
         expect(screen.queryByRole('status')).not.toBeInTheDocument();
     });
 
-    it('does not offer to continue while the next track is still waiting', () => {
+    it('does not offer to continue while the next track is still waiting', async () => {
         panel({ lifecycle: waiting() });
 
         choose('on_hold');
@@ -568,6 +618,8 @@ describe('one step at a time', () => {
             target: { value: 'Stock check' },
         });
         fireEvent.click(save());
+        await statusUpdateConfirm();
+        await vi.waitFor(() => expect(requests).toHaveLength(1));
         act(() => requests[0].succeed());
 
         expect(screen.queryByRole('status')).not.toBeInTheDocument();

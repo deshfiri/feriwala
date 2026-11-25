@@ -22,6 +22,8 @@ vi.mock('@inertiajs/react', async () => {
     };
 });
 
+const { ConfirmProvider } =
+    await import('@/components/confirm/confirm-provider');
 const { default: AdminSms } = await import('./sms');
 
 const smsEvents: SmsEventRow[] = [
@@ -51,29 +53,38 @@ const smsEvents: SmsEventRow[] = [
     },
 ];
 
+/** Answers the app's "Are you sure?" with Confirm. */
+async function smsConfirmDialog(): Promise<void> {
+    fireEvent.click(
+        await screen.findByRole('button', { name: 'common.actions.confirm' }),
+    );
+}
+
 function renderSmsPage(manage = true) {
     return render(
-        <AdminSms
-            settings={{
-                enabled: true,
-                provider: 'log',
-                can_send: true,
-                storefront_verification_required: false,
-            }}
-            providers={[
-                {
-                    name: 'log',
-                    is_implemented: true,
-                    is_active: true,
-                    is_configured: true,
-                    required_configuration: [],
-                    missing_configuration: [],
-                },
-            ]}
-            messages={[]}
-            events={smsEvents}
-            can={{ manage }}
-        />,
+        <ConfirmProvider>
+            <AdminSms
+                settings={{
+                    enabled: true,
+                    provider: 'log',
+                    can_send: true,
+                    storefront_verification_required: false,
+                }}
+                providers={[
+                    {
+                        name: 'log',
+                        is_implemented: true,
+                        is_active: true,
+                        is_configured: true,
+                        required_configuration: [],
+                        missing_configuration: [],
+                    },
+                ]}
+                messages={[]}
+                events={smsEvents}
+                can={{ manage }}
+            />
+        </ConfirmProvider>,
     );
 }
 
@@ -109,7 +120,7 @@ describe('the per-event SMS switches', () => {
         );
     });
 
-    it('warns on a one-time code and asks before switching it off', () => {
+    it('warns on a one-time code and asks, in words, before switching it off', async () => {
         renderSmsPage();
 
         expect(smsEventSwitch('mobile_verification')).toBeEnabled();
@@ -117,45 +128,59 @@ describe('the per-event SMS switches', () => {
             screen.getByText('sms.event_switch.code_warning'),
         ).toBeInTheDocument();
 
-        const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false);
         fireEvent.click(smsEventSwitch('mobile_verification'));
 
         // Declined: nothing is sent.
-        expect(confirm).toHaveBeenCalledWith(
-            'sms.event_switch.confirm_code_off',
+        expect(
+            await screen.findByText('sms.event_switch.confirm_code_off'),
+        ).toBeInTheDocument();
+        fireEvent.click(
+            screen.getByRole('button', { name: 'common.actions.cancel' }),
         );
+        await new Promise((resolve) => setTimeout(resolve, 0));
         expect(router.put).not.toHaveBeenCalled();
 
-        confirm.mockReturnValueOnce(true);
         fireEvent.click(smsEventSwitch('mobile_verification'));
+        await smsConfirmDialog();
 
-        expect(router.put).toHaveBeenCalledTimes(1);
+        await vi.waitFor(() => expect(router.put).toHaveBeenCalledTimes(1));
         expect(router.put.mock.calls[0][1]).toEqual({
             event: 'mobile_verification',
             enabled: false,
         });
-
-        confirm.mockRestore();
     });
 
-    it('does not ask before switching an ordinary event off', () => {
-        renderSmsPage();
-
-        const confirm = vi.spyOn(window, 'confirm');
-        fireEvent.click(smsEventSwitch('account.activated'));
-
-        expect(confirm).not.toHaveBeenCalled();
-        expect(router.put).toHaveBeenCalledTimes(1);
-
-        confirm.mockRestore();
-    });
-
-    it('sends the flipped state for that event', () => {
+    it('asks before switching an ordinary event off too', async () => {
         renderSmsPage();
 
         fireEvent.click(smsEventSwitch('account.activated'));
 
-        expect(router.put).toHaveBeenCalledTimes(1);
+        expect(
+            await screen.findByText('common.confirm.description'),
+        ).toBeInTheDocument();
+        expect(router.put).not.toHaveBeenCalled();
+    });
+
+    it('does not ask before switching an event on', async () => {
+        renderSmsPage();
+
+        fireEvent.click(smsEventSwitch('payment.received'));
+
+        await vi.waitFor(() => expect(router.put).toHaveBeenCalledTimes(1));
+        expect(screen.queryByText('common.confirm.title')).toBeNull();
+        expect(router.put.mock.calls[0][1]).toEqual({
+            event: 'payment.received',
+            enabled: true,
+        });
+    });
+
+    it('sends the flipped state for that event', async () => {
+        renderSmsPage();
+
+        fireEvent.click(smsEventSwitch('account.activated'));
+        await smsConfirmDialog();
+
+        await vi.waitFor(() => expect(router.put).toHaveBeenCalledTimes(1));
         expect(router.put.mock.calls[0][0]).toBe('/admin/sms/events');
         expect(router.put.mock.calls[0][1]).toEqual({
             event: 'account.activated',

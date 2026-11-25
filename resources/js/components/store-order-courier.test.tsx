@@ -22,6 +22,14 @@ vi.mock('@inertiajs/react', () => ({
 
 const { PartnerCourierCard, StaffCourierPanel } =
     await import('./store-order-courier');
+const { ConfirmProvider } = await import('./confirm/confirm-provider');
+
+/** Clicks the open confirmation's own confirm button, labelled with the action. */
+async function courierConfirmDialog(label: string): Promise<void> {
+    await screen.findByText('common.confirm.title');
+    const buttons = screen.getAllByRole('button', { name: label });
+    fireEvent.click(buttons[buttons.length - 1]);
+}
 
 const shipment: NonNullable<StaffCourierData['shipment']> = {
     id: 'shp_1',
@@ -80,43 +88,56 @@ describe('the staff panel', () => {
         expect(screen.queryByText('steadfast.panel.disabled')).toBeNull();
     });
 
-    it('offers booking only when booking is allowed, and asks first', () => {
-        const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
-
-        const { rerender } = render(<StaffCourierPanel courier={staff()} />);
+    it('offers booking only when booking is allowed, and asks first', async () => {
+        const { rerender } = render(
+            <ConfirmProvider>
+                <StaffCourierPanel courier={staff()} />
+            </ConfirmProvider>,
+        );
 
         expect(
             screen.queryByRole('button', { name: 'steadfast.panel.book' }),
         ).toBeNull();
 
         rerender(
-            <StaffCourierPanel
-                courier={staff({
-                    can: {
-                        book: true,
-                        reconcile: false,
-                        mark_not_booked: false,
-                    },
-                })}
-            />,
+            <ConfirmProvider>
+                <StaffCourierPanel
+                    courier={staff({
+                        can: {
+                            book: true,
+                            reconcile: false,
+                            mark_not_booked: false,
+                        },
+                    })}
+                />
+            </ConfirmProvider>,
         );
 
         fireEvent.click(
             screen.getByRole('button', { name: 'steadfast.panel.book' }),
         );
 
-        expect(confirm).toHaveBeenCalledOnce();
+        expect(
+            await screen.findByText('steadfast.panel.book_confirm'),
+        ).toBeTruthy();
+        fireEvent.click(
+            screen.getByRole('button', { name: 'common.actions.cancel' }),
+        );
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
         // Declining the confirmation sends nothing: a booking may be chargeable.
         expect(post).not.toHaveBeenCalled();
 
-        confirm.mockReturnValue(true);
         fireEvent.click(
             screen.getByRole('button', { name: 'steadfast.panel.book' }),
         );
+        await courierConfirmDialog('steadfast.panel.book');
 
-        expect(post).toHaveBeenCalledWith(
-            '/admin/orders/ord_1/steadfast-booking',
-            { preserveScroll: true },
+        await vi.waitFor(() =>
+            expect(post).toHaveBeenCalledWith(
+                '/admin/orders/ord_1/steadfast-booking',
+                { preserveScroll: true },
+            ),
         );
     });
 
@@ -153,7 +174,7 @@ describe('the staff panel', () => {
         );
     });
 
-    it('lets a person settle an uncertain booking, and only then', () => {
+    it('lets a person settle an uncertain booking, and only then', async () => {
         const uncertain = staff({
             booking: {
                 id: 'att_1',
@@ -170,7 +191,11 @@ describe('the staff panel', () => {
             },
         });
 
-        const { unmount } = render(<StaffCourierPanel courier={uncertain} />);
+        const { unmount } = render(
+            <ConfirmProvider>
+                <StaffCourierPanel courier={uncertain} />
+            </ConfirmProvider>,
+        );
 
         expect(
             screen.getByRole('button', { name: 'steadfast.panel.reconcile' }),
@@ -188,9 +213,15 @@ describe('the staff panel', () => {
             screen.getByRole('button', { name: 'steadfast.panel.reconcile' }),
         );
 
-        expect(post).toHaveBeenCalledWith(
-            '/admin/courier/booking-attempts/att_1/reconcile',
-            { preserveScroll: true },
+        // Nothing is sent until the person confirms.
+        expect(post).not.toHaveBeenCalled();
+        await courierConfirmDialog('steadfast.panel.reconcile');
+
+        await vi.waitFor(() =>
+            expect(post).toHaveBeenCalledWith(
+                '/admin/courier/booking-attempts/att_1/reconcile',
+                { preserveScroll: true },
+            ),
         );
 
         unmount();

@@ -7,6 +7,7 @@ import SectionCard from '@/components/section-card';
 import StatusPill from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { useConfirm } from '@/hooks/use-confirm';
 import { useTranslation } from '@/hooks/use-translation';
 import { HEX_COLOR_PATTERN } from '@/lib/accent';
 import { cn } from '@/lib/utils';
@@ -41,14 +42,20 @@ export default function BackgroundColorPicker({
     background: BackgroundColorState;
 }) {
     const { t } = useTranslation();
+    const confirm = useConfirm();
     const [color, setColor] = useState(background.color);
 
     const isValid = HEX_COLOR_PATTERN.test(color);
     const previewColor = isValid ? color.toLowerCase() : background.color;
     const isUnchanged = previewColor === background.color.toLowerCase();
 
-    const restore = () => {
-        if (!window.confirm(t('branding.background.restore_confirm'))) {
+    const restore = async () => {
+        if (
+            !(await confirm({
+                description: t('branding.background.restore_confirm'),
+                confirmLabel: t('branding.background.restore'),
+            }))
+        ) {
             return;
         }
 

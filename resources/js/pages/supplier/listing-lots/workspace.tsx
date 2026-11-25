@@ -1,6 +1,7 @@
 import { Form, Head, router } from '@inertiajs/react';
 import { Lock, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
+import ConfirmButton from '@/components/confirm/confirm-button';
 import SubmitButton from '@/components/forms/submit-button';
 import MoneyAmount from '@/components/money-amount';
 import PageContainer from '@/components/page-container';
@@ -8,6 +9,8 @@ import PageHeader from '@/components/page-header';
 import SectionCard from '@/components/section-card';
 import StatusPill from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
+import { Spinner } from '@/components/ui/spinner';
+import { useConfirm } from '@/hooks/use-confirm';
 import { useTranslation } from '@/hooks/use-translation';
 import { archive } from '@/routes/supplier/listing-lots';
 import { archive as archiveEntry } from '@/routes/supplier/listing-lots/items';
@@ -28,11 +31,14 @@ export default function SupplierListingLotWorkspace({
     };
 }) {
     const { t, locale } = useTranslation();
+    const confirm = useConfirm();
     const [editing, setEditing] = useState<LotEntry | null | 'new'>(null);
 
-    const remove = (entry: LotEntry) => {
+    const remove = async (entry: LotEntry) => {
         if (
-            !window.confirm(t('supplier.listing_lots.workspace.remove_entry'))
+            !(await confirm({
+                confirmLabel: t('supplier.listing_lots.workspace.remove_entry'),
+            }))
         ) {
             return;
         }
@@ -216,14 +222,25 @@ export default function SupplierListingLotWorkspace({
                     lot.is_draft && (
                         <Form {...archive.form(lot.id)}>
                             {({ processing }) => (
-                                <SubmitButton
-                                    processing={processing}
+                                <ConfirmButton
+                                    type="submit"
                                     variant="outline"
+                                    disabled={processing}
+                                    aria-busy={processing || undefined}
+                                    className="gap-2"
+                                    confirm={{
+                                        confirmLabel: t(
+                                            'supplier.listing_lots.workspace.discard_batch',
+                                        ),
+                                    }}
                                 >
+                                    {processing && (
+                                        <Spinner className="size-3.5" />
+                                    )}
                                     {t(
                                         'supplier.listing_lots.workspace.discard_batch',
                                     )}
-                                </SubmitButton>
+                                </ConfirmButton>
                             )}
                         </Form>
                     )

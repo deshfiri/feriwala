@@ -20,6 +20,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import StructureOutline from '@/components/kyc/structure-outline';
+import { useConfirm } from '@/hooks/use-confirm';
 import { useTranslation } from '@/hooks/use-translation';
 import {
     active,
@@ -54,6 +55,7 @@ export default function KycBatchTemplates({
     can: { create: boolean; activate: boolean };
 }) {
     const { t } = useTranslation();
+    const confirm = useConfirm();
     const [creating, setCreating] = useState(false);
     const [busy, setBusy] = useState<string | null>(null);
 
@@ -223,7 +225,18 @@ export default function KycBatchTemplates({
                                             variant="outline"
                                             size="sm"
                                             disabled={busy === batch.id}
-                                            onClick={() =>
+                                            onClick={async () => {
+                                                if (
+                                                    batch.is_active &&
+                                                    !(await confirm({
+                                                        confirmLabel: t(
+                                                            'kyc.builder.deactivate',
+                                                        ),
+                                                    }))
+                                                ) {
+                                                    return;
+                                                }
+
                                                 act(batch.id, () =>
                                                     router.patch(
                                                         active.url(batch.id),
@@ -237,8 +250,8 @@ export default function KycBatchTemplates({
                                                                 setBusy(null),
                                                         },
                                                     ),
-                                                )
-                                            }
+                                                );
+                                            }}
                                         >
                                             <Power
                                                 className="size-4"

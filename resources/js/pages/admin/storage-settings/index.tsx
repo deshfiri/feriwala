@@ -1,6 +1,7 @@
 import { Form, Head, useForm, useHttp } from '@inertiajs/react';
 import { useState } from 'react';
 import StorageSettingsController from '@/actions/App/Http/Controllers/Admin/StorageSettingsController';
+import ConfirmButton from '@/components/confirm/confirm-button';
 import FormField from '@/components/forms/form-field';
 import SubmitButton from '@/components/forms/submit-button';
 import PageContainer from '@/components/page-container';
@@ -9,6 +10,7 @@ import SectionCard from '@/components/section-card';
 import StatusPill from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Spinner } from '@/components/ui/spinner';
 import { useTranslation } from '@/hooks/use-translation';
 import ReasonTextarea from '@/components/forms/reason-textarea';
 
@@ -200,24 +202,33 @@ export default function StorageSettingsIndex({ settings, can }: Props) {
                                         )}
                                     </FormField>
 
-                                    <SubmitButton
-                                        processing={toggling}
-                                        variant={
-                                            settings.enabled
-                                                ? 'outline'
-                                                : 'default'
-                                        }
-                                        disabled={
-                                            !settings.enabled &&
-                                            !settings.is_configured
-                                        }
-                                    >
-                                        {t(
-                                            settings.enabled
-                                                ? 'storage_settings.disable'
-                                                : 'storage_settings.enable',
-                                        )}
-                                    </SubmitButton>
+                                    {settings.enabled ? (
+                                        <ConfirmButton
+                                            type="submit"
+                                            variant="outline"
+                                            className="gap-2"
+                                            disabled={toggling}
+                                            aria-busy={toggling || undefined}
+                                            confirm={{
+                                                confirmLabel: t(
+                                                    'storage_settings.disable',
+                                                ),
+                                            }}
+                                        >
+                                            {toggling && (
+                                                <Spinner className="size-3.5" />
+                                            )}
+                                            {t('storage_settings.disable')}
+                                        </ConfirmButton>
+                                    ) : (
+                                        <SubmitButton
+                                            processing={toggling}
+                                            variant="default"
+                                            disabled={!settings.is_configured}
+                                        >
+                                            {t('storage_settings.enable')}
+                                        </SubmitButton>
+                                    )}
                                 </>
                             )}
                         </Form>

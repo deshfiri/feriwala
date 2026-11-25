@@ -2,6 +2,7 @@ import { router } from '@inertiajs/react';
 import { Monitor } from 'lucide-react';
 import { useState } from 'react';
 import SecurityController from '@/actions/App/Http/Controllers/Settings/SecurityController';
+import ConfirmButton from '@/components/confirm/confirm-button';
 import ConfirmDialog from '@/components/forms/confirm-dialog';
 import Heading from '@/components/heading';
 import { Button } from '@/components/ui/button';
@@ -118,7 +119,7 @@ export default function ManageSessions({ sessions = [] }: Props) {
                             </div>
 
                             {!session.is_current && !session.ended && (
-                                <Button
+                                <ConfirmButton
                                     variant="ghost"
                                     size="sm"
                                     className="text-destructive hover:bg-destructive/10 hover:text-destructive shrink-0"
@@ -126,7 +127,7 @@ export default function ManageSessions({ sessions = [] }: Props) {
                                     onClick={() => signOut(session.id)}
                                 >
                                     {t('security.sessions.sign_out')}
-                                </Button>
+                                </ConfirmButton>
                             )}
                         </div>
                     ))

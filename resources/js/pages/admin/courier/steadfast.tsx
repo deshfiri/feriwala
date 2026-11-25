@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
+import { useConfirm } from '@/hooks/use-confirm';
 import { useTranslation } from '@/hooks/use-translation';
 
 type Settings = {
@@ -51,6 +52,7 @@ export default function Steadfast({
     can: { manage: boolean };
 }) {
     const { t } = useTranslation();
+    const confirm = useConfirm();
     const [token, setToken] = useState<string | null>(null);
     const [copied, setCopied] = useState<'token' | 'url' | null>(null);
     const rotation = useHttp<Record<string, never>, { token: string }>({});
@@ -58,7 +60,9 @@ export default function Steadfast({
     async function generate() {
         if (
             settings.has_webhook_token &&
-            !window.confirm(t('steadfast.ui.regenerate_confirm'))
+            !(await confirm({
+                description: t('steadfast.ui.regenerate_confirm'),
+            }))
         ) {
             return;
         }

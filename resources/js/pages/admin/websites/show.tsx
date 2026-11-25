@@ -1,5 +1,7 @@
 import { Form, Head, Link } from '@inertiajs/react';
 import { ArrowLeft } from 'lucide-react';
+import { useRef, type MouseEvent } from 'react';
+import ConfirmButton from '@/components/confirm/confirm-button';
 import FormField from '@/components/forms/form-field';
 import InputError from '@/components/input-error';
 import MoneyAmount from '@/components/money-amount';
@@ -12,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
+import { useConfirm } from '@/hooks/use-confirm';
 import { useTranslation } from '@/hooks/use-translation';
 import WebsiteController from '@/actions/App/Http/Controllers/Admin/WebsiteController';
 import {
@@ -58,6 +61,15 @@ type Props = {
     image_limits: { max_bytes: number; accepted: string[] };
 };
 
+/** Moves that take a storefront offline or end it: each is asked about first. */
+const NEGATIVE_WEBSITE_STATUSES = [
+    'temporarily_disabled',
+    'package_expired',
+    'suspended',
+    'maintenance',
+    'closed',
+];
+
 const controlClass =
     'border-input bg-background focus-visible:ring-ring w-full rounded-lg border px-3 py-2 text-sm focus-visible:ring-2 focus-visible:outline-none';
 
@@ -86,6 +98,52 @@ export default function AdminWebsiteShow({
 
     const date = (value: string | null) =>
         value ? new Date(value).toLocaleDateString(locale) : '—';
+
+    const confirm = useConfirm();
+    const statusMoveConfirmed = useRef(false);
+
+    /**
+     * Asks "Are you sure?" only when the chosen move takes the storefront down
+     * — suspended, disabled, expired, in maintenance or closed. A routine move
+     * submits straight away, as before.
+     */
+    const confirmStatusMove = (event: MouseEvent<HTMLButtonElement>) => {
+        if (statusMoveConfirmed.current) {
+            statusMoveConfirmed.current = false;
+
+            return;
+        }
+
+        const button = event.currentTarget;
+        const select = button.form?.elements.namedItem('status');
+
+        if (
+            !(select instanceof HTMLSelectElement) ||
+            !NEGATIVE_WEBSITE_STATUSES.includes(select.value)
+        ) {
+            return;
+        }
+
+        event.preventDefault();
+
+        void confirm({
+            description: (
+                <>
+                    {t('common.confirm.description')}{' '}
+                    <span className="text-foreground font-medium">
+                        {website.name} →{' '}
+                        {select.selectedOptions[0]?.text ?? select.value}
+                    </span>
+                </>
+            ),
+            confirmLabel: t('website.admin.move_submit'),
+        }).then((yes) => {
+            if (yes) {
+                statusMoveConfirmed.current = true;
+                button.click();
+            }
+        });
+    };
 
     return (
         <>
@@ -357,6 +415,7 @@ export default function AdminWebsiteShow({
                                         <Button
                                             type="submit"
                                             disabled={processing}
+                                            onClick={confirmStatusMove}
                                         >
                                             {processing && <Spinner />}
                                             {t('website.admin.move_submit')}
@@ -377,11 +436,6 @@ export default function AdminWebsiteShow({
                         >
                             <Form
                                 {...WebsiteController.destroy.form(website.id)}
-                                onBefore={() =>
-                                    window.confirm(
-                                        t('website.admin.delete_confirm'),
-                                    )
-                                }
                                 className="space-y-4"
                             >
                                 {({ processing, errors }) => (
@@ -406,14 +460,23 @@ export default function AdminWebsiteShow({
                                             />
                                         </div>
 
-                                        <Button
+                                        {/* Asked before the visit starts: the confirmation is the click. */}
+                                        <ConfirmButton
                                             type="submit"
                                             variant="destructive"
                                             disabled={processing}
+                                            confirm={{
+                                                description: t(
+                                                    'website.admin.delete_confirm',
+                                                ),
+                                                confirmLabel: t(
+                                                    'website.admin.delete_submit',
+                                                ),
+                                            }}
                                         >
                                             {processing && <Spinner />}
                                             {t('website.admin.delete_submit')}
-                                        </Button>
+                                        </ConfirmButton>
                                     </>
                                 )}
                             </Form>
@@ -851,15 +914,27 @@ function DomainRouting({
                                         )}
                                     />
                                     <InputError message={errors.reason} />
-                                    <Button
+                                    <ConfirmButton
                                         type="submit"
                                         size="sm"
                                         variant="destructive"
                                         disabled={processing}
                                         className="self-start"
+                                        confirm={{
+                                            description: (
+                                                <>
+                                                    {t(
+                                                        'common.confirm.description',
+                                                    )}{' '}
+                                                    <span className="text-foreground font-medium break-all">
+                                                        {domain.domain}
+                                                    </span>
+                                                </>
+                                            ),
+                                        }}
                                     >
                                         {t('website.admin.routing_suspend')}
-                                    </Button>
+                                    </ConfirmButton>
                                 </>
                             )}
                         </Form>

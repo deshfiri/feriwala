@@ -1,5 +1,6 @@
 import { Form, Head } from '@inertiajs/react';
 import PaymentGatewayController from '@/actions/App/Http/Controllers/Admin/PaymentGatewayController';
+import ConfirmButton from '@/components/confirm/confirm-button';
 import InputError from '@/components/input-error';
 import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
@@ -391,21 +392,27 @@ export default function Gateways({ gateways, modes, can }: Props) {
                                                 message={errors.enabled}
                                             />
 
-                                            <Button
-                                                type="submit"
-                                                variant={
-                                                    gateway.is_enabled
-                                                        ? 'outline'
-                                                        : 'default'
-                                                }
-                                                disabled={processing}
-                                            >
-                                                {t(
-                                                    gateway.is_enabled
-                                                        ? 'gateways.enable.disable'
-                                                        : 'gateways.enable.enable',
-                                                )}
-                                            </Button>
+                                            {gateway.is_enabled ? (
+                                                <ConfirmButton
+                                                    type="submit"
+                                                    variant="outline"
+                                                    disabled={processing}
+                                                >
+                                                    {t(
+                                                        'gateways.enable.disable',
+                                                    )}
+                                                </ConfirmButton>
+                                            ) : (
+                                                <Button
+                                                    type="submit"
+                                                    variant="default"
+                                                    disabled={processing}
+                                                >
+                                                    {t(
+                                                        'gateways.enable.enable',
+                                                    )}
+                                                </Button>
+                                            )}
                                         </>
                                     )}
                                 </Form>

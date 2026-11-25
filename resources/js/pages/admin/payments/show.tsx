@@ -1,6 +1,7 @@
 import { Form, Head, Link } from '@inertiajs/react';
 import { useState, type ReactNode } from 'react';
 import PaymentManualSettlementController from '@/actions/App/Http/Controllers/Admin/PaymentManualSettlementController';
+import ConfirmButton from '@/components/confirm/confirm-button';
 import InputError from '@/components/input-error';
 import MoneyAmount from '@/components/money-amount';
 import PageContainer from '@/components/page-container';
@@ -298,14 +299,35 @@ export default function AdminPaymentShow({ payment, logs, manual }: Props) {
                                     <InputError message={errors.confirm} />
 
                                     <div>
-                                        <Button
+                                        <ConfirmButton
                                             type="submit"
                                             size="sm"
                                             disabled={processing}
+                                            confirm={{
+                                                description: (
+                                                    <>
+                                                        {t(
+                                                            'common.confirm.description',
+                                                        )}{' '}
+                                                        <span className="text-foreground font-medium">
+                                                            {payment.reference}{' '}
+                                                            ·{' '}
+                                                            <MoneyAmount
+                                                                amount={
+                                                                    payment.amount
+                                                                }
+                                                            />
+                                                        </span>
+                                                    </>
+                                                ),
+                                                confirmLabel: t(
+                                                    'payments.manual.submit',
+                                                ),
+                                            }}
                                         >
                                             {processing && <Spinner />}
                                             {t('payments.manual.submit')}
-                                        </Button>
+                                        </ConfirmButton>
                                     </div>
                                 </>
                             )}

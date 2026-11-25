@@ -8,6 +8,12 @@ return [
         'skip' => 'Skip to content',
     ],
 
+    // The one "Are you sure?" every dangerous action asks (useConfirm, ConfirmButton).
+    'confirm' => [
+        'title' => 'Are you sure?',
+        'description' => 'This action may not be easy to undo. Confirm only if you are sure you want to go ahead.',
+    ],
+
     'actions' => [
         'save' => 'Save',
         'cancel' => 'Cancel',

@@ -1,4 +1,5 @@
 import { Form } from '@inertiajs/react';
+import ConfirmButton from '@/components/confirm/confirm-button';
 import InputError from '@/components/input-error';
 import SectionCard from '@/components/section-card';
 import { Button } from '@/components/ui/button';
@@ -94,14 +95,14 @@ export default function WebsiteImageCard({
                     className="mt-3"
                 >
                     {({ processing }) => (
-                        <Button
+                        <ConfirmButton
                             type="submit"
                             size="sm"
                             variant="outline"
                             disabled={processing}
                         >
                             {t('website.settings.remove')}
-                        </Button>
+                        </ConfirmButton>
                     )}
                 </Form>
             )}

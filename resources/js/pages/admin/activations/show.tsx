@@ -1,6 +1,7 @@
 import { Form, Head, Link } from '@inertiajs/react';
 import { AlertTriangle, ArrowLeft, Check, X } from 'lucide-react';
 import { useState } from 'react';
+import ConfirmButton from '@/components/confirm/confirm-button';
 import FormField from '@/components/forms/form-field';
 import SubmitButton from '@/components/forms/submit-button';
 import PageContainer from '@/components/page-container';
@@ -8,6 +9,7 @@ import PageHeader from '@/components/page-header';
 import SectionCard from '@/components/section-card';
 import StatusPill from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
+import { Spinner } from '@/components/ui/spinner';
 import { useTranslation } from '@/hooks/use-translation';
 import {
     approve,
@@ -231,20 +233,36 @@ export default function AdminActivationsShow({
                                                     />
                                                 )}
                                             </FormField>
-                                            <SubmitButton
-                                                processing={processing}
-                                                variant={
-                                                    account.is_held
-                                                        ? 'default'
-                                                        : 'outline'
-                                                }
-                                            >
-                                                {t(
-                                                    account.is_held
-                                                        ? 'activation.hold.release'
-                                                        : 'activation.hold.hold',
-                                                )}
-                                            </SubmitButton>
+                                            {account.is_held ? (
+                                                <SubmitButton
+                                                    processing={processing}
+                                                    variant="default"
+                                                >
+                                                    {t(
+                                                        'activation.hold.release',
+                                                    )}
+                                                </SubmitButton>
+                                            ) : (
+                                                <ConfirmButton
+                                                    type="submit"
+                                                    variant="outline"
+                                                    className="gap-2"
+                                                    disabled={processing}
+                                                    aria-busy={
+                                                        processing || undefined
+                                                    }
+                                                    confirm={{
+                                                        confirmLabel: t(
+                                                            'activation.hold.hold',
+                                                        ),
+                                                    }}
+                                                >
+                                                    {processing && (
+                                                        <Spinner className="size-3.5" />
+                                                    )}
+                                                    {t('activation.hold.hold')}
+                                                </ConfirmButton>
+                                            )}
                                         </>
                                     )}
                                 </Form>
@@ -532,20 +550,47 @@ export default function AdminActivationsShow({
                                                         )}
                                                     </FormField>
 
-                                                    <SubmitButton
-                                                        processing={processing}
-                                                        variant={
-                                                            outcome ===
-                                                            'suspend'
-                                                                ? 'destructive'
-                                                                : 'default'
-                                                        }
-                                                        className="w-full"
-                                                    >
-                                                        {t(
-                                                            'activation.decision.submit',
-                                                        )}
-                                                    </SubmitButton>
+                                                    {outcome === 'suspend' ? (
+                                                        <ConfirmButton
+                                                            type="submit"
+                                                            variant="destructive"
+                                                            className="w-full gap-2"
+                                                            disabled={
+                                                                processing
+                                                            }
+                                                            aria-busy={
+                                                                processing ||
+                                                                undefined
+                                                            }
+                                                            confirm={{
+                                                                description: t(
+                                                                    'activation.decision.suspend_warning',
+                                                                ),
+                                                                confirmLabel: t(
+                                                                    'activation.decision.submit',
+                                                                ),
+                                                            }}
+                                                        >
+                                                            {processing && (
+                                                                <Spinner className="size-3.5" />
+                                                            )}
+                                                            {t(
+                                                                'activation.decision.submit',
+                                                            )}
+                                                        </ConfirmButton>
+                                                    ) : (
+                                                        <SubmitButton
+                                                            processing={
+                                                                processing
+                                                            }
+                                                            variant="default"
+                                                            className="w-full"
+                                                        >
+                                                            {t(
+                                                                'activation.decision.submit',
+                                                            )}
+                                                        </SubmitButton>
+                                                    )}
                                                 </>
                                             )}
                                         </Form>

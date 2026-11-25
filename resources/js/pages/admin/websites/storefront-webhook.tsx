@@ -1,6 +1,7 @@
 import { Form, router, useHttp } from '@inertiajs/react';
 import { useState, type FormEvent } from 'react';
 import WebsiteWebhookController from '@/actions/App/Http/Controllers/Admin/WebsiteWebhookController';
+import ConfirmButton from '@/components/confirm/confirm-button';
 import InputError from '@/components/input-error';
 import SectionCard from '@/components/section-card';
 import WebsiteWebhookSummary, {
@@ -18,6 +19,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
+import { useConfirm } from '@/hooks/use-confirm';
 import { useTranslation } from '@/hooks/use-translation';
 
 /** What the server answers to setting or rotating the webhook. */
@@ -45,6 +47,7 @@ export default function StorefrontWebhook({
     webhook: WebhookRow | null;
 }) {
     const { t } = useTranslation();
+    const confirm = useConfirm();
     const [secret, setSecret] = useState<string | null>(null);
     const [copied, setCopied] = useState(false);
 
@@ -78,7 +81,16 @@ export default function StorefrontWebhook({
     }
 
     async function rotate() {
-        if (!window.confirm(t('website.credentials.rotate_confirm'))) {
+        if (
+            !(await confirm({
+                description: t('website.credentials.rotate_confirm'),
+                confirmLabel: t(
+                    webhook
+                        ? 'website.integration.rotate'
+                        : 'website.integration.generate',
+                ),
+            }))
+        ) {
             return;
         }
 
@@ -183,14 +195,26 @@ export default function StorefrontWebhook({
                                 options={{ preserveScroll: true }}
                             >
                                 {({ processing }) => (
-                                    <Button
+                                    <ConfirmButton
                                         type="submit"
                                         size="sm"
                                         variant="ghost"
                                         disabled={processing}
+                                        confirm={{
+                                            description: (
+                                                <>
+                                                    {t(
+                                                        'common.confirm.description',
+                                                    )}{' '}
+                                                    <span className="text-foreground font-medium break-all">
+                                                        {webhook.url}
+                                                    </span>
+                                                </>
+                                            ),
+                                        }}
                                     >
                                         {t('website.integration.disable')}
-                                    </Button>
+                                    </ConfirmButton>
                                 )}
                             </Form>
                         )}

@@ -1,6 +1,7 @@
 import { Form } from '@inertiajs/react';
 import { useState } from 'react';
 import BillingController from '@/actions/App/Http/Controllers/Admin/BillingController';
+import ConfirmButton from '@/components/confirm/confirm-button';
 import InputError from '@/components/input-error';
 import SectionCard from '@/components/section-card';
 import StatusPill from '@/components/status-pill';
@@ -153,14 +154,14 @@ export default function BillingTax({
                                             options={{ preserveScroll: true }}
                                         >
                                             {({ processing }) => (
-                                                <Button
+                                                <ConfirmButton
                                                     type="submit"
                                                     variant="ghost"
                                                     size="sm"
                                                     disabled={processing}
                                                 >
                                                     {t('billing.tax.close')}
-                                                </Button>
+                                                </ConfirmButton>
                                             )}
                                         </Form>
                                     )}
@@ -357,14 +358,14 @@ export default function BillingTax({
                                             options={{ preserveScroll: true }}
                                         >
                                             {({ processing }) => (
-                                                <Button
+                                                <ConfirmButton
                                                     type="submit"
                                                     variant="ghost"
                                                     size="sm"
                                                     disabled={processing}
                                                 >
                                                     {t('billing.tax.close')}
-                                                </Button>
+                                                </ConfirmButton>
                                             )}
                                         </Form>
                                     )}

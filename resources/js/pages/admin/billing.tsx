@@ -1,6 +1,7 @@
 import { Form, Head } from '@inertiajs/react';
 import { useState } from 'react';
 import BillingController from '@/actions/App/Http/Controllers/Admin/BillingController';
+import ConfirmButton from '@/components/confirm/confirm-button';
 import InputError from '@/components/input-error';
 import MoneyAmount from '@/components/money-amount';
 import MoneyInput from '@/components/money-input';
@@ -165,7 +166,7 @@ export default function Billing({
                                                 }}
                                             >
                                                 {({ processing }) => (
-                                                    <Button
+                                                    <ConfirmButton
                                                         type="submit"
                                                         variant="ghost"
                                                         size="sm"
@@ -174,7 +175,7 @@ export default function Billing({
                                                         {t(
                                                             'billing.fees.close',
                                                         )}
-                                                    </Button>
+                                                    </ConfirmButton>
                                                 )}
                                             </Form>
                                         )}

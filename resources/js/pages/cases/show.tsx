@@ -1,6 +1,7 @@
 import { Form, Head } from '@inertiajs/react';
 import CaseTimeline from '@/components/cases/case-timeline';
 import EvidenceGallery from '@/components/cases/evidence-gallery';
+import ConfirmButton from '@/components/confirm/confirm-button';
 import FinancialsPanel from '@/components/cases/financials-panel';
 import LinkedRef from '@/components/cases/linked-ref';
 import InputError from '@/components/input-error';
@@ -10,7 +11,6 @@ import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
 import SectionCard from '@/components/section-card';
 import StatusPill from '@/components/status-pill';
-import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import { useTranslation } from '@/hooks/use-translation';
 import { cancel as cancelRoute, index } from '@/routes/cases';
@@ -60,15 +60,20 @@ export default function PartnerCase({
                             >
                                 {({ processing, errors }) => (
                                     <>
-                                        <Button
+                                        <ConfirmButton
                                             type="submit"
                                             size="sm"
                                             variant="outline"
                                             disabled={processing}
+                                            confirm={{
+                                                confirmLabel: t(
+                                                    'cases.partner.withdraw',
+                                                ),
+                                            }}
                                         >
                                             {processing && <Spinner />}
                                             {t('cases.partner.withdraw')}
-                                        </Button>
+                                        </ConfirmButton>
                                         <InputError message={errors.case} />
                                     </>
                                 )}

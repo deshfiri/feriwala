@@ -1,5 +1,6 @@
 import { Form, Head, router, usePage } from '@inertiajs/react';
 import { UserPlus, Users } from 'lucide-react';
+import ConfirmButton from '@/components/confirm/confirm-button';
 import Heading from '@/components/heading';
 import InputError from '@/components/input-error';
 import EmptyState from '@/components/states/empty-state';
@@ -152,7 +153,7 @@ export default function Staff({
                                             </SelectContent>
                                         </Select>
 
-                                        <Button
+                                        <ConfirmButton
                                             variant="ghost"
                                             size="sm"
                                             onClick={() =>
@@ -165,7 +166,7 @@ export default function Staff({
                                             }
                                         >
                                             {t('common.settings.staff.remove')}
-                                        </Button>
+                                        </ConfirmButton>
                                     </>
                                 ) : null}
                             </div>
@@ -198,7 +199,7 @@ export default function Staff({
                                         </p>
                                     </div>
 
-                                    <Button
+                                    <ConfirmButton
                                         variant="ghost"
                                         size="sm"
                                         onClick={() =>
@@ -211,7 +212,7 @@ export default function Staff({
                                         }
                                     >
                                         {t('common.settings.staff.withdraw')}
-                                    </Button>
+                                    </ConfirmButton>
                                 </li>
                             ))}
                         </ul>

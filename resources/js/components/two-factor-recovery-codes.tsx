@@ -2,6 +2,7 @@ import { Form } from '@inertiajs/react';
 import { Eye, EyeOff, LockKeyhole, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import AlertError from '@/components/alert-error';
+import ConfirmButton from '@/components/confirm/confirm-button';
 import { Button } from '@/components/ui/button';
 import {
     Card,
@@ -89,17 +90,22 @@ export default function TwoFactorRecoveryCodes({
                             onSuccess={fetchRecoveryCodes}
                         >
                             {({ processing }) => (
-                                <Button
+                                <ConfirmButton
                                     variant="secondary"
                                     type="submit"
                                     disabled={processing}
                                     aria-describedby="regenerate-warning"
+                                    confirm={{
+                                        confirmLabel: t(
+                                            'security.two_factor.recovery_codes.regenerate',
+                                        ),
+                                    }}
                                 >
                                     <RefreshCw />{' '}
                                     {t(
                                         'security.two_factor.recovery_codes.regenerate',
                                     )}
-                                </Button>
+                                </ConfirmButton>
                             )}
                         </Form>
                     )}

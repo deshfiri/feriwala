@@ -1,5 +1,6 @@
 import { Form } from '@inertiajs/react';
 import { useRef } from 'react';
+import ConfirmButton from '@/components/confirm/confirm-button';
 import Heading from '@/components/heading';
 import InputError from '@/components/input-error';
 import PasswordInput from '@/components/password-input';
@@ -98,14 +99,14 @@ export default function RequestAccountDeletion({
                             options={{ preserveScroll: true }}
                         >
                             {({ processing }) => (
-                                <Button
+                                <ConfirmButton
                                     type="submit"
                                     variant="outline"
                                     disabled={processing}
                                     data-test="withdraw-deletion-button"
                                 >
                                     {t('deletion.withdraw')}
-                                </Button>
+                                </ConfirmButton>
                             )}
                         </Form>
                     </div>

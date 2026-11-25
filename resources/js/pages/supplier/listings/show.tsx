@@ -1,5 +1,6 @@
 import { Form, Head, Link } from '@inertiajs/react';
 import { Lock } from 'lucide-react';
+import ConfirmButton from '@/components/confirm/confirm-button';
 import SubmitButton from '@/components/forms/submit-button';
 import MoneyAmount from '@/components/money-amount';
 import PageContainer from '@/components/page-container';
@@ -7,6 +8,7 @@ import PageHeader from '@/components/page-header';
 import SectionCard from '@/components/section-card';
 import StatusPill from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
+import { Spinner } from '@/components/ui/spinner';
 import { useTranslation } from '@/hooks/use-translation';
 import type { Money } from '@/lib/money';
 import type { StatusTone } from '@/lib/status';
@@ -142,12 +144,23 @@ export default function SupplierListingShow({ listing }: { listing: Listing }) {
                         {listing.status === 'draft' && (
                             <Form {...archive.form(listing.id)}>
                                 {({ processing }) => (
-                                    <SubmitButton
-                                        processing={processing}
+                                    <ConfirmButton
+                                        type="submit"
                                         variant="outline"
+                                        disabled={processing}
+                                        aria-busy={processing || undefined}
+                                        className="gap-2"
+                                        confirm={{
+                                            confirmLabel: t(
+                                                'supplier.listings.archive',
+                                            ),
+                                        }}
                                     >
+                                        {processing && (
+                                            <Spinner className="size-3.5" />
+                                        )}
                                         {t('supplier.listings.archive')}
-                                    </SubmitButton>
+                                    </ConfirmButton>
                                 )}
                             </Form>
                         )}

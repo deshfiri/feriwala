@@ -9,6 +9,8 @@ vi.mock('@inertiajs/react', () => ({
     usePage: () => ({ props: { translations: {} } }),
 }));
 
+const { ConfirmProvider } =
+    await import('@/components/confirm/confirm-provider');
 const { default: EvidenceDraftUploader } =
     await import('./evidence-draft-uploader');
 
@@ -53,13 +55,15 @@ class FakeRequest {
 
 const renderUploader = (initial: EvidenceFile[] = []) =>
     render(
-        <EvidenceDraftUploader
-            orderId="01ORDER"
-            uploadUrl="/cases/evidence"
-            deleteUrl={(id) => `/cases/evidence/${id}`}
-            limits={limits}
-            initial={initial}
-        />,
+        <ConfirmProvider>
+            <EvidenceDraftUploader
+                orderId="01ORDER"
+                uploadUrl="/cases/evidence"
+                deleteUrl={(id) => `/cases/evidence/${id}`}
+                limits={limits}
+                initial={initial}
+            />
+        </ConfirmProvider>,
     );
 
 const file = (name: string, type: string, size = 100) =>
@@ -182,6 +186,20 @@ describe('attaching evidence to a request', () => {
             screen.getAllByRole('button', { name: 'cases.evidence.remove' })[0],
         );
 
+        // Nothing is deleted until the "Are you sure?" is confirmed.
+        expect(await screen.findByText('common.confirm.title')).toBeVisible();
+        expect(fetch).not.toHaveBeenCalled();
+
+        const confirmButtons = screen.getAllByRole('button', {
+            name: 'cases.evidence.remove',
+        });
+        await user.click(confirmButtons[confirmButtons.length - 1]);
+
+        await vi.waitFor(() =>
+            expect(
+                document.querySelectorAll('input[name="evidence[]"]'),
+            ).toHaveLength(1),
+        );
         expect(fetch).toHaveBeenCalledWith(
             '/cases/evidence/01EVID',
             expect.objectContaining({ method: 'DELETE' }),

@@ -15,6 +15,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
+import { useConfirm } from '@/hooks/use-confirm';
 import { useTranslation } from '@/hooks/use-translation';
 import type {
     CatalogAbilities,
@@ -47,6 +48,7 @@ export default function StatusPanel({
     can,
 }: Props) {
     const { t } = useTranslation();
+    const confirm = useConfirm();
     const [moving, setMoving] = useState<ProductTransition | null>(null);
 
     return (
@@ -130,7 +132,18 @@ export default function StatusPanel({
                                         <Button
                                             variant="outline"
                                             size="sm"
-                                            onClick={() =>
+                                            onClick={async () => {
+                                                if (
+                                                    state.enabled &&
+                                                    !(await confirm({
+                                                        confirmLabel: t(
+                                                            'catalog.channels.disable',
+                                                        ),
+                                                    }))
+                                                ) {
+                                                    return;
+                                                }
+
                                                 router.patch(
                                                     ProductChannelController.update.url(
                                                         {
@@ -141,8 +154,8 @@ export default function StatusPanel({
                                                     ),
                                                     { enabled: !state.enabled },
                                                     { preserveScroll: true },
-                                                )
-                                            }
+                                                );
+                                            }}
                                         >
                                             {t(
                                                 state.enabled

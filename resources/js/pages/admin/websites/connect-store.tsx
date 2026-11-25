@@ -1,6 +1,7 @@
 import { Form, router, useHttp } from '@inertiajs/react';
 import { useState, type FormEvent } from 'react';
 import WebsiteConnectionController from '@/actions/App/Http/Controllers/Admin/WebsiteConnectionController';
+import ConfirmButton from '@/components/confirm/confirm-button';
 import FormField from '@/components/forms/form-field';
 import InputError from '@/components/input-error';
 import Notice from '@/components/notice';
@@ -19,6 +20,7 @@ import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
 import type { CredentialRow } from '@/components/website-credential-list';
 import type { WebhookRow } from '@/components/website-webhook-summary';
+import { useConfirm } from '@/hooks/use-confirm';
 import { useTranslation } from '@/hooks/use-translation';
 
 /** What the server answers, once, to connecting a store or rotating its token. */
@@ -57,6 +59,7 @@ export default function ConnectStore({
     webhook: WebhookRow | null;
 }) {
     const { t, locale } = useTranslation();
+    const confirm = useConfirm();
     const [done, setDone] = useState<ConnectedStore | null>(null);
     const [copied, setCopied] = useState(false);
     const [rotating, setRotating] = useState(false);
@@ -92,7 +95,12 @@ export default function ConnectStore({
     }
 
     async function rotate() {
-        if (!window.confirm(t('website.connect.rotate_confirm'))) {
+        if (
+            !(await confirm({
+                description: t('website.connect.rotate_confirm'),
+                confirmLabel: t('website.connect.rotate'),
+            }))
+        ) {
             return;
         }
 
@@ -284,15 +292,27 @@ export default function ConnectStore({
                                                 }
                                             />
                                         </div>
-                                        <Button
+                                        <ConfirmButton
                                             type="submit"
                                             variant="destructive"
                                             disabled={processing}
+                                            confirm={{
+                                                description: (
+                                                    <>
+                                                        {t(
+                                                            'common.confirm.description',
+                                                        )}{' '}
+                                                        <span className="text-foreground font-medium">
+                                                            {address}
+                                                        </span>
+                                                    </>
+                                                ),
+                                            }}
                                         >
                                             {t(
                                                 'website.connect.disconnect_submit',
                                             )}
-                                        </Button>
+                                        </ConfirmButton>
                                     </>
                                 )}
                             </Form>

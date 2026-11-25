@@ -23,6 +23,7 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { useConfirm } from '@/hooks/use-confirm';
 import { useTranslation } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
 import type { MediaLimits, MediaRow, ProductDetail, VariantRow } from '@/types';
@@ -56,6 +57,7 @@ export default function MediaSection({
     canEdit,
 }: Props) {
     const { t } = useTranslation();
+    const confirm = useConfirm();
     const [describing, setDescribing] = useState<MediaRow | null>(null);
 
     const full = media.length >= limits.max_items;
@@ -77,8 +79,13 @@ export default function MediaSection({
         );
     };
 
-    const remove = (item: MediaRow) => {
-        if (!window.confirm(t('catalog.media.delete_confirm'))) {
+    const remove = async (item: MediaRow) => {
+        if (
+            !(await confirm({
+                description: t('catalog.media.delete_confirm'),
+                confirmLabel: t('common.actions.delete'),
+            }))
+        ) {
             return;
         }
 

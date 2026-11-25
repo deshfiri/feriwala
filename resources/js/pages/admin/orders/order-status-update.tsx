@@ -8,6 +8,7 @@ import SectionCard from '@/components/section-card';
 import StatusPill from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
+import { useConfirm } from '@/hooks/use-confirm';
 import { useTranslation } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
 import {
@@ -23,6 +24,14 @@ import {
 } from '@/pages/admin/orders/order-lifecycle';
 import type { OrderShipment } from '@/pages/admin/orders/shipments-panel';
 import { show as shipmentShow } from '@/routes/admin/shipments';
+
+/**
+ * A move that stops, reverses or undoes an order — cancelled, on hold, a failed
+ * delivery, a return or a refund — rather than taking it a step forward.
+ */
+function isDangerousOrderStatus(status: string): boolean {
+    return /cancel|fail|hold|return|refund/.test(status);
+}
 
 /**
  * Changing an order's status, by hand, on the track that changed.
@@ -48,6 +57,7 @@ export default function OrderStatusUpdate({
     canManageShipments: boolean;
 }) {
     const { t } = useTranslation();
+    const confirm = useConfirm();
     // Start where the work is: the first track that has something to do and is
     // not waiting on an earlier one.
     const [axis, setAxis] = useState<LifecycleAxis>(
@@ -100,7 +110,7 @@ export default function OrderStatusUpdate({
         lifecycle[following].locked_reason === null &&
         lifecycle[following].available_actions.length > 0;
 
-    const save = (event: FormEvent) => {
+    const save = async (event: FormEvent) => {
         event.preventDefault();
 
         // `processing` only turns true on the next render, so a burst of clicks
@@ -115,6 +125,24 @@ export default function OrderStatusUpdate({
         }
 
         submitting.current = true;
+
+        // A cancellation, a hold, a failure or a return is asked about first;
+        // a routine step forward is not.
+        if (
+            isDangerousOrderStatus(target) &&
+            !(await confirm({
+                description: t(
+                    `orders.admin.status_update.effects.${group}.${target}`,
+                ),
+                confirmLabel: t('orders.admin.status_update.save', {
+                    status: t(`status.${group}.${target}`),
+                }),
+            }))
+        ) {
+            submitting.current = false;
+
+            return;
+        }
 
         form.transform((data) => ({
             status: target,
@@ -279,7 +307,11 @@ export default function OrderStatusUpdate({
                         })}
                     </Notice>
                 ) : (
-                    <form onSubmit={save} className="space-y-4" noValidate>
+                    <form
+                        onSubmit={(event) => void save(event)}
+                        className="space-y-4"
+                        noValidate
+                    >
                         <fieldset
                             disabled={form.processing}
                             className="min-w-0 space-y-2"

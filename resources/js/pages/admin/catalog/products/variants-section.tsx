@@ -18,6 +18,7 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { useConfirm } from '@/hooks/use-confirm';
 import { useTranslation } from '@/hooks/use-translation';
 import LogisticsFields from './logistics-fields';
 import WholesalePricingFields from './wholesale-pricing-fields';
@@ -56,6 +57,7 @@ export default function VariantsSection({
     can,
 }: Props) {
     const { t } = useTranslation();
+    const confirm = useConfirm();
     const page = usePage<{ errors: Record<string, string> }>();
 
     const [building, setBuilding] = useState(false);
@@ -71,7 +73,16 @@ export default function VariantsSection({
         ? attributes.filter((attribute) => usedAttributes.has(attribute.name))
         : attributes;
 
-    const toggle = (variant: VariantRow) =>
+    const toggle = async (variant: VariantRow) => {
+        if (
+            variant.is_active &&
+            !(await confirm({
+                confirmLabel: t('catalog.variants.disable'),
+            }))
+        ) {
+            return;
+        }
+
         router.patch(
             ProductVariantController.update.url({
                 product: product.id,
@@ -89,9 +100,15 @@ export default function VariantsSection({
             },
             { preserveScroll: true },
         );
+    };
 
-    const remove = (variant: VariantRow) => {
-        if (!window.confirm(t('catalog.variants.delete_confirm'))) {
+    const remove = async (variant: VariantRow) => {
+        if (
+            !(await confirm({
+                description: t('catalog.variants.delete_confirm'),
+                confirmLabel: t('common.actions.delete'),
+            }))
+        ) {
             return;
         }
 
@@ -230,7 +247,9 @@ export default function VariantsSection({
                                             <Button
                                                 variant="ghost"
                                                 size="sm"
-                                                onClick={() => toggle(variant)}
+                                                onClick={() =>
+                                                    void toggle(variant)
+                                                }
                                             >
                                                 <Power
                                                     className="size-4"
@@ -253,7 +272,9 @@ export default function VariantsSection({
                                                 variant="ghost"
                                                 size="sm"
                                                 className="ml-auto"
-                                                onClick={() => remove(variant)}
+                                                onClick={() =>
+                                                    void remove(variant)
+                                                }
                                             >
                                                 <Trash2
                                                     className="size-4"

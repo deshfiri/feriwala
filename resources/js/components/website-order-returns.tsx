@@ -1,4 +1,5 @@
 import { Form, Link } from '@inertiajs/react';
+import ConfirmButton from '@/components/confirm/confirm-button';
 import InputError from '@/components/input-error';
 import MoneyAmount from '@/components/money-amount';
 import SectionCard from '@/components/section-card';
@@ -165,17 +166,22 @@ export default function WebsiteOrderReturns({
                             >
                                 {({ processing, errors }) => (
                                     <>
-                                        <Button
+                                        <ConfirmButton
                                             type="submit"
                                             size="sm"
                                             variant="outline"
                                             disabled={processing}
+                                            confirm={{
+                                                confirmLabel: t(
+                                                    'website.orders.returns.withdraw',
+                                                ),
+                                            }}
                                         >
                                             {processing && <Spinner />}
                                             {t(
                                                 'website.orders.returns.withdraw',
                                             )}
-                                        </Button>
+                                        </ConfirmButton>
                                         <InputError message={errors.return} />
                                     </>
                                 )}

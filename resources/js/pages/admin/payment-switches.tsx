@@ -19,6 +19,7 @@ import StatCard, { StatCardGrid } from '@/components/stat-card';
 import StatusPill from '@/components/status-pill';
 import ToggleSwitch from '@/components/toggle-switch';
 import { Button } from '@/components/ui/button';
+import { useConfirm } from '@/hooks/use-confirm';
 import { useTranslation } from '@/hooks/use-translation';
 import type { Money } from '@/lib/money';
 import type { StatusTone } from '@/lib/status';
@@ -95,13 +96,18 @@ function ReceivedAmounts({
  */
 export default function PaymentSwitches({ gateways, summary, can }: Props) {
     const { t } = useTranslation();
+    const confirm = useConfirm();
     const [pending, setPending] = useState<string | null>(null);
     const [failure, setFailure] = useState<{
         gateway: string;
         message: string;
     } | null>(null);
 
-    const toggle = (gateway: GatewaySwitchRow, enabled: boolean) => {
+    const toggle = async (gateway: GatewaySwitchRow, enabled: boolean) => {
+        if (!enabled && !(await confirm())) {
+            return;
+        }
+
         setFailure(null);
 
         router.put(
@@ -319,7 +325,7 @@ export default function PaymentSwitches({ gateways, summary, can }: Props) {
                                 <ToggleSwitch
                                     checked={gateway.is_enabled}
                                     onCheckedChange={(enabled) =>
-                                        toggle(gateway, enabled)
+                                        void toggle(gateway, enabled)
                                     }
                                     label={t('gateways.switches.toggle', {
                                         gateway: gateway.label,

@@ -1,6 +1,7 @@
 import { Form, router, useHttp } from '@inertiajs/react';
 import { useState, type FormEvent } from 'react';
 import WebsiteCredentialController from '@/actions/App/Http/Controllers/Admin/WebsiteCredentialController';
+import ConfirmButton from '@/components/confirm/confirm-button';
 import FormField from '@/components/forms/form-field';
 import InputError from '@/components/input-error';
 import Notice from '@/components/notice';
@@ -20,6 +21,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
+import { useConfirm } from '@/hooks/use-confirm';
 import { useTranslation } from '@/hooks/use-translation';
 
 export type CredentialScopeOption = { value: string; label: string };
@@ -75,6 +77,7 @@ export default function StorefrontCredentials({
     connection: StorefrontConnection;
 }) {
     const { t } = useTranslation();
+    const confirm = useConfirm();
     const [issued, setIssued] = useState<IssuedCredential | null>(null);
     const [copied, setCopied] = useState(false);
 
@@ -103,7 +106,12 @@ export default function StorefrontCredentials({
     }
 
     async function rotate(credential: CredentialRow) {
-        if (!window.confirm(t('website.credentials.rotate_confirm'))) {
+        if (
+            !(await confirm({
+                description: t('website.credentials.rotate_confirm'),
+                confirmLabel: t('website.integration.rotate'),
+            }))
+        ) {
             return;
         }
 
@@ -228,16 +236,36 @@ export default function StorefrontCredentials({
                                                     }
                                                 />
                                             </div>
-                                            <Button
+                                            <ConfirmButton
                                                 type="submit"
                                                 size="sm"
                                                 variant="destructive"
                                                 disabled={processing}
+                                                confirm={{
+                                                    description: (
+                                                        <>
+                                                            {t(
+                                                                'common.confirm.description',
+                                                            )}{' '}
+                                                            <span className="text-foreground font-medium">
+                                                                {
+                                                                    credential.name
+                                                                }{' '}
+                                                                ·{' '}
+                                                                <code>
+                                                                    {
+                                                                        credential.key_id
+                                                                    }
+                                                                </code>
+                                                            </span>
+                                                        </>
+                                                    ),
+                                                }}
                                             >
                                                 {t(
                                                     'website.integration.revoke',
                                                 )}
-                                            </Button>
+                                            </ConfirmButton>
                                         </>
                                     )}
                                 </Form>

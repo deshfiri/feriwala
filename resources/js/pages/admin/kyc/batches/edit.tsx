@@ -23,6 +23,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import StructureOutline from '@/components/kyc/structure-outline';
+import { useConfirm } from '@/hooks/use-confirm';
 import { useTranslation } from '@/hooks/use-translation';
 import {
     active,
@@ -195,6 +196,7 @@ export default function KycBatchBuilder({
     can: { create: boolean; update: boolean; activate: boolean };
 }) {
     const { t } = useTranslation();
+    const confirm = useConfirm();
     const [groups, setGroups] = useState<KycBuilderGroup[]>(savedGroups);
     const [details, setDetails] = useState({
         name: batch.name,
@@ -375,15 +377,24 @@ export default function KycBatchBuilder({
                             dirty ||
                             (!batch.is_active && !isPublishable)
                         }
-                        onClick={() =>
+                        onClick={async () => {
+                            if (
+                                batch.is_active &&
+                                !(await confirm({
+                                    confirmLabel: t('kyc.builder.deactivate'),
+                                }))
+                            ) {
+                                return;
+                            }
+
                             request('active', (callbacks) =>
                                 router.patch(
                                     active.url(batch.id),
                                     { is_active: !batch.is_active },
                                     callbacks,
                                 ),
-                            )
-                        }
+                            );
+                        }}
                     >
                         <Power className="size-4" aria-hidden="true" />
                         {t(

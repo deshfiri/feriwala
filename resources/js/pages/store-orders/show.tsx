@@ -1,6 +1,7 @@
 import { Head, Link, useForm } from '@inertiajs/react';
 import { ArrowLeft } from 'lucide-react';
 import type { FormEvent } from 'react';
+import ConfirmButton from '@/components/confirm/confirm-button';
 import InputError from '@/components/input-error';
 import MoneyAmount from '@/components/money-amount';
 import OrderCustomerCard from '@/components/order-customer-card';
@@ -433,14 +434,14 @@ export default function StoreOrderShow({
                                     <InputError
                                         message={cancelForm.errors.reason}
                                     />
-                                    <Button
+                                    <ConfirmButton
                                         type="submit"
                                         variant="outline"
                                         size="sm"
                                         disabled={cancelForm.processing}
                                     >
                                         {t('store_orders.cancel')}
-                                    </Button>
+                                    </ConfirmButton>
                                 </form>
                             </SectionCard>
                         )}

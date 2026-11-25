@@ -1,6 +1,7 @@
 import { Form, Head, Link } from '@inertiajs/react';
 import { AlertTriangle, ImageOff, ShoppingBasket, Trash2 } from 'lucide-react';
 import WholesaleCartController from '@/actions/App/Http/Controllers/Erp/WholesaleCartController';
+import ConfirmButton from '@/components/confirm/confirm-button';
 import InputError from '@/components/input-error';
 import MoneyAmount from '@/components/money-amount';
 import PageContainer from '@/components/page-container';
@@ -353,7 +354,7 @@ function CartLineRow({ line }: { line: CartLine }) {
                         options={{ preserveScroll: true }}
                     >
                         {({ processing }) => (
-                            <Button
+                            <ConfirmButton
                                 type="submit"
                                 variant="ghost"
                                 size="sm"
@@ -364,7 +365,7 @@ function CartLineRow({ line }: { line: CartLine }) {
                                 })}
                             >
                                 <Trash2 className="size-4" aria-hidden="true" />
-                            </Button>
+                            </ConfirmButton>
                         )}
                     </Form>
                 </div>

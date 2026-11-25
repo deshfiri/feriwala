@@ -1,6 +1,7 @@
 import { Form, Head, Link } from '@inertiajs/react';
 import { ArrowLeft } from 'lucide-react';
 import SupplierPayableController from '@/actions/App/Http/Controllers/Admin/SupplierPayableController';
+import ConfirmButton from '@/components/confirm/confirm-button';
 import MoneyAmount from '@/components/money-amount';
 import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
@@ -103,15 +104,36 @@ export default function AdminSupplierPayableShow({
                                                 'supplier.admin.payables.settle_confirm',
                                             )}
                                         </p>
-                                        <Button
+                                        <ConfirmButton
                                             type="submit"
                                             disabled={processing}
+                                            confirm={{
+                                                description: (
+                                                    <>
+                                                        {t(
+                                                            'supplier.admin.payables.settle_confirm',
+                                                        )}{' '}
+                                                        <span className="text-foreground font-medium">
+                                                            {payable.reference}{' '}
+                                                            ·{' '}
+                                                            <MoneyAmount
+                                                                amount={
+                                                                    payable.net_amount
+                                                                }
+                                                            />
+                                                        </span>
+                                                    </>
+                                                ),
+                                                confirmLabel: t(
+                                                    'supplier.admin.payables.settle',
+                                                ),
+                                            }}
                                         >
                                             {processing && <Spinner />}
                                             {t(
                                                 'supplier.admin.payables.settle',
                                             )}
-                                        </Button>
+                                        </ConfirmButton>
                                         {errors.settlement && (
                                             <p className="text-destructive mt-2 text-sm">
                                                 {errors.settlement}

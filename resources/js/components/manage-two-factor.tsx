@@ -1,6 +1,7 @@
 import { Form } from '@inertiajs/react';
 import { ShieldCheck } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import ConfirmButton from '@/components/confirm/confirm-button';
 import Heading from '@/components/heading';
 import TwoFactorRecoveryCodes from '@/components/two-factor-recovery-codes';
 import TwoFactorSetupModal from '@/components/two-factor-setup-modal';
@@ -62,13 +63,13 @@ export default function ManageTwoFactor(props: Props) {
                     <div className="relative inline">
                         <Form {...disable.form()}>
                             {({ processing }) => (
-                                <Button
+                                <ConfirmButton
                                     variant="destructive"
                                     type="submit"
                                     disabled={processing}
                                 >
                                     {t('security.two_factor.disable')}
-                                </Button>
+                                </ConfirmButton>
                             )}
                         </Form>
                     </div>

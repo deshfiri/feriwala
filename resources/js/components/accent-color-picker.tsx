@@ -9,6 +9,7 @@ import SectionCard from '@/components/section-card';
 import StatusPill from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { useConfirm } from '@/hooks/use-confirm';
 import { useTranslation } from '@/hooks/use-translation';
 import {
     ACCENT_PRESETS,
@@ -37,14 +38,20 @@ export type AccentState = {
  */
 export default function AccentColorPicker({ accent }: { accent: AccentState }) {
     const { t } = useTranslation();
+    const confirm = useConfirm();
     const [color, setColor] = useState(accent.color);
 
     const isValid = HEX_COLOR_PATTERN.test(color);
     const previewColor = isValid ? color.toLowerCase() : accent.color;
     const isUnchanged = previewColor === accent.color.toLowerCase();
 
-    const restore = () => {
-        if (!window.confirm(t('branding.accent.restore_confirm'))) {
+    const restore = async () => {
+        if (
+            !(await confirm({
+                description: t('branding.accent.restore_confirm'),
+                confirmLabel: t('branding.accent.restore'),
+            }))
+        ) {
             return;
         }
 

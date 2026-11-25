@@ -11,12 +11,14 @@ import { useState } from 'react';
 import KycBatchController from '@/actions/App/Http/Controllers/Admin/KycBatchController';
 import { index as kycBatchesIndex } from '@/routes/admin/kyc/batch-builder';
 import KycDocumentTypeController from '@/actions/App/Http/Controllers/Admin/KycDocumentTypeController';
+import ConfirmButton from '@/components/confirm/confirm-button';
 import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
 import EmptyState from '@/components/states/empty-state';
 import PermissionDeniedState from '@/components/states/permission-denied-state';
 import StatusPill from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
+import { useConfirm } from '@/hooks/use-confirm';
 import { useTranslation } from '@/hooks/use-translation';
 import type { KycBatchRow, KycDocumentTypeRow, SelectOption } from '@/types';
 import BatchDialog from './batch-dialog';
@@ -386,6 +388,7 @@ function BatchSection({
     onMoveCriterion: (index: number, delta: -1 | 1) => void;
 }) {
     const { t } = useTranslation();
+    const confirm = useConfirm();
 
     return (
         <section className="bg-card rounded-xl border">
@@ -477,23 +480,39 @@ function BatchSection({
                             <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() =>
+                                onClick={async () => {
+                                    if (
+                                        batch.is_active &&
+                                        !(await confirm({
+                                            confirmLabel: t(
+                                                'kyc.document_types.actions.pause',
+                                            ),
+                                        }))
+                                    ) {
+                                        return;
+                                    }
+
                                     router.patch(
                                         KycBatchController.setActive.url(
                                             batch.id,
                                         ),
                                         { is_active: !batch.is_active },
                                         { preserveScroll: true },
-                                    )
-                                }
+                                    );
+                                }}
                             >
                                 {batch.is_active
                                     ? t('kyc.document_types.actions.pause')
                                     : t('kyc.document_types.actions.resume')}
                             </Button>
-                            <Button
+                            <ConfirmButton
                                 variant="ghost"
                                 size="sm"
+                                confirm={{
+                                    confirmLabel: t(
+                                        'kyc.document_types.actions.archive',
+                                    ),
+                                }}
                                 onClick={() =>
                                     router.post(
                                         KycBatchController.archive.url(
@@ -506,16 +525,21 @@ function BatchSection({
                             >
                                 <Archive className="size-4" />
                                 {t('kyc.document_types.actions.archive')}
-                            </Button>
+                            </ConfirmButton>
                         </>
                     )}
 
                     {/* Offered only for a batch nothing has used and that holds
                         nothing — otherwise the control would sometimes lie. */}
                     {batch.can.delete && (
-                        <Button
+                        <ConfirmButton
                             variant="ghost"
                             size="sm"
+                            confirm={{
+                                confirmLabel: t(
+                                    'kyc.document_types.actions.delete',
+                                ),
+                            }}
                             onClick={() =>
                                 router.delete(
                                     KycBatchController.destroy.url(batch.id),
@@ -525,7 +549,7 @@ function BatchSection({
                         >
                             <Trash2 className="size-4" />
                             {t('kyc.document_types.actions.delete')}
-                        </Button>
+                        </ConfirmButton>
                     )}
                 </div>
             </header>
@@ -613,6 +637,7 @@ function TypeRow({
     onMoveDown?: () => void;
 }) {
     const { t } = useTranslation();
+    const confirm = useConfirm();
 
     return (
         <li className="flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between">
@@ -719,15 +744,26 @@ function TypeRow({
                     <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() =>
+                        onClick={async () => {
+                            if (
+                                type.is_active &&
+                                !(await confirm({
+                                    confirmLabel: t(
+                                        'kyc.document_types.actions.pause',
+                                    ),
+                                }))
+                            ) {
+                                return;
+                            }
+
                             router.patch(
                                 KycDocumentTypeController.setActive.url(
                                     type.id,
                                 ),
                                 { is_active: !type.is_active },
                                 { preserveScroll: true },
-                            )
-                        }
+                            );
+                        }}
                     >
                         {type.is_active
                             ? t('kyc.document_types.actions.pause')
@@ -736,9 +772,14 @@ function TypeRow({
                 )}
 
                 {!type.is_archived && type.can.update && (
-                    <Button
+                    <ConfirmButton
                         variant="ghost"
                         size="sm"
+                        confirm={{
+                            confirmLabel: t(
+                                'kyc.document_types.actions.archive',
+                            ),
+                        }}
                         onClick={() =>
                             router.post(
                                 KycDocumentTypeController.archive.url(type.id),
@@ -749,7 +790,7 @@ function TypeRow({
                     >
                         <Archive className="size-4" />
                         {t('kyc.document_types.actions.archive')}
-                    </Button>
+                    </ConfirmButton>
                 )}
 
                 {/*
@@ -759,9 +800,14 @@ function TypeRow({
                  * unavailable, the reason is shown instead.
                  */}
                 {type.can.delete ? (
-                    <Button
+                    <ConfirmButton
                         variant="ghost"
                         size="sm"
+                        confirm={{
+                            confirmLabel: t(
+                                'kyc.document_types.actions.delete',
+                            ),
+                        }}
                         onClick={() =>
                             router.delete(
                                 KycDocumentTypeController.destroy.url(type.id),
@@ -771,7 +817,7 @@ function TypeRow({
                     >
                         <Trash2 className="size-4" />
                         {t('kyc.document_types.actions.delete')}
-                    </Button>
+                    </ConfirmButton>
                 ) : type.used_by_rounds > 0 ? (
                     <span className="text-muted-foreground text-xs">
                         {t('kyc.document_types.meta.cannot_delete')}

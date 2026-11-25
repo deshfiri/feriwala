@@ -12,6 +12,7 @@ import StatusPill from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { useConfirm } from '@/hooks/use-confirm';
 import { useTableQuery } from '@/hooks/use-table-query';
 import { useTranslation } from '@/hooks/use-translation';
 import type { Money } from '@/lib/money';
@@ -317,6 +318,7 @@ function StorefrontRow({
     slug: string;
 }) {
     const { t } = useTranslation();
+    const confirm = useConfirm();
     const live = shop.state === 'published';
     const terms = shop.terms;
     const saved = shop.price?.amount ?? terms?.suggested?.amount ?? '';
@@ -365,7 +367,20 @@ function StorefrontRow({
                     size="sm"
                     variant={live ? 'outline' : 'default'}
                     disabled={busy}
-                    onClick={() => send(!live)}
+                    onClick={async () => {
+                        if (
+                            live &&
+                            !(await confirm({
+                                confirmLabel: t(
+                                    'partner_products.ownership.unpublish',
+                                ),
+                            }))
+                        ) {
+                            return;
+                        }
+
+                        send(!live);
+                    }}
                 >
                     {t(
                         live

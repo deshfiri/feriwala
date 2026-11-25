@@ -1,4 +1,5 @@
 import { Form, Head, Link } from '@inertiajs/react';
+import ConfirmButton from '@/components/confirm/confirm-button';
 import InputError from '@/components/input-error';
 import MoneyAmount from '@/components/money-amount';
 import PageContainer from '@/components/page-container';
@@ -314,17 +315,42 @@ export default function ReferralEvent({
                                                     errors,
                                                     commission.id,
                                                 )}
-                                                <Button
+                                                <ConfirmButton
                                                     type="submit"
                                                     size="sm"
                                                     variant="outline"
                                                     disabled={processing}
+                                                    confirm={{
+                                                        description: (
+                                                            <>
+                                                                {t(
+                                                                    'common.confirm.description',
+                                                                )}{' '}
+                                                                <span className="text-foreground font-medium">
+                                                                    {
+                                                                        commission
+                                                                            .beneficiary
+                                                                            .name
+                                                                    }{' '}
+                                                                    ·{' '}
+                                                                    <MoneyAmount
+                                                                        amount={
+                                                                            commission.amount
+                                                                        }
+                                                                    />
+                                                                </span>
+                                                            </>
+                                                        ),
+                                                        confirmLabel: t(
+                                                            'referral.event.reverse_one',
+                                                        ),
+                                                    }}
                                                 >
                                                     {processing && <Spinner />}
                                                     {t(
                                                         'referral.event.reverse_one',
                                                     )}
-                                                </Button>
+                                                </ConfirmButton>
                                             </>
                                         )}
                                     </Form>
@@ -349,15 +375,23 @@ export default function ReferralEvent({
                             {({ processing, errors }) => (
                                 <>
                                     {reverseFields(errors, event.id)}
-                                    <Button
+                                    <ConfirmButton
                                         type="submit"
                                         size="sm"
                                         variant="destructive"
                                         disabled={processing}
+                                        confirm={{
+                                            description: t(
+                                                'referral.event.reverse_hint',
+                                            ),
+                                            confirmLabel: t(
+                                                'referral.event.reverse_all',
+                                            ),
+                                        }}
                                     >
                                         {processing && <Spinner />}
                                         {t('referral.event.reverse_all')}
-                                    </Button>
+                                    </ConfirmButton>
                                 </>
                             )}
                         </Form>

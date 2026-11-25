@@ -1,11 +1,13 @@
 import { useForm } from '@inertiajs/react';
 import type { FormEvent } from 'react';
+import ConfirmButton from '@/components/confirm/confirm-button';
 import InputError from '@/components/input-error';
 import MoneyAmount from '@/components/money-amount';
 import SectionCard from '@/components/section-card';
 import StatusPill from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { useConfirm } from '@/hooks/use-confirm';
 import { useTranslation } from '@/hooks/use-translation';
 import type { Money } from '@/lib/money';
 import type { StatusTone } from '@/lib/status';
@@ -94,6 +96,7 @@ function Row({
  */
 export function StaffCourierPanel({ courier }: { courier: StaffCourierData }) {
     const { t } = useTranslation();
+    const confirm = useConfirm();
     const book = useForm({});
     const reconcile = useForm({});
     const notBooked = useForm({ reason: '' });
@@ -103,9 +106,14 @@ export function StaffCourierPanel({ courier }: { courier: StaffCourierData }) {
     const submitBook = (event: FormEvent) => {
         event.preventDefault();
 
-        if (window.confirm(t('steadfast.panel.book_confirm'))) {
-            book.post(courier.urls.book, { preserveScroll: true });
-        }
+        void confirm({
+            description: t('steadfast.panel.book_confirm'),
+            confirmLabel: t('steadfast.panel.book'),
+        }).then((yes) => {
+            if (yes) {
+                book.post(courier.urls.book, { preserveScroll: true });
+            }
+        });
     };
 
     const submitNotBooked = (event: FormEvent) => {
@@ -216,7 +224,7 @@ export function StaffCourierPanel({ courier }: { courier: StaffCourierData }) {
                     )}
 
                     {courier.can.reconcile && courier.urls.reconcile && (
-                        <Button
+                        <ConfirmButton
                             type="button"
                             variant="outline"
                             disabled={reconcile.processing}
@@ -230,7 +238,7 @@ export function StaffCourierPanel({ courier }: { courier: StaffCourierData }) {
                             }
                         >
                             {t('steadfast.panel.reconcile')}
-                        </Button>
+                        </ConfirmButton>
                     )}
 
                     {shipment?.can_sync && (
@@ -275,14 +283,14 @@ export function StaffCourierPanel({ courier }: { courier: StaffCourierData }) {
                             required
                         />
                         <InputError message={notBooked.errors.reason} />
-                        <Button
+                        <ConfirmButton
                             type="submit"
                             size="sm"
                             variant="outline"
                             disabled={notBooked.processing}
                         >
                             {t('steadfast.panel.not_booked_submit')}
-                        </Button>
+                        </ConfirmButton>
                     </form>
                 )}
 

@@ -17,6 +17,7 @@ import PageHeader from '@/components/page-header';
 import EmptyState from '@/components/states/empty-state';
 import StatusPill from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
+import { useConfirm } from '@/hooks/use-confirm';
 import { useTableQuery } from '@/hooks/use-table-query';
 import { useTranslation } from '@/hooks/use-translation';
 import { index as productsIndex } from '@/routes/admin/catalog/products';
@@ -59,6 +60,7 @@ type Props = {
  */
 export default function AdminBrands({ brands, filters, can, limits }: Props) {
     const { t } = useTranslation();
+    const confirm = useConfirm();
     const { search, setFilter, sort } = useTableQuery({
         only: ['brands', 'filters'],
     });
@@ -66,16 +68,19 @@ export default function AdminBrands({ brands, filters, can, limits }: Props) {
     const [editing, setEditing] = useState<BrandRow | null>(null);
     const [creating, setCreating] = useState(false);
 
-    const toggle = (row: BrandRow) => {
+    const toggle = async (row: BrandRow) => {
         if (
             row.is_active &&
-            row.products_count > 0 &&
-            !window.confirm(
-                t('catalog.brands.disable_confirm', {
-                    name: row.name,
-                    count: row.products_count,
-                }),
-            )
+            !(await confirm({
+                description:
+                    row.products_count > 0
+                        ? t('catalog.brands.disable_confirm', {
+                              name: row.name,
+                              count: row.products_count,
+                          })
+                        : undefined,
+                confirmLabel: t('catalog.brands.disable'),
+            }))
         ) {
             return;
         }
@@ -103,8 +108,13 @@ export default function AdminBrands({ brands, filters, can, limits }: Props) {
             { preserveScroll: true },
         );
 
-    const remove = (row: BrandRow) => {
-        if (!window.confirm(t('catalog.brands.delete_confirm'))) {
+    const remove = async (row: BrandRow) => {
+        if (
+            !(await confirm({
+                description: t('catalog.brands.delete_confirm'),
+                confirmLabel: t('common.actions.delete'),
+            }))
+        ) {
             return;
         }
 
@@ -202,7 +212,7 @@ export default function AdminBrands({ brands, filters, can, limits }: Props) {
                     <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => toggle(row)}
+                        onClick={() => void toggle(row)}
                     >
                         <Power className="size-4" aria-hidden="true" />
                         <span className="sr-only sm:not-sr-only">
@@ -216,7 +226,11 @@ export default function AdminBrands({ brands, filters, can, limits }: Props) {
                 </>
             )}
             {can.delete && (
-                <Button variant="ghost" size="sm" onClick={() => remove(row)}>
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => void remove(row)}
+                >
                     <Trash2 className="size-4" aria-hidden="true" />
                     <span className="sr-only">
                         {t('common.actions.delete')}

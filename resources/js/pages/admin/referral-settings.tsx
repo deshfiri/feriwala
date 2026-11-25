@@ -1,6 +1,7 @@
 import { Form, Head, Link } from '@inertiajs/react';
 import { Network } from 'lucide-react';
 import { useState } from 'react';
+import ConfirmButton from '@/components/confirm/confirm-button';
 import FormField from '@/components/forms/form-field';
 import InputError from '@/components/input-error';
 import MoneyAmount from '@/components/money-amount';
@@ -219,22 +220,35 @@ export default function ReferralSettings({
                                                 />
                                             )}
                                         </FormField>
-                                        <Button
-                                            type="submit"
-                                            variant={
-                                                enabled ? 'outline' : 'default'
-                                            }
-                                            disabled={processing}
-                                        >
-                                            {processing && <Spinner />}
-                                            {enabled
-                                                ? t(
-                                                      'referral.settings.switch_off',
-                                                  )
-                                                : t(
-                                                      'referral.settings.switch_on',
-                                                  )}
-                                        </Button>
+                                        {/* Turning the programme off is asked about; turning it on is not. */}
+                                        {enabled ? (
+                                            <ConfirmButton
+                                                type="submit"
+                                                variant="outline"
+                                                disabled={processing}
+                                                confirm={{
+                                                    confirmLabel: t(
+                                                        'referral.settings.switch_off',
+                                                    ),
+                                                }}
+                                            >
+                                                {processing && <Spinner />}
+                                                {t(
+                                                    'referral.settings.switch_off',
+                                                )}
+                                            </ConfirmButton>
+                                        ) : (
+                                            <Button
+                                                type="submit"
+                                                variant="default"
+                                                disabled={processing}
+                                            >
+                                                {processing && <Spinner />}
+                                                {t(
+                                                    'referral.settings.switch_on',
+                                                )}
+                                            </Button>
+                                        )}
                                     </>
                                 )}
                             </Form>
@@ -925,7 +939,7 @@ export default function ReferralSettings({
                                                             }
                                                         />
                                                     </div>
-                                                    <Button
+                                                    <ConfirmButton
                                                         type="submit"
                                                         size="sm"
                                                         variant="outline"
@@ -934,7 +948,7 @@ export default function ReferralSettings({
                                                         {t(
                                                             'referral.settings.close',
                                                         )}
-                                                    </Button>
+                                                    </ConfirmButton>
                                                 </>
                                             )}
                                         </Form>

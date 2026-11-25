@@ -7,6 +7,7 @@ import PageHeader from '@/components/page-header';
 import EmptyState from '@/components/states/empty-state';
 import StatusPill from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
+import { useConfirm } from '@/hooks/use-confirm';
 import { useTranslation } from '@/hooks/use-translation';
 import { index } from '@/routes/admin/inventory/warehouses';
 import type { WarehouseRow } from '@/types/inventory';
@@ -26,16 +27,18 @@ type Props = {
  */
 export default function AdminWarehouses({ warehouses, can }: Props) {
     const { t } = useTranslation();
+    const confirm = useConfirm();
     const [editing, setEditing] = useState<WarehouseRow | null>(null);
     const [creating, setCreating] = useState(false);
 
-    const makeDefault = (warehouse: WarehouseRow) => {
+    const makeDefault = async (warehouse: WarehouseRow) => {
         if (
-            !window.confirm(
-                t('inventory.warehouses.make_default_confirm', {
+            !(await confirm({
+                description: t('inventory.warehouses.make_default_confirm', {
                     name: warehouse.name,
                 }),
-            )
+                destructive: false,
+            }))
         ) {
             return;
         }

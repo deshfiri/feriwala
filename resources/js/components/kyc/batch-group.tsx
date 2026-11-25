@@ -1,5 +1,6 @@
 import { FileText, Lock, Trash2, Upload } from 'lucide-react';
 import { useEffect, useId, useRef, useState } from 'react';
+import ConfirmButton from '@/components/confirm/confirm-button';
 import NativeSelect from '@/components/forms/native-select';
 import SectionCard from '@/components/section-card';
 import StatusPill from '@/components/status-pill';
@@ -707,7 +708,7 @@ function SlotField({
                                 </Button>
                             )}
                             {!locked && (
-                                <Button
+                                <ConfirmButton
                                     type="button"
                                     variant="ghost"
                                     size="icon"
@@ -715,9 +716,14 @@ function SlotField({
                                     disabled={request.busy}
                                     onClick={clear}
                                     aria-label={`${t('kyc.batch_form.remove')}: ${slot.label}`}
+                                    confirm={{
+                                        confirmLabel: t(
+                                            'kyc.batch_form.remove',
+                                        ),
+                                    }}
                                 >
                                     <Trash2 className="size-3.5" />
-                                </Button>
+                                </ConfirmButton>
                             )}
                         </div>
                     )}

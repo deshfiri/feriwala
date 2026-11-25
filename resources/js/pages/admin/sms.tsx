@@ -9,6 +9,7 @@ import StatusPill from '@/components/status-pill';
 import ToggleSwitch from '@/components/toggle-switch';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { useConfirm } from '@/hooks/use-confirm';
 import { useTranslation } from '@/hooks/use-translation';
 import { updateStorefrontVerification } from '@/actions/App/Http/Controllers/Admin/SmsController';
 
@@ -74,6 +75,7 @@ export default function AdminSms({
     can,
 }: Props) {
     const { t, locale } = useTranslation();
+    const confirm = useConfirm();
     const [pending, setPending] = useState<string | null>(null);
     const [failure, setFailure] = useState<{
         event: string;
@@ -84,17 +86,21 @@ export default function AdminSms({
     const eventTitle = (event: string) =>
         events.find((row) => row.event === event)?.title ?? event;
 
-    const toggleEvent = (row: SmsEventRow, enabled: boolean) => {
+    const toggleEvent = async (row: SmsEventRow, enabled: boolean) => {
         /*
-         * Switching a one-time code off stops people verifying their mobile
-         * or confirming a cash order — asked once more, in words, first.
+         * Every switch-off is asked first. A one-time code says why in words:
+         * switching it off stops people verifying their mobile or confirming
+         * a cash order.
          */
         if (
             !enabled &&
-            row.one_time_code &&
-            !window.confirm(
-                t('sms.event_switch.confirm_code_off', { event: row.title }),
-            )
+            !(await confirm({
+                description: row.one_time_code
+                    ? t('sms.event_switch.confirm_code_off', {
+                          event: row.title,
+                      })
+                    : undefined,
+            }))
         ) {
             return;
         }
@@ -522,7 +528,7 @@ export default function AdminSms({
                                 <ToggleSwitch
                                     checked={row.enabled}
                                     onCheckedChange={(enabled) =>
-                                        toggleEvent(row, enabled)
+                                        void toggleEvent(row, enabled)
                                     }
                                     label={t('sms.event_switch.toggle', {
                                         event: row.title,

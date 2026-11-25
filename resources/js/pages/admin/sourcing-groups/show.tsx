@@ -2,6 +2,7 @@ import { Form, Head, Link, router } from '@inertiajs/react';
 import { ArrowLeft } from 'lucide-react';
 import { useState } from 'react';
 import SourcingGroupController from '@/actions/App/Http/Controllers/Admin/SourcingGroupController';
+import ConfirmButton from '@/components/confirm/confirm-button';
 import FormField from '@/components/forms/form-field';
 import SubmitButton from '@/components/forms/submit-button';
 import TextArea from '@/components/forms/text-area';
@@ -12,6 +13,7 @@ import SectionTabs, { SectionTabPanel } from '@/components/section-tabs';
 import StatusPill from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Spinner } from '@/components/ui/spinner';
 import { useTranslation } from '@/hooks/use-translation';
 import ReasonTextarea from '@/components/forms/reason-textarea';
 
@@ -238,14 +240,34 @@ export default function SourcingGroupShow({
                                                 />
                                             )}
                                         </FormField>
-                                        <SubmitButton
-                                            processing={processing}
-                                            variant="outline"
-                                        >
-                                            {group.is_active
-                                                ? t('sourcing.deactivate')
-                                                : t('sourcing.activate')}
-                                        </SubmitButton>
+                                        {group.is_active ? (
+                                            <ConfirmButton
+                                                type="submit"
+                                                variant="outline"
+                                                className="gap-2"
+                                                disabled={processing}
+                                                aria-busy={
+                                                    processing || undefined
+                                                }
+                                                confirm={{
+                                                    confirmLabel: t(
+                                                        'sourcing.deactivate',
+                                                    ),
+                                                }}
+                                            >
+                                                {processing && (
+                                                    <Spinner className="size-3.5" />
+                                                )}
+                                                {t('sourcing.deactivate')}
+                                            </ConfirmButton>
+                                        ) : (
+                                            <SubmitButton
+                                                processing={processing}
+                                                variant="outline"
+                                            >
+                                                {t('sourcing.activate')}
+                                            </SubmitButton>
+                                        )}
                                     </>
                                 )}
                             </Form>
@@ -323,17 +345,31 @@ export default function SourcingGroupShow({
                                                                 'sourcing.form.reason',
                                                             )}
                                                         />
-                                                        <SubmitButton
-                                                            processing={
-                                                                processing
-                                                            }
+                                                        <ConfirmButton
+                                                            type="submit"
                                                             variant="outline"
                                                             size="sm"
+                                                            className="gap-2"
+                                                            disabled={
+                                                                processing
+                                                            }
+                                                            aria-busy={
+                                                                processing ||
+                                                                undefined
+                                                            }
+                                                            confirm={{
+                                                                confirmLabel: t(
+                                                                    'sourcing.products.remove',
+                                                                ),
+                                                            }}
                                                         >
+                                                            {processing && (
+                                                                <Spinner className="size-3.5" />
+                                                            )}
                                                             {t(
                                                                 'sourcing.products.remove',
                                                             )}
-                                                        </SubmitButton>
+                                                        </ConfirmButton>
                                                     </>
                                                 )}
                                             </Form>
@@ -488,17 +524,31 @@ export default function SourcingGroupShow({
                                                                 'sourcing.form.reason',
                                                             )}
                                                         />
-                                                        <SubmitButton
-                                                            processing={
-                                                                processing
-                                                            }
+                                                        <ConfirmButton
+                                                            type="submit"
                                                             variant="outline"
                                                             size="sm"
+                                                            className="gap-2"
+                                                            disabled={
+                                                                processing
+                                                            }
+                                                            aria-busy={
+                                                                processing ||
+                                                                undefined
+                                                            }
+                                                            confirm={{
+                                                                confirmLabel: t(
+                                                                    'sourcing.mappings.remove',
+                                                                ),
+                                                            }}
                                                         >
+                                                            {processing && (
+                                                                <Spinner className="size-3.5" />
+                                                            )}
                                                             {t(
                                                                 'sourcing.mappings.remove',
                                                             )}
-                                                        </SubmitButton>
+                                                        </ConfirmButton>
                                                     </>
                                                 )}
                                             </Form>

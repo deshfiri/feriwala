@@ -11,6 +11,7 @@ import SectionCard from '@/components/section-card';
 import StatusPill from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { useConfirm } from '@/hooks/use-confirm';
 import { useTranslation } from '@/hooks/use-translation';
 import type { Money } from '@/lib/money';
 import type { StatusTone } from '@/lib/status';
@@ -107,6 +108,7 @@ export default function AdminSupplierListingLotShow({
     options,
 }: Props) {
     const { t, locale } = useTranslation();
+    const confirm = useConfirm();
 
     const pendingEntries = lot.entries.filter((entry) =>
         entry.items.some((item) => item.status === 'pending'),
@@ -162,8 +164,17 @@ export default function AdminSupplierListingLotShow({
             ),
         );
 
-    const submit = (event: FormEvent) => {
+    const submit = async (event: FormEvent) => {
         event.preventDefault();
+
+        if (
+            form.data.entries.some((entry) =>
+                entry.items.some((item) => item.decision === 'reject'),
+            ) &&
+            !(await confirm())
+        ) {
+            return;
+        }
 
         form.transform((data) => ({
             entries: data.entries
@@ -244,7 +255,10 @@ export default function AdminSupplierListingLotShow({
                     }
                 />
 
-                <form onSubmit={submit} className="space-y-6">
+                <form
+                    onSubmit={(event) => void submit(event)}
+                    className="space-y-6"
+                >
                     {lot.entries.map((entry) => {
                         const entryIndex = form.data.entries.findIndex(
                             (e) => e.listing_id === entry.id,

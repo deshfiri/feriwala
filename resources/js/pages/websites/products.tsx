@@ -1,6 +1,7 @@
 import { Form, Head, Link, setLayoutProps } from '@inertiajs/react';
 import { PackageSearch } from 'lucide-react';
 import { useState } from 'react';
+import ConfirmButton from '@/components/confirm/confirm-button';
 import DataTable from '@/components/data-table/data-table';
 import InputError from '@/components/input-error';
 import MoneyAmount from '@/components/money-amount';
@@ -189,21 +190,32 @@ export default function WebsiteProducts({
             >
                 {({ processing, errors }) => (
                     <div className="space-y-1">
-                        <Button
-                            type="submit"
-                            size="sm"
-                            variant={
-                                row.status === 'published'
-                                    ? 'outline'
-                                    : 'default'
-                            }
-                            disabled={processing}
-                        >
-                            {processing && <Spinner />}
-                            {row.status === 'published'
-                                ? t('website.products.unpublish')
-                                : t('website.products.publish')}
-                        </Button>
+                        {row.status === 'published' ? (
+                            <ConfirmButton
+                                type="submit"
+                                size="sm"
+                                variant="outline"
+                                disabled={processing}
+                                confirm={{
+                                    confirmLabel: t(
+                                        'website.products.unpublish',
+                                    ),
+                                }}
+                            >
+                                {processing && <Spinner />}
+                                {t('website.products.unpublish')}
+                            </ConfirmButton>
+                        ) : (
+                            <Button
+                                type="submit"
+                                size="sm"
+                                variant="default"
+                                disabled={processing}
+                            >
+                                {processing && <Spinner />}
+                                {t('website.products.publish')}
+                            </Button>
+                        )}
                         <InputError message={errors.product ?? errors.price} />
                     </div>
                 )}

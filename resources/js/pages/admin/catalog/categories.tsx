@@ -18,6 +18,7 @@ import EmptyState from '@/components/states/empty-state';
 import StatusPill from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { useConfirm } from '@/hooks/use-confirm';
 import { useTranslation } from '@/hooks/use-translation';
 import type { StatusTone } from '@/lib/status';
 import { index as productsIndex } from '@/routes/admin/catalog/products';
@@ -65,6 +66,7 @@ type Props = {
  */
 export default function AdminCategories({ categories, can, limits }: Props) {
     const { t } = useTranslation();
+    const confirm = useConfirm();
 
     const [editing, setEditing] = useState<CategoryRow | null>(null);
     const [creating, setCreating] = useState(false);
@@ -131,16 +133,19 @@ export default function AdminCategories({ categories, can, limits }: Props) {
         return { tone: 'success', label: t('catalog.categories.state_live') };
     };
 
-    const toggle = (row: CategoryRow) => {
+    const toggle = async (row: CategoryRow) => {
         if (
             row.is_active &&
-            row.products_in_branch > 0 &&
-            !window.confirm(
-                t('catalog.categories.disable_confirm', {
-                    name: row.name,
-                    count: row.products_in_branch,
-                }),
-            )
+            !(await confirm({
+                description:
+                    row.products_in_branch > 0
+                        ? t('catalog.categories.disable_confirm', {
+                              name: row.name,
+                              count: row.products_in_branch,
+                          })
+                        : undefined,
+                confirmLabel: t('catalog.categories.disable'),
+            }))
         ) {
             return;
         }
@@ -178,8 +183,13 @@ export default function AdminCategories({ categories, can, limits }: Props) {
         );
     };
 
-    const remove = (row: CategoryRow) => {
-        if (!window.confirm(t('catalog.categories.delete_confirm'))) {
+    const remove = async (row: CategoryRow) => {
+        if (
+            !(await confirm({
+                description: t('catalog.categories.delete_confirm'),
+                confirmLabel: t('common.actions.delete'),
+            }))
+        ) {
             return;
         }
 
@@ -291,7 +301,7 @@ export default function AdminCategories({ categories, can, limits }: Props) {
                         <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => toggle(category)}
+                            onClick={() => void toggle(category)}
                         >
                             <Power className="size-4" aria-hidden="true" />
                             <span className="sr-only sm:not-sr-only">
@@ -309,7 +319,7 @@ export default function AdminCategories({ categories, can, limits }: Props) {
                     <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => remove(category)}
+                        onClick={() => void remove(category)}
                     >
                         <Trash2 className="size-4" aria-hidden="true" />
                         <span className="sr-only">

@@ -8,6 +8,7 @@ import SectionCard from '@/components/section-card';
 import StatusPill from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { useConfirm } from '@/hooks/use-confirm';
 import { useTranslation } from '@/hooks/use-translation';
 import {
     ACCENT_PRESETS,
@@ -38,6 +39,7 @@ export default function ButtonColorPicker({
     state: ButtonColorState;
 }) {
     const { t } = useTranslation();
+    const confirm = useConfirm();
     const [color, setColor] = useState(button.color);
 
     const isValid = HEX_COLOR_PATTERN.test(color);
@@ -45,8 +47,13 @@ export default function ButtonColorPicker({
     const isUnchanged =
         button.is_custom && previewColor === button.color.toLowerCase();
 
-    const restore = () => {
-        if (!window.confirm(t(`branding.${kind}.restore_confirm`))) {
+    const restore = async () => {
+        if (
+            !(await confirm({
+                description: t(`branding.${kind}.restore_confirm`),
+                confirmLabel: t(`branding.${kind}.restore`),
+            }))
+        ) {
             return;
         }
 

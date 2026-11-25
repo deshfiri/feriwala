@@ -32,6 +32,8 @@ vi.mock('@inertiajs/react', async () => {
     };
 });
 
+const { ConfirmProvider } =
+    await import('@/components/confirm/confirm-provider');
 const { default: PaymentSwitches } = await import('./payment-switches');
 
 function paymentSwitchRow(
@@ -162,19 +164,30 @@ describe('the payments switch list', () => {
         expect(paymentSwitchFor('stripe')).toBeEnabled();
     });
 
-    it('sends the flipped state for that gateway to the toggle action', () => {
+    it('sends the flipped state for that gateway to the toggle action, asking first before switching one off', async () => {
         render(
-            <PaymentSwitches
-                gateways={gateways}
-                summary={paymentSwitchSummary}
-                can={{ manage: true }}
-            />,
+            <ConfirmProvider>
+                <PaymentSwitches
+                    gateways={gateways}
+                    summary={paymentSwitchSummary}
+                    can={{ manage: true }}
+                />
+            </ConfirmProvider>,
         );
 
+        // Switching on goes straight through.
         fireEvent.click(paymentSwitchFor('bkash'));
-        fireEvent.click(paymentSwitchFor('sslcommerz'));
+        await vi.waitFor(() => expect(router.put).toHaveBeenCalledTimes(1));
 
-        expect(router.put).toHaveBeenCalledTimes(2);
+        // Switching off waits for "Are you sure?".
+        fireEvent.click(paymentSwitchFor('sslcommerz'));
+        fireEvent.click(
+            await screen.findByRole('button', {
+                name: 'common.actions.confirm',
+            }),
+        );
+
+        await vi.waitFor(() => expect(router.put).toHaveBeenCalledTimes(2));
         expect(router.put.mock.calls[0][0]).toBe('/admin/gateways/enabled');
         expect(router.put.mock.calls[0][1]).toEqual({
             gateway: 'bkash',

@@ -8,6 +8,7 @@ import {
     Lock,
 } from 'lucide-react';
 import { useState } from 'react';
+import ConfirmButton from '@/components/confirm/confirm-button';
 import FormField from '@/components/forms/form-field';
 import SubmitButton from '@/components/forms/submit-button';
 import PageContainer from '@/components/page-container';
@@ -15,6 +16,7 @@ import PageHeader from '@/components/page-header';
 import SectionCard from '@/components/section-card';
 import StatusPill from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
+import { Spinner } from '@/components/ui/spinner';
 import { useTranslation } from '@/hooks/use-translation';
 import { show as accountDossier } from '@/routes/admin/accounts';
 import {
@@ -491,12 +493,35 @@ export default function AdminKycShow({
                                                 </p>
                                             )}
 
-                                            <SubmitButton
-                                                processing={processing}
-                                                className="w-full"
-                                            >
-                                                {t('kyc.decision.submit')}
-                                            </SubmitButton>
+                                            {/* Only a rejection asks
+                                                "Are you sure?" first. */}
+                                            {outcome === 'reject' ? (
+                                                <ConfirmButton
+                                                    type="submit"
+                                                    className="w-full gap-2"
+                                                    disabled={processing}
+                                                    aria-busy={
+                                                        processing || undefined
+                                                    }
+                                                    confirm={{
+                                                        confirmLabel: t(
+                                                            'kyc.decision.reject',
+                                                        ),
+                                                    }}
+                                                >
+                                                    {processing && (
+                                                        <Spinner className="size-3.5" />
+                                                    )}
+                                                    {t('kyc.decision.submit')}
+                                                </ConfirmButton>
+                                            ) : (
+                                                <SubmitButton
+                                                    processing={processing}
+                                                    className="w-full"
+                                                >
+                                                    {t('kyc.decision.submit')}
+                                                </SubmitButton>
+                                            )}
                                         </>
                                     )}
                                 </Form>

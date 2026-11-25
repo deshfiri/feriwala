@@ -1,5 +1,6 @@
 import { Paperclip, X } from 'lucide-react';
 import { useRef, useState } from 'react';
+import ConfirmButton from '@/components/confirm/confirm-button';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
@@ -227,7 +228,7 @@ export default function EvidenceDraftUploader({
                         {item.state === 'uploading' ? (
                             <Spinner className="size-4" />
                         ) : (
-                            <Button
+                            <ConfirmButton
                                 type="button"
                                 size="icon"
                                 variant="ghost"
@@ -236,7 +237,7 @@ export default function EvidenceDraftUploader({
                                 onClick={() => void remove(item)}
                             >
                                 <X aria-hidden="true" className="size-4" />
-                            </Button>
+                            </ConfirmButton>
                         )}
                     </li>
                 ))}

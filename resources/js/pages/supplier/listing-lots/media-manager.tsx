@@ -5,6 +5,7 @@ import EmptyState from '@/components/states/empty-state';
 import StatusPill from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { useConfirm } from '@/hooks/use-confirm';
 import { useTranslation } from '@/hooks/use-translation';
 import * as media from '@/routes/supplier/listings/media';
 import type { LotEntryMedia } from './types';
@@ -25,9 +26,14 @@ export default function ListingLotMediaManager({
     items: LotEntryMedia[];
 }) {
     const { t } = useTranslation();
+    const confirm = useConfirm();
 
-    const remove = (item: LotEntryMedia) => {
-        if (!window.confirm(t('supplier.listing_lots.media.remove'))) {
+    const remove = async (item: LotEntryMedia) => {
+        if (
+            !(await confirm({
+                confirmLabel: t('supplier.listing_lots.media.remove'),
+            }))
+        ) {
             return;
         }
 

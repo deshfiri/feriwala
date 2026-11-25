@@ -9,6 +9,7 @@ import PageHeader from '@/components/page-header';
 import EmptyState from '@/components/states/empty-state';
 import StatusPill from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
+import { useConfirm } from '@/hooks/use-confirm';
 import { useTableQuery } from '@/hooks/use-table-query';
 import ForceDeleteDialog from './force-delete-dialog';
 import { useTranslation } from '@/hooks/use-translation';
@@ -153,6 +154,7 @@ function RowActions({
     setError: (error: string | undefined) => void;
 }) {
     const { t } = useTranslation();
+    const confirm = useConfirm();
     const [forceOpen, setForceOpen] = useState(false);
 
     if (!can.delete) {
@@ -172,13 +174,15 @@ function RowActions({
         );
     };
 
-    const permanentlyDelete = () => {
+    const permanentlyDelete = async () => {
         if (
-            !window.confirm(
-                t('catalog.products.trash.permanent_delete_confirm', {
-                    name: row.name,
-                }),
-            )
+            !(await confirm({
+                description: t(
+                    'catalog.products.trash.permanent_delete_confirm',
+                    { name: row.name },
+                ),
+                confirmLabel: t('catalog.products.trash.permanent_delete'),
+            }))
         ) {
             return;
         }
@@ -197,7 +201,11 @@ function RowActions({
                 <RotateCcw className="size-4" aria-hidden="true" />
                 {t('catalog.products.trash.restore')}
             </Button>
-            <Button variant="ghost" size="sm" onClick={permanentlyDelete}>
+            <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => void permanentlyDelete()}
+            >
                 <Trash2 className="text-danger size-4" aria-hidden="true" />
                 {t('catalog.products.trash.permanent_delete')}
             </Button>

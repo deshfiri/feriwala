@@ -9,6 +9,7 @@ import {
 import { useState } from 'react';
 import WholesaleCheckoutController from '@/actions/App/Http/Controllers/Erp/WholesaleCheckoutController';
 import WholesaleOrderController from '@/actions/App/Http/Controllers/Erp/WholesaleOrderController';
+import ConfirmButton from '@/components/confirm/confirm-button';
 import InputError from '@/components/input-error';
 import LineThumb from '@/components/line-thumb';
 import MoneyAmount from '@/components/money-amount';
@@ -152,7 +153,7 @@ export default function WholesaleCheckout({ checkout }: Props) {
                                         options={{ preserveScroll: true }}
                                     >
                                         {({ processing }) => (
-                                            <Button
+                                            <ConfirmButton
                                                 type="submit"
                                                 variant="ghost"
                                                 size="sm"
@@ -161,7 +162,7 @@ export default function WholesaleCheckout({ checkout }: Props) {
                                                 {t(
                                                     'wholesale.checkout.remove_coupon',
                                                 )}
-                                            </Button>
+                                            </ConfirmButton>
                                         )}
                                     </Form>
                                 </div>
@@ -440,15 +441,20 @@ function ConfirmationPanel({ checkout }: { checkout: CheckoutSummary }) {
                         options={{ preserveScroll: true }}
                     >
                         {({ processing }) => (
-                            <Button
+                            <ConfirmButton
                                 type="submit"
                                 variant="outline"
                                 className="w-full"
                                 disabled={processing}
+                                confirm={{
+                                    confirmLabel: t(
+                                        'wholesale.checkout.confirmation.change',
+                                    ),
+                                }}
                             >
                                 {processing && <Spinner />}
                                 {t('wholesale.checkout.confirmation.change')}
-                            </Button>
+                            </ConfirmButton>
                         )}
                     </Form>
                 </div>

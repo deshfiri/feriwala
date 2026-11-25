@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useConfirm } from '@/hooks/use-confirm';
 import { useTranslation } from '@/hooks/use-translation';
 import type { AttributeRow, CatalogAbilities } from '@/types';
 
@@ -41,14 +42,20 @@ type Renaming =
  */
 export default function AdminAttributes({ attributes, can }: Props) {
     const { t } = useTranslation();
+    const confirm = useConfirm();
     const page = usePage<{ errors: Record<string, string> }>();
 
     const [renaming, setRenaming] = useState<Renaming | null>(null);
 
     const refusal = page.props.errors?.attribute ?? page.props.errors?.value;
 
-    const removeAttribute = (attribute: AttributeRow) => {
-        if (!window.confirm(t('catalog.attributes.delete_confirm'))) {
+    const removeAttribute = async (attribute: AttributeRow) => {
+        if (
+            !(await confirm({
+                description: t('catalog.attributes.delete_confirm'),
+                confirmLabel: t('common.actions.delete'),
+            }))
+        ) {
             return;
         }
 
@@ -57,8 +64,13 @@ export default function AdminAttributes({ attributes, can }: Props) {
         });
     };
 
-    const removeValue = (id: string) => {
-        if (!window.confirm(t('catalog.attributes.delete_value_confirm'))) {
+    const removeValue = async (id: string) => {
+        if (
+            !(await confirm({
+                description: t('catalog.attributes.delete_value_confirm'),
+                confirmLabel: t('common.actions.delete'),
+            }))
+        ) {
             return;
         }
 

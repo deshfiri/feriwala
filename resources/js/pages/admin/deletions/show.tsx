@@ -1,4 +1,5 @@
 import { Form, Head, Link } from '@inertiajs/react';
+import ConfirmButton from '@/components/confirm/confirm-button';
 import InputError from '@/components/input-error';
 import Notice from '@/components/notice';
 import PageContainer from '@/components/page-container';
@@ -9,6 +10,7 @@ import StatusPill from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Spinner } from '@/components/ui/spinner';
 import { useTranslation } from '@/hooks/use-translation';
 import { approve, index, reject } from '@/routes/admin/deletions';
 import type { DeletionQueueRow, ErasureImpact } from '@/types';
@@ -244,12 +246,23 @@ export default function AdminDeletionsShow({
                                             <InputError message={errors.note} />
                                         </div>
 
-                                        <SubmitButton
-                                            processing={processing}
+                                        <ConfirmButton
+                                            type="submit"
                                             variant="outline"
+                                            className="gap-2"
+                                            disabled={processing}
+                                            aria-busy={processing || undefined}
+                                            confirm={{
+                                                confirmLabel: t(
+                                                    'deletion.admin.reject',
+                                                ),
+                                            }}
                                         >
+                                            {processing && (
+                                                <Spinner className="size-3.5" />
+                                            )}
                                             {t('deletion.admin.reject')}
-                                        </SubmitButton>
+                                        </ConfirmButton>
                                     </>
                                 )}
                             </Form>

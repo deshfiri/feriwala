@@ -1,5 +1,6 @@
 import { Form, Head, Link } from '@inertiajs/react';
 import { ArrowLeft } from 'lucide-react';
+import ConfirmButton from '@/components/confirm/confirm-button';
 import FormField from '@/components/forms/form-field';
 import SubmitButton from '@/components/forms/submit-button';
 import MoneyAmount from '@/components/money-amount';
@@ -10,6 +11,7 @@ import SectionCard from '@/components/section-card';
 import StatusPill from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Spinner } from '@/components/ui/spinner';
 import { useTranslation } from '@/hooks/use-translation';
 import type { Money } from '@/lib/money';
 import { index } from '@/routes/admin/supplier-offers';
@@ -250,15 +252,28 @@ export default function AdminSupplierOfferShow({ offer }: { offer: Offer }) {
                                                             />
                                                         )}
                                                     </FormField>
-                                                    <SubmitButton
-                                                        processing={processing}
+                                                    <ConfirmButton
+                                                        type="submit"
                                                         variant="destructive"
-                                                        className="w-full"
+                                                        className="w-full gap-2"
+                                                        disabled={processing}
+                                                        aria-busy={
+                                                            processing ||
+                                                            undefined
+                                                        }
+                                                        confirm={{
+                                                            confirmLabel: t(
+                                                                'supplier.admin.offers.suspend',
+                                                            ),
+                                                        }}
                                                     >
+                                                        {processing && (
+                                                            <Spinner className="size-3.5" />
+                                                        )}
                                                         {t(
                                                             'supplier.admin.offers.suspend',
                                                         )}
-                                                    </SubmitButton>
+                                                    </ConfirmButton>
                                                 </>
                                             )}
                                         </Form>

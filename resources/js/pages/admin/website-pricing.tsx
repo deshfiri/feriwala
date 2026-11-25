@@ -1,5 +1,6 @@
 import { Form, Head } from '@inertiajs/react';
 import { Scale } from 'lucide-react';
+import ConfirmButton from '@/components/confirm/confirm-button';
 import DataTable from '@/components/data-table/data-table';
 import FormField from '@/components/forms/form-field';
 import InputError from '@/components/input-error';
@@ -154,14 +155,14 @@ export default function WebsitePricing({
                         options={{ preserveScroll: true }}
                     >
                         {({ processing }) => (
-                            <Button
+                            <ConfirmButton
                                 type="submit"
                                 size="sm"
                                 variant="outline"
                                 disabled={processing}
                             >
                                 {t('website.pricing.close')}
-                            </Button>
+                            </ConfirmButton>
                         )}
                     </Form>
                 ),

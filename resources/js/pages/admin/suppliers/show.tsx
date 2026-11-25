@@ -6,6 +6,7 @@ import * as kycUpload from '@/routes/admin/suppliers/kyc-upload';
 import ContactVerificationCard, {
     type ContactState,
 } from '@/components/contact-verification-card';
+import ConfirmButton from '@/components/confirm/confirm-button';
 import FormField from '@/components/forms/form-field';
 import SubmitButton from '@/components/forms/submit-button';
 import TextArea from '@/components/forms/text-area';
@@ -15,6 +16,7 @@ import SectionCard from '@/components/section-card';
 import StatusPill from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Spinner } from '@/components/ui/spinner';
 import { useTranslation } from '@/hooks/use-translation';
 import type { StatusTone } from '@/lib/status';
 import ManagedSupplierController from '@/actions/App/Http/Controllers/Admin/ManagedSupplierController';
@@ -168,13 +170,28 @@ export default function AdminSupplierShow({
                             }
                         </FormField>
                     ))}
-                    <SubmitButton
-                        processing={processing}
-                        variant={variant}
-                        className="w-full"
-                    >
-                        {label}
-                    </SubmitButton>
+                    {/* Rejecting and suspending ask "Are you sure?" first. */}
+                    {variant === 'destructive' ? (
+                        <ConfirmButton
+                            type="submit"
+                            variant={variant}
+                            className="w-full gap-2"
+                            disabled={processing}
+                            aria-busy={processing || undefined}
+                            confirm={{ confirmLabel: label }}
+                        >
+                            {processing && <Spinner className="size-3.5" />}
+                            {label}
+                        </ConfirmButton>
+                    ) : (
+                        <SubmitButton
+                            processing={processing}
+                            variant={variant}
+                            className="w-full"
+                        >
+                            {label}
+                        </SubmitButton>
+                    )}
                 </>
             )}
         </Form>

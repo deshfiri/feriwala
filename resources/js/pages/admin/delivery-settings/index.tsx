@@ -2,6 +2,7 @@ import { Form, Head } from '@inertiajs/react';
 import { Plus } from 'lucide-react';
 import { useState } from 'react';
 import DeliverySettingsController from '@/actions/App/Http/Controllers/Admin/DeliverySettingsController';
+import ConfirmButton from '@/components/confirm/confirm-button';
 import FormField from '@/components/forms/form-field';
 import MoneyField from '@/components/forms/money-field';
 import SubmitButton from '@/components/forms/submit-button';
@@ -413,7 +414,7 @@ export default function DeliverySettingsIndex({
                                                 }}
                                             >
                                                 {({ processing }) => (
-                                                    <Button
+                                                    <ConfirmButton
                                                         type="submit"
                                                         size="sm"
                                                         variant="ghost"
@@ -422,7 +423,7 @@ export default function DeliverySettingsIndex({
                                                         {t(
                                                             'delivery_settings.admin.close',
                                                         )}
-                                                    </Button>
+                                                    </ConfirmButton>
                                                 )}
                                             </Form>
                                         )}
