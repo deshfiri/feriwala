@@ -4,21 +4,28 @@ namespace App\Http\Controllers\Admin;
 
 use App\Domain\Account\Actions\ActivateAccount;
 use App\Domain\Account\Actions\HoldAccountActivation;
+use App\Domain\Account\Actions\RecordPreferredDomainCheck;
+use App\Domain\Account\Actions\RequestApplicationCorrection;
 use App\Domain\Account\Actions\RequestKycResubmission;
+use App\Domain\Account\Actions\SetPartnerSelfieMode;
 use App\Domain\Account\Actions\SuspendAccount;
 use App\Domain\Account\ActivationRequirements;
 use App\Domain\Account\Exceptions\ActivationBlocked;
 use App\Domain\Account\Models\BusinessAccount;
+use App\Domain\Account\OnboardingApplication;
 use App\Domain\Account\Queries\PendingActivationQuery;
 use App\Domain\Billing\Enums\PaymentPurpose;
 use App\Domain\Billing\Models\Payment;
+use App\Domain\Kyc\Enums\KycSelfieMode;
 use App\Domain\Kyc\Enums\KycStatus;
+use App\Domain\Kyc\KycSelfiePolicy;
 use App\Domain\Kyc\Models\KycSubmission;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -39,6 +46,8 @@ class ActivationReviewController extends Controller
 
     public function __construct(
         protected ActivationRequirements $requirements,
+        protected OnboardingApplication $application,
+        protected KycSelfiePolicy $selfies,
     ) {}
 
     public function index(Request $request, PendingActivationQuery $pending): Response
@@ -142,6 +151,21 @@ class ActivationReviewController extends Controller
             // not a green tick they have to take on trust.
             'conditions' => $this->conditions($account),
 
+            // Everything the partner submitted (D39): personal details, business,
+            // the preferred domain to check and buy by hand, and any correction
+            // already asked for.
+            'application' => $this->application->summary($account),
+            'correction_sections' => OnboardingApplication::SECTIONS,
+            'can_request_correction' => $reviewer->can('requestKycResubmission', $account),
+
+            // This partner's own selfie setting (D39): '' follows the platform.
+            'selfie' => [
+                'mode' => $account->kyc_selfie_mode ?? '',
+                'effective' => $this->selfies->forAccount($account)?->label(),
+                'modes' => array_map(fn (KycSelfieMode $mode) => ['value' => $mode->value, 'label' => $mode->label()], KycSelfieMode::cases()),
+                'can_set' => $reviewer->can('approveActivation', $account),
+            ],
+
             'history' => $account->statusHistory()->with('changedBy:id,name')->get()
                 ->map(fn ($change) => [
                     'to_status' => $change->to_status->label(),
@@ -218,6 +242,96 @@ class ActivationReviewController extends Controller
 
         return to_route('admin.activations.index')
             ->with('success', 'Correction requested.');
+    }
+
+    /**
+     * Send part of a submitted application back to the partner (D39): personal
+     * details, business, or the preferred domain. Identity documents keep their
+     * own resubmission request above. The same authority as asking for a KYC
+     * correction.
+     */
+    public function requestCorrection(
+        Request $request,
+        BusinessAccount $account,
+        RequestApplicationCorrection $action,
+    ): RedirectResponse {
+        Gate::authorize('requestKycResubmission', $account);
+
+        /** @var User $reviewer */
+        $reviewer = $request->user();
+
+        $validated = $request->validate([
+            'sections' => ['required', 'array', 'min:1'],
+            'sections.*' => ['string', Rule::in(OnboardingApplication::SECTIONS)],
+            'reason' => ['required', 'string', 'max:1000'],
+            'feedback' => ['required', 'string', 'max:1000'],
+            'internal_note' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        try {
+            $action->handle(
+                account: $account,
+                decidedBy: $reviewer->id,
+                sections: array_values($validated['sections']),
+                reason: $validated['reason'],
+                feedback: $validated['feedback'],
+                internalNote: $validated['internal_note'] ?? null,
+            );
+        } catch (InvalidArgumentException $exception) {
+            throw ValidationException::withMessages(['sections' => $exception->getMessage()]);
+        }
+
+        return to_route('admin.activations.index')
+            ->with('success', 'Correction requested.');
+    }
+
+    /**
+     * Whether this one partner's identity verification asks for a selfie (D39),
+     * overriding the platform setting. The same authority as approving.
+     */
+    public function selfie(Request $request, BusinessAccount $account, SetPartnerSelfieMode $action): RedirectResponse
+    {
+        Gate::authorize('approveActivation', $account);
+
+        /** @var User $reviewer */
+        $reviewer = $request->user();
+
+        $validated = $request->validate([
+            'mode' => ['nullable', Rule::in(['', ...array_map(fn (KycSelfieMode $mode) => $mode->value, KycSelfieMode::cases())])],
+            'reason' => ['required', 'string', 'max:1000'],
+        ]);
+
+        $action->handle($account, $reviewer, KycSelfieMode::tryFrom((string) ($validated['mode'] ?? '')), $validated['reason']);
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('account_verification_settings.selfie.partner_saved')]);
+
+        return back();
+    }
+
+    /**
+     * Record what staff found when they checked the preferred domain by hand
+     * (D39). The only source of "available" there is: Banij has no registrar
+     * connection, and nothing is bought here.
+     */
+    public function domainCheck(Request $request, BusinessAccount $account, RecordPreferredDomainCheck $record): RedirectResponse
+    {
+        Gate::authorize('approveActivation', $account);
+
+        /** @var User $reviewer */
+        $reviewer = $request->user();
+
+        $validated = $request->validate([
+            'result' => ['required', Rule::in([RecordPreferredDomainCheck::AVAILABLE, RecordPreferredDomainCheck::UNAVAILABLE])],
+            'note' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        try {
+            $record->handle($account, $reviewer, $validated['result'], $validated['note'] ?? null);
+        } catch (InvalidArgumentException $exception) {
+            throw ValidationException::withMessages(['result' => $exception->getMessage()]);
+        }
+
+        return back();
     }
 
     public function suspend(

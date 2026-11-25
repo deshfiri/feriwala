@@ -100,6 +100,12 @@ class CompleteAccountManually
 
         $this->confirmContacts($actor, $owner, $reason);
 
+        // The administrator completes the application on the partner's behalf
+        // (D39): it counts as submitted, recorded by this decision's audit entry.
+        if (! $account->refresh()->hasSubmittedApplication()) {
+            $account->forceFill(['application_submitted_at' => now()])->save();
+        }
+
         $this->approveKyc($account->refresh(), $actor, $reason);
 
         $account->refresh();

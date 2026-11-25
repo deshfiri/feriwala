@@ -22,7 +22,7 @@ class CourierPartnerUpdate extends Notification implements ShouldQueue
     use Queueable;
 
     /**
-     * @param  string  $outcome  `booked`, `picked_up`, `in_transit`, `delivered`, `failed` or `returned`
+     * @param  string  $outcome  `booked`, `picked_up`, `in_transit`, `delivered`, `failed`, `returned` or `label_ready`
      */
     public function __construct(
         public readonly string $outcome,

@@ -9,7 +9,8 @@ use App\Domain\Account\Models\BusinessAccount;
 use Illuminate\Database\DatabaseManager;
 
 /**
- * Moves an account on from the verification steps to KYC once everything
+ * Moves an account on from the verification steps to package selection (D39;
+ * it was KYC under the earlier order) once everything
  * verification currently asks of its owner is done: their email, and their
  * mobile while the administrator's requirement is on.
  *
@@ -50,11 +51,13 @@ class AdvanceAccountPastVerification
                 return;
             }
 
-            if (! $locked->canTransitionTo(AccountStatus::KycPending)) {
+            // Package selection is next (D39): the package is chosen and paid
+            // for before KYC.
+            if (! $locked->canTransitionTo(AccountStatus::PackageSelectionPending)) {
                 return;
             }
 
-            $this->changeStatus->handle($locked, new AccountStatusChange(to: AccountStatus::KycPending, reason: $reason));
+            $this->changeStatus->handle($locked, new AccountStatusChange(to: AccountStatus::PackageSelectionPending, reason: $reason));
         });
     }
 }

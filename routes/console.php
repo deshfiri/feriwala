@@ -10,6 +10,7 @@ use App\Domain\Kyc\Actions\SweepKycDeadlines;
 use App\Domain\Order\Actions\ExpireUnconfirmedCodOrders;
 use App\Domain\Order\Actions\ExpireUnpaidOrders;
 use App\Domain\Order\Actions\ReleaseCollectableReceivables;
+use App\Domain\Order\Actions\ReleaseDueStorefrontProfits;
 use App\Domain\Order\Actions\RetryCodConfirmationCodes;
 use App\Domain\Package\Actions\SweepSubscriptionLifecycle;
 use App\Domain\Referral\Actions\ReleaseDueReferralCommissions;
@@ -451,6 +452,19 @@ Schedule::call(fn () => app(ReleaseDueReferralCommissions::class)->handle())
     ->onOneServer()
     ->withoutOverlapping()
     ->description('Pay due Partner Network commissions and retry owed reversals (D24)');
+
+/*
+ * Partner Storefront profit. Every minute: credit each profit whose 24-hour
+ * hold after Delivered has ended, look again at blocked ones, take owed
+ * reversals the Wallet can now carry, and catch up a delivered order with no
+ * profit yet. Each credit is keyed by its order, so a repeated run adds nothing.
+ */
+Schedule::call(fn () => app(ReleaseDueStorefrontProfits::class)->handle())
+    ->name('storefront-profit-release')
+    ->everyMinute()
+    ->onOneServer()
+    ->withoutOverlapping()
+    ->description('Credit Partner Storefront profit after its 24-hour hold');
 
 /*
  * External store orders (D29). Every ten minutes each live connection is

@@ -21,8 +21,8 @@ it('shows an unactivated account its progress', function () {
             ->component('onboarding/status')
             ->where('progress.current_step', 'kyc')
             ->where('progress.is_complete', false)
-            ->where('progress.action.label', 'Submit your KYC documents')
-            ->has('progress.steps', 6),
+            ->where('progress.action.label', 'Verify your identity')
+            ->has('progress.steps', 9),
         );
 });
 

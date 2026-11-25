@@ -29,6 +29,9 @@ return [
     'required_for' => [
         // Every order revision says why it was made (D38).
         'admin.orders.revisions.*',
+        // An application sent back for correction records why (D39).
+        'admin.activations.request-correction',
+        'admin.activations.selfie',
         'admin.roles.*',
         'admin.permissions.*',
         'admin.staff.*',
@@ -74,5 +77,8 @@ return [
         // A consignment id or tracking code typed in by hand is printed on the
         // parcel's label and matched against the courier's webhooks.
         'admin.shipments.courier-references.*',
+
+        // A corrected label replaces what is printed on a parcel in transit.
+        'admin.shipments.label.reissue',
     ],
 ];

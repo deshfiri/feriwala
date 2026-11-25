@@ -28,16 +28,19 @@ function stateOfStep(array $progress, OnboardingStep $step): string
 }
 
 describe('the stepper (§33.4)', function () {
-    it('always shows all six steps', function () {
-        expect(progressFor(AccountStatus::Registered)['steps'])->toHaveCount(6);
+    it('always shows all nine steps of D39', function () {
+        expect(collect(progressFor(AccountStatus::Registered)['steps'])->pluck('key')->all())->toBe([
+            'registration', 'verification', 'package', 'payment', 'kyc', 'details', 'business', 'review', 'approval',
+        ]);
     });
 
     it('marks earlier steps done and later ones upcoming', function () {
         $progress = progressFor(AccountStatus::PaymentPending);
 
-        expect(stateOfStep($progress, OnboardingStep::Kyc))->toBe('done')
-            ->and(stateOfStep($progress, OnboardingStep::Package))->toBe('done')
+        // Paying comes before identity verification (D39).
+        expect(stateOfStep($progress, OnboardingStep::Package))->toBe('done')
             ->and(stateOfStep($progress, OnboardingStep::Payment))->toBe('current')
+            ->and(stateOfStep($progress, OnboardingStep::Kyc))->toBe('upcoming')
             ->and(stateOfStep($progress, OnboardingStep::Approval))->toBe('upcoming');
     });
 
@@ -66,7 +69,7 @@ describe('the required action', function () {
         // Someone part-way through signing up needs the next thing to click.
         $action = progressFor(AccountStatus::KycPending)['action'];
 
-        expect($action['label'])->toBe('Submit your KYC documents')
+        expect($action['label'])->toBe('Verify your identity')
             ->and($action['url'])->toBe(route('kyc.create', absolute: false));
     });
 
@@ -108,12 +111,12 @@ describe('when something is wrong', function () {
         $progress = progressFor(AccountStatus::KycResubmissionRequired);
 
         expect(stateOfStep($progress, OnboardingStep::Kyc))->toBe('blocked')
-            ->and($progress['blocked_reason'])->toBe('Your KYC needs a correction.');
+            ->and($progress['blocked_reason'])->toBe('Your identity documents need a correction.');
     });
 
     it('still offers the way forward', function () {
         expect(progressFor(AccountStatus::KycResubmissionRequired)['action']['label'])
-            ->toBe('Update your KYC documents');
+            ->toBe('Update your identity documents');
     });
 
     it('explains a suspension without offering an action', function () {

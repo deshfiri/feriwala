@@ -9,6 +9,7 @@ use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Billing\Enums\PaymentStatus;
 use App\Domain\Cases\Queries\CaseLinks;
 use App\Domain\Courier\Models\Shipment;
+use App\Domain\Courier\Queries\ShipmentLabelPanel;
 use App\Domain\Courier\Queries\StoreOrderCourierPanel;
 use App\Domain\Order\Actions\AdvanceOrderCourierStatus;
 use App\Domain\Order\Actions\AdvanceOrderDeliveryStatus;
@@ -37,11 +38,13 @@ use App\Domain\Order\Models\OrderItem;
 use App\Domain\Order\Models\OrderItemAllocation;
 use App\Domain\Order\Models\OrderRevision;
 use App\Domain\Order\Models\OrderStatusChange;
+use App\Domain\Order\Models\PartnerStorefrontProfit;
 use App\Domain\Order\Queries\AllocationSourceCandidates;
 use App\Domain\Order\Queries\CodConfirmationState;
 use App\Domain\Order\Queries\OrderCustomerDetails;
 use App\Domain\Order\Queries\OrderRevisionEligibility;
 use App\Domain\Order\Queries\SearchAllocationSources;
+use App\Domain\Order\Queries\StorefrontProfitSummary;
 use App\Domain\Order\Queries\StoreOrderTimeline;
 use App\Domain\Supplier\Actions\AdvanceSupplierFulfilmentCommitment;
 use App\Domain\Supplier\Enums\FulfilmentCommitmentStatus;
@@ -221,6 +224,18 @@ class OrderController extends Controller
                 'status' => $record->status->value,
                 'status_tone' => $record->status->tone(),
                 'account_type' => $record->account_type->value,
+                // The Partner's Storefront profit on this order, and whether
+                // staff may confirm its cash on delivery (once, for the order).
+                'storefront_profit' => $record->source === OrderSource::Website ? [
+                    'summary' => app(StorefrontProfitSummary::class)->forOrder($record),
+                    'id' => PartnerStorefrontProfit::query()->where('order_id', $record->id)->value('public_id'),
+                    'can_confirm_cod' => $canRecordCodCollection
+                        && $payment !== null
+                        && $payment->gateway_ownership === null
+                        && $record->cancelled_at === null
+                        && PartnerStorefrontProfit::query()->where('order_id', $record->id)->whereNotNull('collected_at')->doesntExist(),
+                    'total' => $record->total->jsonSerialize(),
+                ] : null,
                 'lifecycle' => [
                     'fulfillment' => $this->lifecycleSummary(
                         $record->fulfillment_status,
@@ -397,6 +412,8 @@ class OrderController extends Controller
                         'status_label' => $shipment->status->label(),
                         'status_tone' => $shipment->status->tone(),
                         'tracking_number' => $shipment->tracking_number,
+                        // The parcel's shipping label: state, printing, correction.
+                        'label' => app(ShipmentLabelPanel::class)->forStaff($shipment->setRelation('order', $record), $actor),
                     ])->all()
                     : [],
                 'courier_providers' => $canManageShipments ? $this->courier->catalogue() : [],

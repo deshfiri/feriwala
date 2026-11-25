@@ -47,6 +47,14 @@ class WarehouseController extends Controller
                     'priority' => $warehouse->priority,
                     'is_active' => $warehouse->is_active,
                     'is_default' => $warehouse->is_default,
+                    'courier_contact_name' => $warehouse->courier_contact_name,
+                    'courier_phone' => $warehouse->courier_phone,
+                    'return_address_line' => $warehouse->return_address_line,
+                    'return_area' => $warehouse->return_area,
+                    'return_district' => $warehouse->return_district,
+                    'return_postcode' => $warehouse->return_postcode,
+                    'usable_for_courier_labels' => $warehouse->usable_for_courier_labels,
+                    'ready_for_courier_labels' => $warehouse->isUsableForCourierLabels(),
                     'stock_items_count' => (int) $warehouse->getAttribute('stock_items_count'),
                 ])
                 ->all(),
@@ -135,6 +143,16 @@ class WarehouseController extends Controller
             'address' => ['nullable', 'string', 'max:500'],
             'priority' => ['nullable', 'integer', 'min:0', 'max:10000'],
             'is_active' => ['boolean'],
+            // What a shipping label prints as the sender and return address.
+            // Approving it for labels needs every required part: a label never
+            // carries a partial return address.
+            'usable_for_courier_labels' => ['boolean'],
+            'courier_contact_name' => ['nullable', 'required_if_accepted:usable_for_courier_labels', 'string', 'max:120'],
+            'courier_phone' => ['nullable', 'required_if_accepted:usable_for_courier_labels', 'string', 'max:32', 'regex:/^\+?[0-9][0-9 \-]{5,30}$/'],
+            'return_address_line' => ['nullable', 'required_if_accepted:usable_for_courier_labels', 'string', 'max:255'],
+            'return_area' => ['nullable', 'string', 'max:120'],
+            'return_district' => ['nullable', 'required_if_accepted:usable_for_courier_labels', 'string', 'max:120'],
+            'return_postcode' => ['nullable', 'string', 'max:20'],
         ];
     }
 

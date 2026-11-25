@@ -211,9 +211,9 @@ describe('the account page', function () {
     });
 
     it('names every unmet condition, not just the first', function () {
-        // Nothing done: unverified, no KYC, no payment. All three must be
-        // reported so an administrator fixes them at once rather than being
-        // refused three times.
+        // Nothing done: unverified, no KYC, no payment, no submitted
+        // application (D39). All four must be reported so an administrator
+        // fixes them at once rather than being refused four times.
         $account = testBusinessAccount(AccountStatus::ApprovalPending);
         $account->owner->forceFill(['email_verified_at' => null, 'mobile_verified_at' => null])->save();
 
@@ -221,7 +221,7 @@ describe('the account page', function () {
             ->get(route('admin.activations.show', $account))
             ->assertInertia(fn (Assert $page) => $page
                 ->where('account.is_ready', false)
-                ->has('account.unmet', 3),
+                ->has('account.unmet', 4),
             );
     });
 

@@ -31,8 +31,8 @@ use App\Http\Controllers\Admin\KycUploadOnBehalfController;
 use App\Http\Controllers\Admin\ManagedAccountController;
 use App\Http\Controllers\Admin\ManagedSupplierController;
 use App\Http\Controllers\Admin\OrderController;
-use App\Http\Controllers\Admin\OrderRevisionController;
 use App\Http\Controllers\Admin\OrderReturnController;
+use App\Http\Controllers\Admin\OrderRevisionController;
 use App\Http\Controllers\Admin\PackageAssignmentController;
 use App\Http\Controllers\Admin\PackageController;
 use App\Http\Controllers\Admin\PaymentGatewayController;
@@ -64,6 +64,7 @@ use App\Http\Controllers\Admin\ReturnCaseActionController;
 use App\Http\Controllers\Admin\RolesController;
 use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\Admin\ShipmentController;
+use App\Http\Controllers\Admin\ShipmentLabelController;
 use App\Http\Controllers\Admin\SmsController;
 use App\Http\Controllers\Admin\SourcingGroupController;
 use App\Http\Controllers\Admin\SteadfastBookingController;
@@ -72,6 +73,7 @@ use App\Http\Controllers\Admin\StockAdjustmentController;
 use App\Http\Controllers\Admin\StockAllocationController;
 use App\Http\Controllers\Admin\StockController;
 use App\Http\Controllers\Admin\StorageSettingsController;
+use App\Http\Controllers\Admin\StorefrontProfitController;
 use App\Http\Controllers\Admin\StoreOrderController as AdminStoreOrderController;
 use App\Http\Controllers\Admin\SupplierAllocationController;
 use App\Http\Controllers\Admin\SupplierController;
@@ -115,6 +117,7 @@ use App\Http\Controllers\Erp\KycEvidenceController;
 use App\Http\Controllers\Erp\MobileVerificationController;
 use App\Http\Controllers\Erp\MyProductWebsiteController;
 use App\Http\Controllers\Erp\NotificationController;
+use App\Http\Controllers\Erp\OnboardingApplicationController;
 use App\Http\Controllers\Erp\OnboardingController;
 use App\Http\Controllers\Erp\OrderController as BusinessOrderController;
 use App\Http\Controllers\Erp\PackageSelectionController;
@@ -123,6 +126,7 @@ use App\Http\Controllers\Erp\PayoutMethodController as ErpPayoutMethodController
 use App\Http\Controllers\Erp\ReferralController;
 use App\Http\Controllers\Erp\StaffInvitationController;
 use App\Http\Controllers\Erp\StoreOrderController as ErpStoreOrderController;
+use App\Http\Controllers\Erp\StoreOrderLabelController;
 use App\Http\Controllers\Erp\WalletController;
 use App\Http\Controllers\Erp\WalletTopUpController;
 use App\Http\Controllers\Erp\WebsiteCategoryController;
@@ -224,6 +228,27 @@ Route::middleware(['auth', 'business.activated'])->group(function () {
         Route::get('onboarding', [OnboardingController::class, 'status'])
             ->name('onboarding.status');
 
+        // The application, steps 5 to 7 (D39): personal details, business
+        // setup, and the review the partner submits for verification. Each
+        // step saves as it is completed; the owner may go back until submitting.
+        Route::get('onboarding/details', [OnboardingApplicationController::class, 'details'])
+            ->name('onboarding.details.edit');
+        Route::put('onboarding/details', [OnboardingApplicationController::class, 'updateDetails'])
+            ->name('onboarding.details.update');
+        Route::get('onboarding/business', [OnboardingApplicationController::class, 'business'])
+            ->name('onboarding.business.edit');
+        Route::put('onboarding/business', [OnboardingApplicationController::class, 'updateBusiness'])
+            ->name('onboarding.business.update');
+        // What Banij can say about a preferred domain — never "available" (D39).
+        Route::get('onboarding/business/domain-check', [OnboardingApplicationController::class, 'checkDomain'])
+            ->middleware('throttle:30,1')
+            ->name('onboarding.business.domain-check');
+        Route::get('onboarding/review', [OnboardingApplicationController::class, 'review'])
+            ->name('onboarding.review.show');
+        Route::post('onboarding/review', [OnboardingApplicationController::class, 'submit'])
+            ->middleware('throttle:10,1')
+            ->name('onboarding.review.submit');
+
         /*
          * Confirming the registered mobile number (§5.1, P1-9). Opening the
          * page sends nothing; a code goes out only when it is asked for.
@@ -253,6 +278,8 @@ Route::middleware(['auth', 'business.activated'])->group(function () {
         Route::post('kyc/evidence/choose', [KycEvidenceController::class, 'choose'])->name('kyc.evidence.choose');
         Route::post('kyc/evidence/deselect', [KycEvidenceController::class, 'deselect'])->name('kyc.evidence.deselect');
         Route::post('kyc/submit', [KycController::class, 'submit'])->name('kyc.submit');
+        // The country that issued the identity document (D39).
+        Route::put('kyc/issuing-country', [KycController::class, 'issuingCountry'])->name('kyc.issuing-country');
 
         // Package selection and the combined activation checkout (§8.2, §9).
         Route::get('packages', [PackageSelectionController::class, 'index'])->name('packages.index');
@@ -612,6 +639,8 @@ Route::middleware(['auth', 'business.activated'])->group(function () {
         Route::post('store-orders/quote', [ErpStoreOrderController::class, 'quote'])->name('store-orders.quote');
         Route::post('store-orders', [ErpStoreOrderController::class, 'store'])->name('store-orders.store');
         Route::get('store-orders/{order}', [ErpStoreOrderController::class, 'show'])->name('store-orders.show');
+        // The printable label for a parcel of the Partner's own order; self-scoped in the query.
+        Route::get('store-orders/{order}/shipments/{shipment}/label', [StoreOrderLabelController::class, 'show'])->name('store-orders.shipments.label');
         Route::post('store-orders/{order}/confirmation', [ErpStoreOrderController::class, 'confirm'])->name('store-orders.confirm');
         Route::post('store-orders/{order}/confirmation-code', [ErpStoreOrderController::class, 'resendCode'])->name('store-orders.resend-code');
         Route::post('store-orders/{order}/cancellation', [ErpStoreOrderController::class, 'cancel'])->name('store-orders.cancel');
@@ -1644,6 +1673,16 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
         // The courier's own references, read from its panel; never calls it.
         Route::post('shipments/{shipment}/courier-references', [ShipmentController::class, 'recordReferences'])
             ->name('shipments.courier-references.store');
+        // Shipping labels: printed from the frozen snapshot; issuing and
+        // correcting never call the courier.
+        Route::get('shipments/{shipment}/label', [ShipmentLabelController::class, 'show'])
+            ->name('shipments.label.show');
+        Route::post('shipments/{shipment}/label', [ShipmentLabelController::class, 'store'])
+            ->middleware('throttle:30,1')->name('shipments.label.store');
+        Route::post('shipments/{shipment}/label/corrections', [ShipmentLabelController::class, 'reissue'])
+            ->name('shipments.label.reissue');
+        Route::get('shipment-labels/print', [ShipmentLabelController::class, 'batch'])
+            ->name('shipment-labels.batch');
 
         /*
          * Steadfast booking. Every real call creates a live consignment, so the
@@ -2026,6 +2065,21 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
         Route::post('referral-chains/{account}/referrer', [ReferralChainController::class, 'attach'])
             ->name('referral-chains.attach');
 
+        /*
+         * Partner Storefront profit. Seen with `order.view`; confirming a COD
+         * collection and retrying a technical failure need `order.edit`;
+         * deciding an unproven cost needs `wallet.adjust_wallet`, a freshly
+         * confirmed password and two-factor.
+         */
+        Route::get('storefront-profits', [StorefrontProfitController::class, 'index'])->name('storefront-profits.index');
+        Route::get('storefront-profits/{profit}', [StorefrontProfitController::class, 'show'])->name('storefront-profits.show');
+        Route::post('storefront-profits/{profit}/retry', [StorefrontProfitController::class, 'retry'])->name('storefront-profits.retry');
+        Route::post('storefront-profits/{profit}/correction', [StorefrontProfitController::class, 'correct'])
+            ->middleware(RequirePassword::class)
+            ->name('storefront-profits.correct');
+        Route::post('orders/{order}/storefront-cod-collection', [StorefrontProfitController::class, 'confirmCod'])
+            ->name('orders.storefront-cod-collection.store');
+
         // The last gate before an account can trade (§5.1, §44).
         Route::get('activations', [ActivationReviewController::class, 'index'])->name('activations.index');
         Route::get('activations/{account}', [ActivationReviewController::class, 'show'])->name('activations.show');
@@ -2035,6 +2089,15 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('activations.approve');
         Route::post('activations/{account}/request-resubmission', [ActivationReviewController::class, 'requestResubmission'])
             ->name('activations.request-resubmission');
+        // Part of a submitted application back to the partner (D39).
+        Route::post('activations/{account}/request-correction', [ActivationReviewController::class, 'requestCorrection'])
+            ->name('activations.request-correction');
+        // This partner's own KYC selfie setting (D39).
+        Route::put('activations/{account}/selfie', [ActivationReviewController::class, 'selfie'])
+            ->name('activations.selfie');
+        // Staff's manual check of the preferred domain (D39); buys nothing.
+        Route::put('activations/{account}/domain-check', [ActivationReviewController::class, 'domainCheck'])
+            ->name('activations.domain-check');
         Route::post('activations/{account}/suspend', [ActivationReviewController::class, 'suspend'])
             ->name('activations.suspend');
         // Not a fourth outcome: a hold decides nothing about the account, it

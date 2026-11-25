@@ -18,7 +18,7 @@ return [
         'package_selection_pending' => 'প্যাকেজ নির্বাচনের অপেক্ষায়',
         'payment_pending' => 'পেমেন্টের অপেক্ষায়',
         'payment_verification_pending' => 'পেমেন্ট যাচাইয়ের অপেক্ষায়',
-        'approval_pending' => 'অনুমোদনের অপেক্ষায়',
+        'approval_pending' => 'যাচাইয়ের অপেক্ষায়',
         'active' => 'সক্রিয়',
         'package_renewal_due' => 'প্যাকেজ নবায়ন বাকি',
         'package_expired' => 'প্যাকেজের মেয়াদ শেষ',
@@ -199,6 +199,19 @@ return [
         'correction_required' => 'সংশোধন প্রয়োজন',
         'approved' => 'অনুমোদিত',
         'rejected' => 'প্রত্যাখ্যাত',
+    ],
+
+    'storefront_profit' => [
+        'awaiting_facts' => 'অপেক্ষমাণ',
+        'holding' => '২৪ ঘণ্টার জন্য রাখা হয়েছে',
+        'blocked' => 'স্থগিত',
+        'review_required' => 'পর্যালোচনা প্রয়োজন',
+        'released' => 'জমা হয়েছে',
+        'reversed' => 'ফেরত নেওয়া হয়েছে',
+        'no_profit' => 'মুনাফা নেই',
+        'reported_only' => 'শুধু রিপোর্ট',
+        'failed' => 'জমা ব্যর্থ',
+        'cancelled' => 'বাতিল',
     ],
 
     'commission' => [

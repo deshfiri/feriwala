@@ -16,6 +16,38 @@ import { Spinner } from '@/components/ui/spinner';
 import { useTranslation } from '@/hooks/use-translation';
 import type { WarehouseRow } from '@/types/inventory';
 
+function WarehouseCourierField({
+    name,
+    label,
+    defaultValue,
+    maxLength,
+    inputMode,
+    error,
+}: {
+    name: string;
+    label: string;
+    defaultValue: string | null | undefined;
+    maxLength: number;
+    inputMode?: 'tel';
+    error?: string;
+}) {
+    const id = `warehouse-${name}`;
+
+    return (
+        <div className="grid gap-2">
+            <Label htmlFor={id}>{label}</Label>
+            <Input
+                id={id}
+                name={name}
+                maxLength={maxLength}
+                inputMode={inputMode}
+                defaultValue={defaultValue ?? ''}
+            />
+            <InputError message={error} />
+        </div>
+    );
+}
+
 /**
  * Adding or editing one warehouse (§19).
  *
@@ -140,6 +172,118 @@ export default function WarehouseDialog({
                                 </p>
                                 <InputError message={errors.priority} />
                             </div>
+
+                            <fieldset className="grid gap-3 rounded-lg border p-3">
+                                <legend className="px-1 text-sm font-medium">
+                                    {t('inventory.warehouses.courier.title')}
+                                </legend>
+                                <p className="text-muted-foreground text-xs">
+                                    {t('inventory.warehouses.courier.help')}
+                                </p>
+
+                                <div className="grid gap-3 sm:grid-cols-2">
+                                    <WarehouseCourierField
+                                        name="courier_contact_name"
+                                        label={t(
+                                            'inventory.warehouses.courier.contact_name',
+                                        )}
+                                        defaultValue={
+                                            warehouse?.courier_contact_name
+                                        }
+                                        maxLength={120}
+                                        error={errors.courier_contact_name}
+                                    />
+                                    <WarehouseCourierField
+                                        name="courier_phone"
+                                        label={t(
+                                            'inventory.warehouses.courier.phone',
+                                        )}
+                                        defaultValue={warehouse?.courier_phone}
+                                        maxLength={32}
+                                        inputMode="tel"
+                                        error={errors.courier_phone}
+                                    />
+                                </div>
+
+                                <WarehouseCourierField
+                                    name="return_address_line"
+                                    label={t(
+                                        'inventory.warehouses.courier.address_line',
+                                    )}
+                                    defaultValue={
+                                        warehouse?.return_address_line
+                                    }
+                                    maxLength={255}
+                                    error={errors.return_address_line}
+                                />
+
+                                <div className="grid gap-3 sm:grid-cols-3">
+                                    <WarehouseCourierField
+                                        name="return_area"
+                                        label={t(
+                                            'inventory.warehouses.courier.area',
+                                        )}
+                                        defaultValue={warehouse?.return_area}
+                                        maxLength={120}
+                                        error={errors.return_area}
+                                    />
+                                    <WarehouseCourierField
+                                        name="return_district"
+                                        label={t(
+                                            'inventory.warehouses.courier.district',
+                                        )}
+                                        defaultValue={
+                                            warehouse?.return_district
+                                        }
+                                        maxLength={120}
+                                        error={errors.return_district}
+                                    />
+                                    <WarehouseCourierField
+                                        name="return_postcode"
+                                        label={t(
+                                            'inventory.warehouses.courier.postcode',
+                                        )}
+                                        defaultValue={
+                                            warehouse?.return_postcode
+                                        }
+                                        maxLength={20}
+                                        error={errors.return_postcode}
+                                    />
+                                </div>
+
+                                <div className="grid gap-1">
+                                    <input
+                                        type="hidden"
+                                        name="usable_for_courier_labels"
+                                        value="0"
+                                    />
+                                    <label className="flex items-center gap-2 text-sm font-medium">
+                                        <input
+                                            type="checkbox"
+                                            name="usable_for_courier_labels"
+                                            value="1"
+                                            defaultChecked={
+                                                warehouse?.usable_for_courier_labels ??
+                                                false
+                                            }
+                                            className="size-4"
+                                        />
+                                        {t(
+                                            'inventory.warehouses.courier.usable',
+                                        )}
+                                    </label>
+                                    <p className="text-muted-foreground text-xs">
+                                        {t(
+                                            'inventory.warehouses.courier.usable_help',
+                                        )}
+                                    </p>
+                                    <InputError
+                                        message={
+                                            errors.usable_for_courier_labels
+                                        }
+                                    />
+                                </div>
+                            </fieldset>
 
                             <div className="grid gap-1">
                                 <input

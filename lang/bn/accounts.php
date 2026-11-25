@@ -13,7 +13,7 @@ return [
     'summary' => [
         'kyc_pending' => 'কেওয়াইসি অপেক্ষমাণ',
         'payment_pending' => 'পেমেন্ট অপেক্ষমাণ',
-        'approval_pending' => 'অনুমোদন অপেক্ষমাণ',
+        'approval_pending' => 'যাচাইয়ের অপেক্ষায়',
         'active' => 'সক্রিয়',
         'suspended' => 'স্থগিত',
         'expired' => 'মেয়াদোত্তীর্ণ',

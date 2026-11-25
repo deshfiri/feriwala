@@ -14,6 +14,8 @@ import type { StatusTone } from '@/lib/status';
 
 export type StaffCourierData = {
     enabled: boolean;
+    /** Why the parcel cannot be booked yet: its stock does not resolve to exactly one Banij warehouse. */
+    warehouse_problem?: string | null;
     /** On in Settings; enabled is false despite it only when this server has not loaded Steadfast. */
     switched_on?: boolean;
     booking: {
@@ -211,6 +213,12 @@ export function StaffCourierPanel({ courier }: { courier: StaffCourierData }) {
                 {shipment?.sync_error && (
                     <p className="text-muted-foreground text-sm">
                         {shipment.sync_error}
+                    </p>
+                )}
+
+                {courier.warehouse_problem && (
+                    <p className="text-sm text-warning" role="status">
+                        {courier.warehouse_problem}
                     </p>
                 )}
 

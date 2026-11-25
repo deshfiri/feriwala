@@ -65,6 +65,13 @@ class EnsureBusinessAccountIsActivated
          */
         'verification.',
 
+        /*
+         * The BD location lookups behind every address picker. Onboarding asks
+         * for a residential and, optionally, a business address before the
+         * account is approved (D39), so the picker must work then too.
+         */
+        'locations.',
+
         ...self::PENDING_ROUTE_PREFIXES,
     ];
 

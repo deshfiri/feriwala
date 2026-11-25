@@ -50,6 +50,7 @@ class RestoreReturnedStock
         protected SupplierStockLedger $supplierLedger,
         protected ReverseSupplierPayable $supplierPayables,
         protected ReverseOrderProceedsSettlement $proceeds,
+        protected SettleStorefrontProfit $storefrontProfit,
     ) {}
 
     /**
@@ -78,6 +79,10 @@ class RestoreReturnedStock
         $this->proceeds->forReturn($item);
 
         $orderItem = $item->orderItem;
+
+        // A Storefront order's profit counts only the units kept: worked out
+        // again, and taken back if already credited, once this commits.
+        $this->storefrontProfit->syncAfterCommit($orderItem->order);
 
         if ($orderItem->stockReservation?->isPartnerSourced() === true) {
             $item->forceFill([

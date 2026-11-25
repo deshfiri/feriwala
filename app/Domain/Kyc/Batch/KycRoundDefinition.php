@@ -36,11 +36,14 @@ final class KycRoundDefinition
         public readonly array $data,
         public readonly int $batchId,
         public readonly int $version,
+        // The selfie as resolved for this round's partner when it was a draft
+        // (D39): their override or the platform setting. Null follows the batch.
+        public readonly ?KycSelfieMode $selfieOverride = null,
     ) {}
 
-    public static function fromVersion(KycBatchVersion $version): self
+    public static function fromVersion(KycBatchVersion $version, ?KycSelfieMode $selfieOverride = null): self
     {
-        return new self($version->definition, $version->kyc_batch_id, $version->version);
+        return new self($version->definition, $version->kyc_batch_id, $version->version, $selfieOverride);
     }
 
     public function batchKey(): string
@@ -138,11 +141,20 @@ final class KycRoundDefinition
 
     public function selfieMode(): KycSelfieMode
     {
-        return KycSelfieMode::from($this->data['batch']['selfie']['mode']);
+        return $this->selfieOverride ?? KycSelfieMode::from($this->data['batch']['selfie']['mode']);
     }
 
+    /**
+     * Whether a file may stand in for a live capture. Taken from the batch; a
+     * selfie the batch never asked for, turned on by an override, is a live
+     * capture only.
+     */
     public function selfieAllowsUpload(): bool
     {
+        if (KycSelfieMode::from($this->data['batch']['selfie']['mode']) === KycSelfieMode::Disabled) {
+            return false;
+        }
+
         return (bool) $this->data['batch']['selfie']['allows_upload'];
     }
 

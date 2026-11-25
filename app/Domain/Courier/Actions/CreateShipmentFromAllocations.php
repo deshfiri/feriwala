@@ -9,12 +9,15 @@ use App\Domain\Billing\Data\DeliveryChargeCalculation;
 use App\Domain\Courier\Enums\CourierProviderCode;
 use App\Domain\Courier\Enums\ShipmentStatusChangeSource;
 use App\Domain\Courier\Exceptions\CourierProviderUnavailable;
+use App\Domain\Courier\Jobs\IssueShipmentLabelJob;
 use App\Domain\Courier\Models\CourierProvider;
 use App\Domain\Courier\Models\Shipment;
+use App\Domain\Courier\Queries\ResolveShipmentWarehouse;
 use App\Domain\Order\Actions\AdvanceOrderCourierStatus;
 use App\Domain\Order\Actions\AdvanceOrderDeliveryStatus;
 use App\Domain\Order\Enums\OrderCourierStatus;
 use App\Domain\Order\Enums\OrderDeliveryStatus;
+use App\Domain\Order\Enums\OrderSource;
 use App\Domain\Order\Models\Order;
 use App\Integrations\Courier\CourierManager;
 use App\Models\User;
@@ -51,6 +54,7 @@ class CreateShipmentFromAllocations
         protected AdvanceOrderCourierStatus $advanceCourier,
         protected AdvanceOrderDeliveryStatus $advanceDelivery,
         protected RecordAuditLog $audit,
+        protected ResolveShipmentWarehouse $warehouses,
     ) {}
 
     /**
@@ -84,6 +88,10 @@ class CreateShipmentFromAllocations
             $shipment = Shipment::create([
                 'order_id' => $locked->id,
                 'courier_provider_id' => $provider->id,
+                // The Banij warehouse the parcel leaves from, when the order's own
+                // stock records name exactly one; otherwise unknown, and its label
+                // is refused rather than guessed.
+                'warehouse_id' => $this->warehouses->handle($locked)->single(),
                 'status' => OrderCourierStatus::Assigned,
                 'tracking_number' => $trackingNumber,
                 'delivery_charge' => $deliveryCharge,
@@ -119,6 +127,13 @@ class CreateShipmentFromAllocations
                 ],
                 module: PermissionModule::Courier->value,
             ));
+
+            // After every enclosing transaction commits -- a Steadfast booking
+            // records its consignment id on this shipment before then -- and
+            // apart from it: a label that cannot be issued undoes nothing here.
+            if ($locked->source === OrderSource::Website) {
+                IssueShipmentLabelJob::dispatch($shipment->id)->afterCommit();
+            }
 
             return $shipment->refresh();
         });

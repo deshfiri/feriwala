@@ -16,7 +16,15 @@ import {
     type PartnerCourierData,
     type StaffCourierData,
 } from '@/components/store-order-courier';
+import {
+    PartnerShippingLabels,
+    type PartnerShippingLabel,
+} from '@/components/shipping-label';
 import StoreOrderTimeline from '@/components/store-order-timeline';
+import {
+    StorefrontProfitCard,
+    type StorefrontProfitSummary,
+} from '@/components/storefront-profit-card';
 import type { StoreOrderTimelineData } from '@/components/store-order-timeline';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -69,6 +77,10 @@ type Props = {
     exchange_origin?: ExchangeOrigin | null;
     /** Staff get the Steadfast booking panel; a Partner the customer-safe courier card; null when neither applies. */
     courier?: StaffCourierData | PartnerCourierData | null;
+    /** The Partner's own parcels and which of their labels can be printed. */
+    shipping_labels?: PartnerShippingLabel[];
+    /** The Partner's profit on this order, as the server worked it out; null before it has one. */
+    profit?: StorefrontProfitSummary | null;
 };
 
 /**
@@ -86,6 +98,8 @@ export default function StoreOrderShow({
     cases,
     exchange_origin,
     courier,
+    shipping_labels,
+    profit,
 }: Props) {
     const { t } = useTranslation();
     const cancelForm = useForm({ reason: '' });
@@ -178,12 +192,18 @@ export default function StoreOrderShow({
                             </ul>
                         </SectionCard>
 
+                        <StorefrontProfitCard profit={profit} />
+
                         {courier &&
                             ('enabled' in courier ? (
                                 <StaffCourierPanel courier={courier} />
                             ) : (
                                 <PartnerCourierCard courier={courier} />
                             ))}
+
+                        {shipping_labels && (
+                            <PartnerShippingLabels labels={shipping_labels} />
+                        )}
 
                         {cases !== undefined &&
                             (cases.length > 0 ||

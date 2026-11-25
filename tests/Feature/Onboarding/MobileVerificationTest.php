@@ -121,13 +121,13 @@ it('throttles resend so the form cannot be used to flood a number', function () 
     expect(fn () => $send->handle($user))->toThrow(ResendTooSoon::class);
 });
 
-it('advances a registered account to KYC once mobile and email are both verified', function () {
+it('advances a registered account to package selection once mobile and email are both verified (D39)', function () {
     $user = verifyingUser(['email_verified_at' => now()]);
     $code = $this->codes->issue(SendMobileVerificationCode::PURPOSE, $user->mobile);
 
     app(VerifyMobile::class)->handle($user, $code);
 
-    expect($user->businessAccount->fresh()->status)->toBe(AccountStatus::KycPending);
+    expect($user->businessAccount->fresh()->status)->toBe(AccountStatus::PackageSelectionPending);
 });
 
 it('sends an account still needing email verification to that step instead', function () {

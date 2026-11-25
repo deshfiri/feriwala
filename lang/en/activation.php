@@ -1,6 +1,36 @@
 <?php
 
 return [
+    // What the partner submitted (D39).
+    'application' => [
+        'title' => 'Application',
+        'submitted_at' => 'Submitted :at',
+        'not_submitted' => 'Not submitted yet.',
+        'correction_open' => 'A correction has been requested',
+        'verified' => '(verified)',
+        'unverified' => '(not verified)',
+        'domain' => 'Preferred domain',
+        'domain_manual' => 'Check availability and buy by hand. Nothing is bought automatically. Check again before buying.',
+        'domain_not_checked' => 'Not checked yet.',
+        'domain_check_available' => 'Checked by :by: available.',
+        'domain_check_unavailable' => 'Checked by :by: not available — ask the partner for another name.',
+        'mark_available' => 'Available',
+        'mark_unavailable' => 'Not available',
+        'record_check' => 'Record manual check',
+        'request_correction' => 'Ask the partner to correct their application',
+        'sections_label' => 'What needs correcting',
+        'sections' => [
+            'personal' => 'Personal details',
+            'business' => 'Business details',
+            'domain' => 'Preferred domain',
+        ],
+        'feedback' => 'Message to the partner',
+        'feedback_help' => 'They see this. Say exactly what to change.',
+        'reason' => 'Reason (internal)',
+        'internal_note' => 'Internal note (optional)',
+        'send_correction' => 'Send back for correction',
+    ],
+
     'queue' => [
         'title' => 'Activation approvals',
         'description' => 'Accounts that have met every condition and are waiting on us.',

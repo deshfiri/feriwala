@@ -222,7 +222,7 @@ function onlineProfitRaceWork(int $orderId, int $worker): void
     $collect->handle($order, $order->payment);
 }
 
-it('credits an online order\'s profit exactly once when several workers collect and deliver it', function () {
+it('settles an online order\'s line exactly once when several workers collect and deliver it, crediting nothing itself', function () {
     $order = onlineProfitRaceOrder();
 
     onlineProfitRace(6, fn (int $worker) => onlineProfitRaceWork($order->id, $worker));
@@ -230,12 +230,14 @@ it('credits an online order\'s profit exactly once when several workers collect 
     $wallet = Wallet::query()->findOrFail($this->wallet->id);
     $settlement = OrderProceedsSettlement::query()->where('order_id', $order->id)->sole();
 
+    // One row, one set of facts. The Storefront line's credit belongs to the
+    // order's Storefront settlement, after its 24-hour hold — never posted here.
     expect($settlement->collection_channel)->toBe(CollectionChannel::PlatformGateway)
         ->and($settlement->eligible_at)->not->toBeNull()
         ->and($settlement->reseller_earning?->toDecimal())->toBe('200.00')
-        ->and($wallet->total->toDecimal())->toBe('200.00')
-        ->and(LedgerEntry::query()->where('wallet_id', $wallet->id)->count())->toBe(1)
-        ->and(LedgerEntry::query()->where('wallet_id', $wallet->id)->sole()->balance_type)->toBe(BalanceType::Withdrawable)
+        ->and($settlement->wallet_transaction_id)->toBeNull()
+        ->and($wallet->total->toDecimal())->toBe('0.00')
+        ->and(LedgerEntry::query()->where('wallet_id', $wallet->id)->count())->toBe(0)
         ->and(app(VerifyLedgerIntegrity::class)->problemsFor($wallet))->toBe([]);
 });
 

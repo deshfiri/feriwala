@@ -17,6 +17,7 @@ use App\Domain\Referral\Actions\ResolveReferrer;
 use App\Domain\Referral\ReferralCode;
 use App\Models\User;
 use App\Support\Localization\Countries;
+use App\Support\Localization\InternationalMobile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
@@ -27,8 +28,9 @@ use Laravel\Fortify\Contracts\CreatesNewUsers;
  * Registers a Feriwala account (§5.1 step one, §5.2).
  *
  * Registration only opens the account — it does not activate it. The new account
- * starts at {@see AccountStatus::Registered} and must still verify, submit KYC,
- * choose a package, pay, and be approved before it can trade (§5.1, §44).
+ * starts at {@see AccountStatus::Registered} and must still verify, choose a
+ * package, pay, verify identity, add personal and business details, submit,
+ * and be approved by a person before it can trade (§5.1, §44, D39).
  */
 class CreateNewUser implements CreatesNewUsers
 {
@@ -52,6 +54,9 @@ class CreateNewUser implements CreatesNewUsers
             ...$this->profileRules(),
             'password' => $this->passwordRules(),
             'mobile' => ['required', 'string', 'max:20', Rule::unique(User::class, 'mobile')],
+            // The country the number belongs to (D39): any country, so a partner
+            // living abroad can register. Defaults to the country of residence.
+            'mobile_country' => ['nullable', 'string', 'size:2', Rule::in(array_keys(app(InternationalMobile::class)->codes()))],
             /*
              * A date of birth in the future is a typo, and one from the 1800s
              * is a slipped century. Bounded on both sides so the mistake is
@@ -81,6 +86,8 @@ class CreateNewUser implements CreatesNewUsers
             'terms_accepted.accepted' => 'You must accept the terms and conditions.',
             'privacy_accepted.accepted' => 'You must accept the privacy policy.',
         ])->validate();
+
+        $input['mobile'] = $this->internationalMobile($input);
 
         return DB::transaction(function () use ($input) {
             $referrer = $this->resolveReferrer->handle($input['referral_code'] ?? null);
@@ -164,6 +171,31 @@ class CreateNewUser implements CreatesNewUsers
 
             return $user;
         });
+    }
+
+    /**
+     * The mobile in E.164, from the chosen country and the number as typed
+     * (D39). Refused when it cannot be read as a number of that country, or when
+     * the same number is already registered in any form.
+     *
+     * @param  array<string, string>  $input
+     *
+     * @throws ValidationException
+     */
+    private function internationalMobile(array $input): string
+    {
+        $country = $input['mobile_country'] ?? $input['country'] ?? app(Countries::class)->default();
+        $mobile = app(InternationalMobile::class)->normalise((string) $country, (string) $input['mobile']);
+
+        if ($mobile === null) {
+            throw ValidationException::withMessages(['mobile' => __('onboarding.refused.mobile_invalid')]);
+        }
+
+        if (User::query()->where('mobile', $mobile)->exists()) {
+            throw ValidationException::withMessages(['mobile' => __('validation.unique', ['attribute' => 'mobile'])]);
+        }
+
+        return $mobile;
     }
 
     /**

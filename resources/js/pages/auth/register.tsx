@@ -21,6 +21,7 @@ type Props = {
     countries: Option[];
     defaultCountry: string;
     genders: Option[];
+    diallingCodes: (Option & { code: string })[];
     referralCode?: string | null;
 };
 
@@ -32,17 +33,17 @@ type Props = {
  * every real registration failed on a mobile number the form never collected —
  * so the fields here are not decoration, they are the contract.
  *
- * Mobile is required because §5.2 makes it the second identity factor and OTP
- * verification depends on it. Date of birth, gender, country and nationality are
- * optional: an account can trade without them, and demanding them at the door
- * costs registrations for data that can be filled in later.
+ * D39 keeps it to what the specification asks at the door: legal full name as
+ * on the ID, country of residence, a mobile from any country (calling code plus
+ * number), email, password, and the two acceptances. Date of birth and
+ * nationality are asked at the personal-details step, once the package is paid.
  */
 export default function Register({
     passwordRules,
     staffInvitation,
     countries,
     defaultCountry,
-    genders,
+    diallingCodes,
     referralCode,
 }: Props) {
     const { t } = useTranslation();
@@ -103,6 +104,32 @@ export default function Register({
                                 <InputError message={errors.name} />
                             </div>
 
+                            <div className="grid gap-2">
+                                <Label htmlFor="country">
+                                    {t('auth.register.country')}
+                                </Label>
+                                {/* From the supported registry, never free
+                                    text — a country nobody can resolve is a
+                                    scope rule that matches nobody. */}
+                                <select
+                                    id="country"
+                                    name="country"
+                                    required
+                                    defaultValue={defaultCountry}
+                                    className="border-input bg-background focus-visible:ring-ring h-9 rounded-md border px-3 text-sm focus-visible:ring-2 focus-visible:outline-hidden"
+                                >
+                                    {countries.map((country) => (
+                                        <option
+                                            key={country.value}
+                                            value={country.value}
+                                        >
+                                            {country.label}
+                                        </option>
+                                    ))}
+                                </select>
+                                <InputError message={errors.country} />
+                            </div>
+
                             {/* `items-start`, or a column with a helper line
                                 under it stretches its neighbour and the two
                                 inputs stop lining up. */}
@@ -126,14 +153,36 @@ export default function Register({
                                     <Label htmlFor="mobile">
                                         {t('auth.register.mobile')}
                                     </Label>
-                                    <Input
-                                        id="mobile"
-                                        type="tel"
-                                        required
-                                        autoComplete="tel"
-                                        name="mobile"
-                                        placeholder="+8801XXXXXXXXX"
-                                    />
+                                    {/* Any country (D39): the code, then the
+                                        number without it. */}
+                                    <div className="grid grid-cols-[minmax(0,9rem)_minmax(0,1fr)] gap-2">
+                                        <select
+                                            name="mobile_country"
+                                            aria-label={t(
+                                                'onboarding.mobile.country',
+                                            )}
+                                            defaultValue={defaultCountry}
+                                            className="border-input bg-background focus-visible:ring-ring h-9 min-w-0 rounded-md border px-2 text-sm focus-visible:ring-2 focus-visible:outline-hidden"
+                                        >
+                                            {diallingCodes.map((code) => (
+                                                <option
+                                                    key={code.value}
+                                                    value={code.value}
+                                                >
+                                                    {code.label}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        <Input
+                                            id="mobile"
+                                            type="tel"
+                                            required
+                                            autoComplete="tel-national"
+                                            inputMode="tel"
+                                            name="mobile"
+                                            placeholder="1XXXXXXXXX"
+                                        />
+                                    </div>
                                     {/* §5.2 makes this the second identity
                                         factor, and OTP verification depends on
                                         reaching it. */}
@@ -186,103 +235,6 @@ export default function Register({
                                     />
                                 </div>
                             </div>
-
-                            {/*
-                             * Optional throughout. An account can trade without
-                             * any of it, and asking for it as a condition of
-                             * entry costs registrations for data that is just
-                             * as useful filled in later.
-                             */}
-                            <fieldset className="grid gap-5">
-                                <legend className="text-muted-foreground mb-2 w-full text-xs">
-                                    {t('auth.register.optional_legend')}
-                                </legend>
-
-                                <div className="grid gap-2">
-                                    <Label htmlFor="date_of_birth">
-                                        {t('auth.register.date_of_birth')}
-                                    </Label>
-                                    <Input
-                                        id="date_of_birth"
-                                        type="date"
-                                        name="date_of_birth"
-                                        autoComplete="bday"
-                                        max={new Date()
-                                            .toISOString()
-                                            .slice(0, 10)}
-                                    />
-                                    <InputError
-                                        message={errors.date_of_birth}
-                                    />
-                                </div>
-
-                                <div className="grid gap-2">
-                                    <Label htmlFor="gender">
-                                        {t('auth.register.gender')}
-                                    </Label>
-                                    <select
-                                        id="gender"
-                                        name="gender"
-                                        defaultValue=""
-                                        className="border-input bg-background focus-visible:ring-ring h-9 rounded-md border px-3 text-sm focus-visible:ring-2 focus-visible:outline-hidden"
-                                    >
-                                        <option value="">
-                                            {t(
-                                                'auth.register.gender_unspecified',
-                                            )}
-                                        </option>
-                                        {genders.map((gender) => (
-                                            <option
-                                                key={gender.value}
-                                                value={gender.value}
-                                            >
-                                                {gender.label}
-                                            </option>
-                                        ))}
-                                    </select>
-                                    <InputError message={errors.gender} />
-                                </div>
-
-                                <div className="grid gap-2">
-                                    <Label htmlFor="country">
-                                        {t('auth.register.country')}
-                                    </Label>
-                                    {/* From the supported registry, never free
-                                        text — a country nobody can resolve is a
-                                        scope rule that matches nobody. */}
-                                    <select
-                                        id="country"
-                                        name="country"
-                                        defaultValue={defaultCountry}
-                                        className="border-input bg-background focus-visible:ring-ring h-9 rounded-md border px-3 text-sm focus-visible:ring-2 focus-visible:outline-hidden"
-                                    >
-                                        {countries.map((country) => (
-                                            <option
-                                                key={country.value}
-                                                value={country.value}
-                                            >
-                                                {country.label}
-                                            </option>
-                                        ))}
-                                    </select>
-                                    <InputError message={errors.country} />
-                                </div>
-
-                                <div className="grid gap-2">
-                                    <Label htmlFor="nationality">
-                                        {t('auth.register.nationality')}
-                                    </Label>
-                                    <Input
-                                        id="nationality"
-                                        type="text"
-                                        name="nationality"
-                                        placeholder={t(
-                                            'auth.register.nationality_placeholder',
-                                        )}
-                                    />
-                                    <InputError message={errors.nationality} />
-                                </div>
-                            </fieldset>
 
                             <div className="grid gap-2">
                                 <Label htmlFor="referral_code">

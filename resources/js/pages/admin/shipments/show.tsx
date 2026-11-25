@@ -10,6 +10,10 @@ import MoneyAmount from '@/components/money-amount';
 import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
 import SectionCard from '@/components/section-card';
+import {
+    StaffShippingLabelPanel,
+    type StaffShippingLabel,
+} from '@/components/shipping-label';
 import StatusPill from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -83,8 +87,10 @@ const REASON_REQUIRED = ['cancelled', 'failed_delivery'];
  */
 export default function AdminShipmentShow({
     shipment,
+    label,
 }: {
     shipment: ShipmentDetail;
+    label: StaffShippingLabel;
 }) {
     const { t, locale } = useTranslation();
     const [pendingAction, setPendingAction] = useState<string | null>(null);
@@ -221,6 +227,8 @@ export default function AdminShipmentShow({
                             </div>
                         )}
                 </SectionCard>
+
+                <StaffShippingLabelPanel label={label} />
 
                 {shipment.missing_references.length > 0 && (
                     <CourierReferencesForm

@@ -25,6 +25,11 @@ import type {
     ActivationOutcome,
 } from '@/types';
 import ReasonTextarea from '@/components/forms/reason-textarea';
+import ApplicationReview, {
+    PartnerSelfieSetting,
+    type PartnerSelfie,
+    type SubmittedApplication,
+} from '@/pages/admin/activations/application-review';
 
 const textareaClasses =
     'border-input focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:border-destructive w-full rounded-md border bg-transparent px-3 py-2 text-sm shadow-xs outline-none focus-visible:ring-[3px]';
@@ -45,10 +50,20 @@ export default function AdminActivationsShow({
     account,
     conditions,
     history,
+    application,
+    correction_sections = [],
+    can_request_correction = false,
+    selfie,
 }: {
+    /** This partner's own KYC selfie setting (D39). */
+    selfie?: PartnerSelfie;
     account: ActivationAccount;
     conditions: ActivationCondition[];
     history: AccountHistoryEntry[];
+    /** What the partner submitted (D39). */
+    application?: SubmittedApplication;
+    correction_sections?: string[];
+    can_request_correction?: boolean;
 }) {
     const { t, locale } = useTranslation();
 
@@ -165,6 +180,22 @@ export default function AdminActivationsShow({
                                 ))}
                             </ul>
                         </SectionCard>
+
+                        {application && (
+                            <ApplicationReview
+                                accountId={account.id}
+                                application={application}
+                                sections={correction_sections}
+                                canRequestCorrection={can_request_correction}
+                            />
+                        )}
+
+                        {selfie && (
+                            <PartnerSelfieSetting
+                                accountId={account.id}
+                                selfie={selfie}
+                            />
+                        )}
 
                         {/*
                             Why this account is still here (D27). A ready

@@ -28,7 +28,7 @@ return [
         'package_selection_pending' => 'Package selection pending',
         'payment_pending' => 'Payment pending',
         'payment_verification_pending' => 'Payment verification pending',
-        'approval_pending' => 'Approval pending',
+        'approval_pending' => 'Pending verification',
         'active' => 'Active',
         'package_renewal_due' => 'Package renewal due',
         'package_expired' => 'Package expired',
@@ -209,6 +209,19 @@ return [
         'correction_required' => 'Correction required',
         'approved' => 'Approved',
         'rejected' => 'Rejected',
+    ],
+
+    'storefront_profit' => [
+        'awaiting_facts' => 'Pending',
+        'holding' => 'Held for 24 hours',
+        'blocked' => 'On hold',
+        'review_required' => 'Needs review',
+        'released' => 'Credited',
+        'reversed' => 'Taken back',
+        'no_profit' => 'No profit',
+        'reported_only' => 'Reported only',
+        'failed' => 'Credit failed',
+        'cancelled' => 'Cancelled',
     ],
 
     'commission' => [

@@ -71,6 +71,7 @@ import { index as deletionRequests } from '@/routes/admin/deletions';
 import { index as kycBatches } from '@/routes/admin/kyc/batch-builder';
 import { index as kycRequirements } from '@/routes/admin/kyc/document-types';
 import { index as adminOrders } from '@/routes/admin/orders';
+import { index as adminStorefrontProfits } from '@/routes/admin/storefront-profits';
 import { index as packageCatalogue } from '@/routes/admin/packages';
 import { index as paymentLog } from '@/routes/admin/payments';
 import { index as referralCommissions } from '@/routes/admin/referral-commissions';
@@ -547,6 +548,13 @@ export function useNavigation(): {
                                             {
                                                 title: t('nav.orders'),
                                                 href: adminOrders(),
+                                            },
+                                            // Partner profit on Storefront orders: held, then credited.
+                                            {
+                                                title: t(
+                                                    'storefront_profit.admin_title',
+                                                ),
+                                                href: adminStorefrontProfits(),
                                             },
                                         ]
                                       : []),

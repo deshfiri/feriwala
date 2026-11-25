@@ -99,7 +99,8 @@ it('confirms the number and moves the account on', function () {
         ->assertInertiaFlash('toast.message', 'Mobile number verified.');
 
     expect($user->fresh()->mobile_verified_at)->not->toBeNull()
-        ->and($user->businessAccount->fresh()->status)->toBe(AccountStatus::KycPending);
+        // Package selection is next (D39).
+        ->and($user->businessAccount->fresh()->status)->toBe(AccountStatus::PackageSelectionPending);
 });
 
 it('refuses a wrong code and confirms nothing', function () {

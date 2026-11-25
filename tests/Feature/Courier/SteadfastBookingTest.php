@@ -33,6 +33,8 @@ use Illuminate\Support\Str;
  * ones Steadfast's maintained package documents (POST /create_order,
  * GET /status_by_invoice/{invoice}).
  */
+require_once __DIR__.'/SteadfastFixtures.php';
+
 const STEADFAST_BOOKING_BASE = 'https://portal.steadfast.com.bd/api/v1';
 const STEADFAST_BOOKING_PHONE = '01712345678';
 
@@ -85,7 +87,7 @@ function steadfastBookingOrder(array $overrides = []): Order
         ];
     }
 
-    return Order::factory()->create([
+    $order = Order::factory()->create([
         'source' => $source,
         // Courier and delivery start only once a Store Order is dispatched.
         'status' => OrderStatus::Shipped,
@@ -101,6 +103,9 @@ function steadfastBookingOrder(array $overrides = []): Order
         ...$website,
         ...$overrides,
     ]);
+
+    // A parcel is booked only once its stock resolves to one Banij warehouse.
+    return $source === OrderSource::Website ? steadfastFixtureWarehouseLine($order) : $order;
 }
 
 /**

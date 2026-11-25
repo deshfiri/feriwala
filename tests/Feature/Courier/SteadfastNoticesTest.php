@@ -137,7 +137,8 @@ describe('the Partner is told what happened to their parcel', function () {
 
         app(BookSteadfastShipment::class)->handle($order, $this->courier);
 
-        expect(steadfastNoticeEvents(steadfastNoticeOwner($order)))->toBe(['courier.partner.booked']);
+        // Booked, and -- the consignment confirmed -- its shipping label is ready.
+        expect(steadfastNoticeEvents(steadfastNoticeOwner($order)))->toEqualCanonicalizing(['courier.partner.booked', 'courier.partner.label_ready']);
     });
 
     it('hears each confirmed step once as the parcel is delivered', function () {
@@ -158,7 +159,8 @@ describe('the Partner is told what happened to their parcel', function () {
         app(ApplySteadfastStatus::class)->handle($shipment, 'hold', ShipmentStatusChangeSource::Webhook);
         app(ApplySteadfastStatus::class)->handle($shipment->refresh(), 'mystery', ShipmentStatusChangeSource::Webhook);
 
-        expect(steadfastNoticeEvents(steadfastNoticeOwner($shipment->order)))->toBe([]);
+        // The label being ready when the shipment was raised is the only notice.
+        expect(steadfastNoticeEvents(steadfastNoticeOwner($shipment->order)))->toBe(['courier.partner.label_ready']);
     });
 
     it('does not start announcing manual shipments', function () {

@@ -3,6 +3,7 @@ import { CheckCircle2, Info, ShieldCheck } from 'lucide-react';
 import { useState } from 'react';
 import FileField from '@/components/forms/file-field';
 import FormField from '@/components/forms/form-field';
+import NativeSelect from '@/components/forms/native-select';
 import SubmitButton from '@/components/forms/submit-button';
 import BatchKycForm from '@/components/kyc/batch-form';
 import PageContainer from '@/components/page-container';
@@ -44,6 +45,7 @@ type Submission = {
     status_tone: StatusTone;
     is_editable: boolean;
     deadline_at: string | null;
+    issuing_country?: string | null;
 };
 
 /**
@@ -58,14 +60,20 @@ export default function KycForm({
     requirements,
     feedback,
     batch = null,
+    issuing_countries = [],
 }: {
     submission: Submission;
     requirements: Requirement[];
     feedback: string | null;
     /** Set for a round on a batch version (D30); null keeps the flat form. */
     batch?: KycBatch | null;
+    /** Every country, for the document's issuing country (D39). */
+    issuing_countries?: { value: string; label: string }[];
 }) {
     const { t } = useTranslation();
+    const [issuingCountry, setIssuingCountry] = useState(
+        submission.issuing_country ?? 'BD',
+    );
 
     const outstanding = requirements.filter(
         (requirement) =>
@@ -125,6 +133,51 @@ export default function KycForm({
                             {t('kyc.submission.feedback_title')}
                         </p>
                         <p className="text-ink-2 text-sm">{feedback}</p>
+                    </section>
+                )}
+
+                {/* Which country issued the document (D39): saved on its own,
+                    as soon as it is chosen. */}
+                {submission.is_editable && issuing_countries.length > 0 && (
+                    <section className="bg-card border-border space-y-2 rounded-xl border p-5 shadow-sm">
+                        <FormField
+                            label={t('kyc.submission.issuing_country')}
+                            description={t(
+                                'kyc.submission.issuing_country_help',
+                            )}
+                            required
+                        >
+                            {(props) => (
+                                <NativeSelect
+                                    {...props}
+                                    name="issuing_country"
+                                    value={issuingCountry}
+                                    onChange={(event) => {
+                                        setIssuingCountry(event.target.value);
+                                        router.put(
+                                            '/kyc/issuing-country',
+                                            {
+                                                issuing_country:
+                                                    event.target.value,
+                                            },
+                                            {
+                                                preserveScroll: true,
+                                                preserveState: true,
+                                            },
+                                        );
+                                    }}
+                                >
+                                    {issuing_countries.map((option) => (
+                                        <option
+                                            key={option.value}
+                                            value={option.value}
+                                        >
+                                            {option.label}
+                                        </option>
+                                    ))}
+                                </NativeSelect>
+                            )}
+                        </FormField>
                     </section>
                 )}
 

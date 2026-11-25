@@ -635,6 +635,21 @@ describe('the courier behind a delivery update', () => {
         status_label: 'In transit',
         status_tone: 'info' as const,
         tracking_number: '1424107',
+        label: {
+            shipment: '01SHIPMENT',
+            reference: 'SHP-1',
+            status: 'ready' as const,
+            status_label: 'Ready',
+            status_tone: 'success' as const,
+            message: null,
+            version: 1,
+            issued_at: '2026-11-25T10:00:00+06:00',
+            print_url: '/admin/shipments/01SHIPMENT/label',
+            issue_url: '/admin/shipments/01SHIPMENT/label',
+            reissue_url: '/admin/shipments/01SHIPMENT/label/corrections',
+            can: { print: true, issue: false, reissue: false },
+            versions: [],
+        },
     };
 
     it('shows which courier and which consignment, with a way to the shipment', () => {

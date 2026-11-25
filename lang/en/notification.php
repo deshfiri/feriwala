@@ -40,6 +40,11 @@ return [
             'description' => 'Review the feedback and submit your documents again.',
         ],
 
+        'account.application_correction_requested' => [
+            'title' => 'Your application needs a correction',
+            'description' => 'Review the feedback, correct your application and submit it again.',
+        ],
+
         'account.kyc_approved' => [
             'title' => 'Your verification has been approved',
             'description' => 'You can continue setting up your account.',
@@ -93,6 +98,26 @@ return [
         'orders.website_order_paid' => [
             'title' => 'A website order has been paid',
             'description' => 'A customer paid for an order on your website. Open the order to see where it stands.',
+        ],
+
+        'orders.storefront_profit_pending' => [
+            'title' => 'Storefront profit pending',
+            'description' => 'Your profit on a delivered order is held for 24 hours, then credited to your withdrawable balance.',
+        ],
+
+        'orders.storefront_profit_released' => [
+            'title' => 'Storefront profit credited',
+            'description' => 'Your profit on a Storefront order is now in your withdrawable balance.',
+        ],
+
+        'orders.storefront_profit_reversed' => [
+            'title' => 'Storefront profit taken back',
+            'description' => 'Goods came back on an order whose profit was already credited, so the difference was taken back.',
+        ],
+
+        'orders.storefront_profit_review' => [
+            'title' => 'A Storefront profit needs review',
+            'description' => 'A Partner\'s profit could not be credited automatically. Open it to see why.',
         ],
 
         'referral.commission_paid' => [
@@ -240,6 +265,10 @@ return [
             'title' => 'Unrecognised courier status',
             'description' => 'Steadfast sent a status Banij does not know. Nothing was changed.',
         ],
+        'courier.staff.label_blocked' => [
+            'title' => 'Shipping label needs review',
+            'description' => 'A parcel\'s label could not be issued. Open the order to see what is missing.',
+        ],
         'courier.partner.booked' => [
             'title' => 'Courier booked',
             'description' => 'A courier has been booked for your order.',
@@ -263,6 +292,10 @@ return [
         'courier.partner.returned' => [
             'title' => 'Parcel returned',
             'description' => 'Your order is on its way back to us.',
+        ],
+        'courier.partner.label_ready' => [
+            'title' => 'Shipping label ready',
+            'description' => 'The courier confirmed your parcel. Its label can be printed from the order.',
         ],
         'case.step.inspect' => [
             'title' => 'Inspection required',

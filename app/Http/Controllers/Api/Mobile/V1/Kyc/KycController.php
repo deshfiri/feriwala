@@ -14,8 +14,10 @@ use App\Http\Controllers\Api\Mobile\V1\MobileController;
 use App\Http\Requests\Mobile\Kyc\StoreKycDocumentRequest;
 use App\Http\Requests\Mobile\Kyc\SubmitKycRequest;
 use App\Http\Resources\Mobile\Kyc\KycFormResource;
+use App\Support\Localization\InternationalMobile;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -131,6 +133,21 @@ class KycController extends MobileController
 
         if ($submission->kyc_batch_version_id !== null && ! $request->boolean('confirm')) {
             throw ValidationException::withMessages(['confirm' => __('validation.accepted', ['attribute' => 'confirm'])]);
+        }
+
+        // The country that issued the document (D39): any ISO code from
+        // `dialling_codes` on `GET /register/options`; defaults to the country
+        // of residence when not sent.
+        if ($request->filled('issuing_country')) {
+            $request->merge(['issuing_country' => strtoupper(trim((string) $request->input('issuing_country')))]);
+        }
+
+        $issuing = $request->validate([
+            'issuing_country' => ['nullable', 'string', 'size:2', Rule::in(array_keys(app(InternationalMobile::class)->codes()))],
+        ])['issuing_country'] ?? $account->owner?->country;
+
+        if ($submission->status->isEditable() && $issuing !== null) {
+            $submission->forceFill(['issuing_country' => strtoupper($issuing)])->save();
         }
 
         try {

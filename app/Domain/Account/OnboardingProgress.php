@@ -8,10 +8,10 @@ use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Kyc\Models\KycSubmission;
 
 /**
- * Works out where an account is in the activation funnel (§33.4).
+ * Works out where an account is in onboarding (§33.4, D39).
  *
  * §33.4 requires the user to always understand: the current step, which are
- * done, which is pending, what they must do, why they were rejected, what is due
+ * done, which is pending, what they must do, why they were stopped, what is due
  * to pay, and what happens next. This assembles all of that in one place so the
  * stepper, the dashboard, and any notification say the same thing — a user told
  * two different things about their own application loses trust in both.
@@ -28,15 +28,18 @@ class OnboardingProgress
     public function for(BusinessAccount $account): array
     {
         $status = $account->status;
-        $current = OnboardingStep::forStatus($status);
+        $current = OnboardingStep::forAccount($account, $this->requirements);
 
         return [
             'is_complete' => $account->isActivated(),
             'current_step' => $current->value,
             'steps' => $this->steps($account, $current),
-            'action' => $this->requiredAction($account),
+            'action' => $this->requiredAction($account, $current),
             'blocked_reason' => $this->blockedReason($account),
             'feedback' => $this->latestFeedback($account),
+            // Submitted and waiting on Banij (D39): what the partner is told, and
+            // where their invoice is while they wait.
+            'pending' => $this->pending($account, $current),
             'status' => [
                 'value' => $status->value,
                 'label' => $status->label(),
@@ -95,7 +98,13 @@ class OnboardingProgress
         return in_array($account->status, [
             AccountStatus::KycRejected,
             AccountStatus::KycResubmissionRequired,
-        ], true);
+        ], true) || $this->awaitsCorrection($account);
+    }
+
+    /** A reviewer asked for part of the application to be corrected and it is not resubmitted yet. */
+    protected function awaitsCorrection(BusinessAccount $account): bool
+    {
+        return ! $account->hasSubmittedApplication() && ($account->correction_sections ?? []) !== [];
     }
 
     /**
@@ -110,27 +119,34 @@ class OnboardingProgress
      *
      * @return array{label: string, url: string}|null
      */
-    protected function requiredAction(BusinessAccount $account): ?array
+    protected function requiredAction(BusinessAccount $account, OnboardingStep $current): ?array
     {
-        [$label, $route] = match ($account->status) {
-            AccountStatus::Registered,
-            AccountStatus::MobileVerificationPending => ['Verify your mobile number', 'verification.mobile'],
+        [$label, $route] = match ($current) {
+            OnboardingStep::Registration, OnboardingStep::Verification => match ($account->status) {
+                AccountStatus::EmailVerificationPending => ['verify_email', 'verification.notice'],
+                default => ['verify_mobile', 'verification.mobile'],
+            },
 
-            AccountStatus::EmailVerificationPending => ['Verify your email address', 'verification.notice'],
+            OnboardingStep::Package => ['choose_package', 'packages.index'],
 
-            AccountStatus::KycPending => ['Submit your KYC documents', 'kyc.create'],
+            OnboardingStep::Payment => $account->status === AccountStatus::PaymentPending
+                ? ['pay', 'checkout.show']
+                : [null, null],
 
-            AccountStatus::KycResubmissionRequired,
-            AccountStatus::KycRejected => ['Update your KYC documents', 'kyc.create'],
+            // Nothing to do while the documents are with the reviewers.
+            OnboardingStep::Kyc => match ($account->status) {
+                AccountStatus::KycPending => ['submit_kyc', 'kyc.create'],
+                AccountStatus::KycResubmissionRequired, AccountStatus::KycRejected => ['update_kyc', 'kyc.create'],
+                default => [null, null],
+            },
 
-            AccountStatus::KycApproved,
-            AccountStatus::PackageSelectionPending => ['Choose your package', 'packages.index'],
-
-            AccountStatus::PaymentPending => ['Complete your payment', 'checkout.show'],
+            OnboardingStep::Details => [$this->awaitsCorrection($account) ? 'correct' : 'details', 'onboarding.details.edit'],
+            OnboardingStep::Business => [$this->awaitsCorrection($account) ? 'correct' : 'business', 'onboarding.business.edit'],
+            OnboardingStep::Review => ['review', 'onboarding.review.show'],
 
             // Nothing to do but wait — and saying so is better than showing a
             // button that does nothing.
-            default => [null, null],
+            OnboardingStep::Approval => [null, null],
         };
 
         if ($label === null || $route === null) {
@@ -138,7 +154,7 @@ class OnboardingProgress
         }
 
         return [
-            'label' => $label,
+            'label' => __("onboarding.actions.{$label}"),
             'url' => route($route, absolute: false),
         ];
     }
@@ -148,11 +164,12 @@ class OnboardingProgress
      */
     protected function blockedReason(BusinessAccount $account): ?string
     {
-        return match ($account->status) {
-            AccountStatus::KycRejected => 'Your KYC could not be verified.',
-            AccountStatus::KycResubmissionRequired => 'Your KYC needs a correction.',
-            AccountStatus::Suspended => 'This account is suspended. Contact support.',
-            AccountStatus::Closed => 'This account is closed.',
+        return match (true) {
+            $account->status === AccountStatus::KycRejected => $this->line('onboarding.blocked.kyc_rejected'),
+            $account->status === AccountStatus::KycResubmissionRequired => $this->line('onboarding.blocked.kyc_correction'),
+            $account->status === AccountStatus::Suspended => $this->line('onboarding.blocked.suspended'),
+            $account->status === AccountStatus::Closed => $this->line('onboarding.blocked.closed'),
+            $this->awaitsCorrection($account) => $this->line('onboarding.blocked.correction'),
             default => null,
         };
     }
@@ -165,7 +182,11 @@ class OnboardingProgress
      */
     protected function latestFeedback(BusinessAccount $account): ?string
     {
-        if (! $this->isBlocked($account)) {
+        if ($this->awaitsCorrection($account)) {
+            return $account->correction_feedback;
+        }
+
+        if (! in_array($account->status, [AccountStatus::KycRejected, AccountStatus::KycResubmissionRequired], true)) {
             return null;
         }
 
@@ -175,5 +196,33 @@ class OnboardingProgress
             ->first();
 
         return $submission?->reviews()->first()?->user_visible_feedback;
+    }
+
+    /**
+     * Once the application is submitted and the account is not yet active: the
+     * "submitted successfully" message with its 24–48 hour estimate, a note when
+     * the identity documents are still being reviewed, and the invoice.
+     *
+     * @return array{heading: string, body: string, note: string|null, invoice_url: string}|null
+     */
+    protected function pending(BusinessAccount $account, OnboardingStep $current): ?array
+    {
+        if ($current !== OnboardingStep::Approval || $account->isActivated() || ! $account->hasSubmittedApplication()) {
+            return null;
+        }
+
+        return [
+            'heading' => $this->line('onboarding.pending.heading'),
+            'body' => $this->line('onboarding.pending.body'),
+            'note' => $this->requirements->kycApproved($account) ? null : $this->line('onboarding.pending.kyc_in_review'),
+            'invoice_url' => route('subscription.invoices.index', absolute: false),
+        ];
+    }
+
+    protected function line(string $key): string
+    {
+        $line = __($key);
+
+        return is_string($line) ? $line : $key;
     }
 }

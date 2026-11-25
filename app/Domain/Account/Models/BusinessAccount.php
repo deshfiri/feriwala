@@ -68,6 +68,20 @@ use Illuminate\Support\Carbon;
  * @property string|null $activation_payment_waiver_reason
  * @property string|null $withdrawal_minimum_override
  * @property string|null $withdrawal_maximum_override
+ * @property CarbonImmutable|null $personal_details_completed_at onboarding step 5 done (D39)
+ * @property CarbonImmutable|null $business_setup_completed_at onboarding step 6 done (D39)
+ * @property CarbonImmutable|null $application_submitted_at the partner's "Submit application" (D39)
+ * @property string|null $business_mobile E.164; null means the owner's own
+ * @property string|null $business_email null means the owner's own
+ * @property string|null $preferred_domain_name e.g. `rahim-traders`; checked and bought by staff by hand (D9)
+ * @property string|null $preferred_domain_extension e.g. `.shop`
+ * @property list<string>|null $correction_sections what a reviewer asked to be corrected, until resubmitted
+ * @property string|null $correction_feedback what the partner is told about it
+ * @property string|null $preferred_domain_check_result `available`|`unavailable`, staff's manual registrar check
+ * @property CarbonImmutable|null $preferred_domain_checked_at
+ * @property int|null $preferred_domain_checked_by
+ * @property string|null $preferred_domain_check_note
+ * @property string|null $kyc_selfie_mode this partner's selfie override; null follows the platform setting
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property Carbon|null $deleted_at
@@ -117,7 +131,26 @@ class BusinessAccount extends Model
             'approval_pending_at' => 'immutable_datetime',
             'activation_held_at' => 'immutable_datetime',
             'activation_payment_waived_at' => 'immutable_datetime',
+            'personal_details_completed_at' => 'immutable_datetime',
+            'business_setup_completed_at' => 'immutable_datetime',
+            'application_submitted_at' => 'immutable_datetime',
+            'correction_sections' => 'array',
+            'preferred_domain_checked_at' => 'immutable_datetime',
         ];
+    }
+
+    /** Whether the partner has submitted their application for review (D39). */
+    public function hasSubmittedApplication(): bool
+    {
+        return $this->application_submitted_at !== null;
+    }
+
+    /** The preferred domain as one address, e.g. `rahim-traders.shop`, or null. */
+    public function preferredDomain(): ?string
+    {
+        return $this->preferred_domain_name === null || $this->preferred_domain_extension === null
+            ? null
+            : $this->preferred_domain_name.$this->preferred_domain_extension;
     }
 
     /**

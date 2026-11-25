@@ -1,12 +1,19 @@
 import { Head, Link } from '@inertiajs/react';
-import { Truck } from 'lucide-react';
+import { Printer, Truck } from 'lucide-react';
+import { useState } from 'react';
 import ShipmentController from '@/actions/App/Http/Controllers/Admin/ShipmentController';
 import DataTable from '@/components/data-table/data-table';
 import MoneyAmount from '@/components/money-amount';
 import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
+import {
+    ShippingLabelSizePicker,
+    shippingLabelUrl,
+    useShippingLabelSize,
+} from '@/components/shipping-label';
 import EmptyState from '@/components/states/empty-state';
 import StatusPill from '@/components/status-pill';
+import { Button } from '@/components/ui/button';
 import { useTableQuery } from '@/hooks/use-table-query';
 import { useTranslation } from '@/hooks/use-translation';
 import type { Money } from '@/lib/money';
@@ -25,12 +32,19 @@ type ShipmentRow = {
     tracking_number: string | null;
     delivery_charge: Money;
     created_at: string | null;
+    label: {
+        status: string;
+        status_label: string;
+        status_tone: StatusTone;
+        printable: boolean;
+    };
 };
 
 type Props = {
     shipments: Paginator<ShipmentRow>;
     filters: { status: string | null };
     statuses: { value: string; label: string }[];
+    label_batch_url: string;
 };
 
 const selectClass =
@@ -46,10 +60,34 @@ export default function AdminShipments({
     shipments,
     filters,
     statuses,
+    label_batch_url,
 }: Props) {
     const { t, locale } = useTranslation();
     const { setFilter } = useTableQuery({ only: ['shipments', 'filters'] });
     const filtered = Boolean(filters.status);
+    const [selected, setSelected] = useState<Set<string | number>>(
+        () => new Set(),
+    );
+    const [labelSize, setLabelSize] = useShippingLabelSize();
+
+    /**
+     * One print page for every selected parcel with a label: one label per
+     * page, each with its own Storefront's frozen branding.
+     */
+    const batchUrl = (ids: Set<string | number>) => {
+        const printable = shipments.data.filter(
+            (row) => ids.has(row.id) && row.label.printable,
+        );
+        const url = new URL(label_batch_url, window.location.origin);
+
+        printable.forEach((row) =>
+            url.searchParams.append('shipments[]', row.id),
+        );
+
+        return printable.length === 0
+            ? null
+            : shippingLabelUrl(url.toString(), labelSize);
+    };
 
     const columns: Column<ShipmentRow>[] = [
         {
@@ -98,6 +136,17 @@ export default function AdminShipments({
             ),
         },
         {
+            key: 'label',
+            header: t('shipping_label.panel.title'),
+            priority: 'secondary',
+            cell: (row) => (
+                <StatusPill
+                    tone={row.label.status_tone}
+                    label={row.label.status_label}
+                />
+            ),
+        },
+        {
             key: 'delivery_charge',
             header: t('courier.admin.columns.delivery_charge'),
             align: 'end',
@@ -130,6 +179,39 @@ export default function AdminShipments({
                     columns={columns}
                     paginator={shipments}
                     rowKey={(row) => row.id}
+                    selection={{ selected, onChange: setSelected }}
+                    bulkActions={(ids) => {
+                        const url = batchUrl(ids);
+
+                        return (
+                            <div className="flex flex-wrap items-center gap-2">
+                                <ShippingLabelSizePicker
+                                    size={labelSize}
+                                    onChange={setLabelSize}
+                                />
+                                {url ? (
+                                    <Button asChild size="sm">
+                                        <a
+                                            href={url}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                        >
+                                            <Printer aria-hidden="true" />
+                                            {t(
+                                                'shipping_label.panel.print_selected',
+                                            )}
+                                        </a>
+                                    </Button>
+                                ) : (
+                                    <span className="text-muted-foreground text-sm">
+                                        {t(
+                                            'shipping_label.panel.none_selected',
+                                        )}
+                                    </span>
+                                )}
+                            </div>
+                        );
+                    }}
                     caption={t('courier.admin.caption')}
                     onlyReload={['shipments', 'filters']}
                     filters={

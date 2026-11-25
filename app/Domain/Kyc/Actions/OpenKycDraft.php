@@ -6,6 +6,7 @@ use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Kyc\Batch\AssignKycBatch;
 use App\Domain\Kyc\Enums\KycStatus;
 use App\Domain\Kyc\KycDeadlines;
+use App\Domain\Kyc\KycSelfiePolicy;
 use App\Domain\Kyc\Models\KycSubmission;
 use Illuminate\Database\DatabaseManager;
 
@@ -25,6 +26,7 @@ class OpenKycDraft
         protected AssignKycBatch $batches,
         protected KycDeadlines $deadlines,
         protected DatabaseManager $database,
+        protected KycSelfiePolicy $selfies,
     ) {}
 
     public function handle(BusinessAccount $account): KycSubmission
@@ -77,6 +79,8 @@ class OpenKycDraft
      */
     protected function withRequirements(KycSubmission $submission): KycSubmission
     {
+        $this->resolveSelfie($submission);
+
         // Already pinned to a batch version: that version is the round.
         if ($submission->kyc_batch_version_id !== null) {
             return $submission;
@@ -107,5 +111,26 @@ class OpenKycDraft
         $this->captureRequirements->handle($submission);
 
         return $submission;
+    }
+
+    /**
+     * Whether this draft asks for a selfie, as the admin has set it for this
+     * partner or for everyone (D39). Kept up to date while the partner is still
+     * filling the round in, and frozen once it is submitted, so a reviewer
+     * judges it against what it asked for.
+     */
+    protected function resolveSelfie(KycSubmission $submission): void
+    {
+        $account = $submission->businessAccount;
+
+        if ($account === null || $submission->submitted_at !== null) {
+            return;
+        }
+
+        $mode = $this->selfies->forAccount($account)?->value;
+
+        if ($submission->selfie_mode !== $mode) {
+            $submission->forceFill(['selfie_mode' => $mode])->save();
+        }
     }
 }

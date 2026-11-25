@@ -11,7 +11,8 @@ use App\Domain\Kyc\Models\KycSubmission;
 use App\Models\User;
 
 /**
- * Checks the three conditions §5.1 and §44 require before activation.
+ * Checks the conditions §5.1 and §44 require before activation — and, since
+ * D39, that the partner has submitted their application.
  *
  * Payment verification, KYC approval, and administrative approval — all three,
  * every time. They are gathered here rather than checked inline so the same
@@ -58,6 +59,12 @@ class ActivationRequirements
 
         if (! $this->ownerVerified($account)) {
             $reasons[] = 'Email and mobile are not both verified.';
+        }
+
+        // D39: the partner completes personal details and business setup and
+        // submits the application; a correction request takes it back.
+        if (! $account->hasSubmittedApplication()) {
+            $reasons[] = 'The application has not been submitted.';
         }
 
         return $reasons;

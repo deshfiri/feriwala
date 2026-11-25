@@ -39,10 +39,15 @@ class SynchronizeOnlineCollectionWithPayment
     public function __construct(
         protected EvaluateOrderProceedsEligibility $eligibility,
         protected LogManager $log,
+        protected SettleStorefrontProfit $storefrontProfit,
     ) {}
 
     public function handle(Order $order, ?Payment $payment): void
     {
+        // The Storefront profit reads the payment itself — its ownership, its
+        // settlement and whether it covers the order — once this commits.
+        $this->storefrontProfit->syncAfterCommit($order);
+
         if ($payment === null
             || $order->source !== OrderSource::Website
             || ! $payment->status->isSettled()

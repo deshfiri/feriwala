@@ -34,6 +34,7 @@ class StoreOrderCourierPanel
 {
     public function __construct(
         protected CourierManager $couriers,
+        protected ResolveShipmentWarehouse $warehouses,
     ) {}
 
     /**
@@ -50,8 +51,11 @@ class StoreOrderCourierPanel
 
         $manage = Gate::forUser($actor)->allows('manageShipments', Shipment::class);
         $live = $attempt !== null && $attempt->status->isLive();
+        // Held for staff until its stock resolves to exactly one Banij warehouse.
+        $warehouseRefusal = $shipment === null ? $this->warehouses->handle($order)->refusal() : null;
 
         return [
+            'warehouse_problem' => $warehouseRefusal === null ? null : __("courier.booking.refused.{$warehouseRefusal}"),
             'enabled' => $this->couriers->isAvailable(CourierProviderCode::Steadfast),
             // Switched on in Settings, whether or not this server has loaded the
             // driver: the two differ only when the cached configuration is stale.
@@ -69,6 +73,7 @@ class StoreOrderCourierPanel
                     && $this->couriers->isAvailable(CourierProviderCode::Steadfast)
                     && ! $live
                     && $shipment === null
+                    && $warehouseRefusal === null
                     && StoreOrderStep::hasDispatched($order->status),
                 'reconcile' => $manage && $attempt?->status === CourierBookingStatus::Uncertain,
                 'mark_not_booked' => $manage && $attempt?->status === CourierBookingStatus::Uncertain,

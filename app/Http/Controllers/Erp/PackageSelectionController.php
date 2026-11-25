@@ -62,6 +62,9 @@ class PackageSelectionController extends Controller
                     'slug' => $package->slug,
                     'name' => $package->name,
                     'short_description' => $package->short_description,
+                    // The included services and applicable terms, in the
+                    // admin's own words (D39 step 2).
+                    'description' => $package->description,
                     'fee' => $package->fee->jsonSerialize(),
 
                     // What they will actually pay today.

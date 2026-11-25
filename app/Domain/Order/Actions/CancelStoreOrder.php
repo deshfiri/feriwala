@@ -49,6 +49,7 @@ class CancelStoreOrder
     public function __construct(
         protected StockReservations $reservations,
         protected DatabaseManager $database,
+        protected SettleStorefrontProfit $storefrontProfit,
     ) {}
 
     /**
@@ -71,6 +72,9 @@ class CancelStoreOrder
             if ($locked->source !== OrderSource::Website) {
                 throw StoreOrderRefused::notStoreOrder();
             }
+
+            // A cancelled order earns nothing: its profit follows once this commits.
+            $this->storefrontProfit->syncAfterCommit($locked);
 
             // Already cancelled, or already on its way to a refund: the repeat is answered.
             if (in_array($locked->status, [OrderStatus::Cancelled, OrderStatus::RefundPending], true)) {

@@ -2,7 +2,7 @@
 
 namespace App\Domain\Billing\Actions;
 
-use App\Domain\Account\Actions\ActivateAccountAutomatically;
+use App\Domain\Account\Actions\AdvanceOnboarding;
 use App\Domain\Billing\Enums\PaymentPurpose;
 use App\Domain\Billing\Enums\PaymentStatus;
 use App\Domain\Billing\Events\PartnerGatewayPaymentVerified;
@@ -45,7 +45,7 @@ use Throwable;
 class SettlePayment
 {
     public function __construct(
-        protected ActivateAccountAutomatically $automaticActivation,
+        protected AdvanceOnboarding $onboarding,
         protected ActivateRenewal $renewals,
         protected ActivatePackageChange $packageChanges,
         protected SettleCouponRedemption $couponRedemptions,
@@ -729,7 +729,7 @@ class SettlePayment
         }
 
         try {
-            $this->automaticActivation->handle($account, 'Activation payment settled.');
+            $this->onboarding->handle($account, 'Activation payment settled.');
         } catch (Throwable $throwable) {
             $this->log->channel('payment')->error('Could not re-evaluate activation readiness', [
                 'payment' => $payment->reference,

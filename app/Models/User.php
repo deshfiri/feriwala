@@ -56,6 +56,9 @@ use Spatie\Permission\Traits\HasRoles;
  * @property string|null $referral_code
  * @property int|null $referred_by_user_id
  * @property string $locale
+ * @property CarbonImmutable|null $date_of_birth
+ * @property string|null $country ISO 3166-1 alpha-2
+ * @property string|null $nationality ISO 3166-1 alpha-2
  * @property string $password
  * @property string|null $two_factor_secret
  * @property string|null $two_factor_recovery_codes

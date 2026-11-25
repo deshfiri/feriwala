@@ -19,6 +19,7 @@ type PackageOption = {
     slug: string;
     name: string;
     short_description: string | null;
+    description?: string | null;
     fee: Money;
     activation_total: Money;
     validity_days: number | null;
@@ -108,6 +109,13 @@ function PackageCard({
             {option.short_description && (
                 <p className="text-muted-foreground mt-1 text-sm">
                     {option.short_description}
+                </p>
+            )}
+
+            {/* Included services and terms, as the admin wrote them (D39). */}
+            {option.description && (
+                <p className="text-muted-foreground mt-2 text-xs whitespace-pre-line">
+                    {option.description}
                 </p>
             )}
 

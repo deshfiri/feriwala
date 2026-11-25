@@ -436,6 +436,9 @@ return [
     ],
 
     'submission' => [
+        // The document's issuing country (D39).
+        'issuing_country' => 'Country that issued your document',
+        'issuing_country_help' => 'Choose the country that issued the ID you are uploading. Saved as soon as you choose.',
         'page_title' => 'KYC verification',
         'title' => 'Identity verification',
         'batch_progress' => ':provided of :total provided',

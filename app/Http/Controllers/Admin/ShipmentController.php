@@ -6,11 +6,15 @@ use App\Domain\Courier\Actions\CreateShipmentFromAllocations;
 use App\Domain\Courier\Actions\RecordManualCourierStatusUpdate;
 use App\Domain\Courier\Actions\RecordShipmentCourierReferences;
 use App\Domain\Courier\Enums\CourierProviderCode;
+use App\Domain\Courier\Enums\ShipmentLabelStatus;
 use App\Domain\Courier\Enums\ShipmentStatusChangeSource;
 use App\Domain\Courier\Exceptions\CourierProviderUnavailable;
 use App\Domain\Courier\Exceptions\CourierReferencesRefused;
 use App\Domain\Courier\Models\Shipment;
+use App\Domain\Courier\Queries\ResolveShipmentWarehouse;
+use App\Domain\Courier\Queries\ShipmentLabelPanel;
 use App\Domain\Order\Enums\OrderCourierStatus;
+use App\Domain\Order\Enums\OrderSource;
 use App\Domain\Order\Models\Order;
 use App\Http\Controllers\Controller;
 use App\Integrations\Courier\CourierManager;
@@ -46,6 +50,8 @@ class ShipmentController extends Controller
         protected CreateShipmentFromAllocations $create,
         protected RecordManualCourierStatusUpdate $advance,
         protected CourierManager $courier,
+        protected ShipmentLabelPanel $labels,
+        protected ResolveShipmentWarehouse $warehouses,
     ) {}
 
     public function index(Request $request): Response
@@ -58,7 +64,7 @@ class ShipmentController extends Controller
         $status = $status === '' ? null : $status;
 
         $shipments = Shipment::query()
-            ->with(['order:id,public_id,reference', 'courierProvider:id,code,name'])
+            ->with(['order:id,public_id,reference,source', 'courierProvider:id,code,name', 'currentLabel:id,shipment_id,version'])
             ->when($status !== null, fn (Builder $query) => $query->where('status', $status))
             ->orderByDesc('id')
             ->paginate(self::PER_PAGE)
@@ -77,11 +83,13 @@ class ShipmentController extends Controller
                 'tracking_number' => $shipment->tracking_number,
                 'delivery_charge' => $shipment->delivery_charge->jsonSerialize(),
                 'created_at' => $shipment->created_at?->toIso8601String(),
+                'label' => $this->labelSummary($shipment),
             ]);
 
         return Inertia::render('admin/shipments/index', [
             'shipments' => $shipments,
             'filters' => ['status' => $status],
+            'label_batch_url' => route('admin.shipment-labels.batch'),
             'statuses' => array_map(
                 fn (OrderCourierStatus $status) => ['value' => $status->value, 'label' => $status->label()],
                 array_values(array_filter(OrderCourierStatus::cases(), fn (OrderCourierStatus $status) => $status !== OrderCourierStatus::Unassigned)),
@@ -108,6 +116,7 @@ class ShipmentController extends Controller
         $canManage = Gate::forUser($actor)->allows('manageShipments', Shipment::class);
 
         return Inertia::render('admin/shipments/show', [
+            'label' => $this->labels->forStaff($record, $actor, withVersions: true),
             'shipment' => [
                 'id' => $record->public_id,
                 'reference' => $record->reference,
@@ -185,6 +194,16 @@ class ShipmentController extends Controller
             'packages.*.height' => ['nullable', 'numeric', 'gt:0'],
             'packages.*.package_size' => ['nullable', 'string', 'max:32'],
         ]);
+
+        // A Storefront parcel leaves from one Banij warehouse, known before it
+        // is handed to any courier; otherwise the order waits for staff.
+        if ($record->source === OrderSource::Website) {
+            $warehouseRefusal = $this->warehouses->handle($record)->refusal();
+
+            if ($warehouseRefusal !== null) {
+                throw ValidationException::withMessages(['provider' => __("courier.booking.refused.{$warehouseRefusal}")]);
+            }
+        }
 
         try {
             $shipment = $this->create->handle(
@@ -271,6 +290,23 @@ class ShipmentController extends Controller
         Inertia::flash('toast', ['type' => 'success', 'message' => __('courier.references.flash.recorded')]);
 
         return back();
+    }
+
+    /**
+     * A list row's label state: enough to show it and to batch-print it.
+     *
+     * @return array{status: string, status_label: string, status_tone: string, printable: bool}
+     */
+    protected function labelSummary(Shipment $shipment): array
+    {
+        $status = ShipmentLabelStatus::of($shipment, $shipment->currentLabel);
+
+        return [
+            'status' => $status->value,
+            'status_label' => $status->label(),
+            'status_tone' => $status->tone(),
+            'printable' => $status->isPrintable(),
+        ];
     }
 
     protected function order(string $publicId): Order

@@ -63,7 +63,7 @@ describe('a Client/Partner owner', function () {
         Notification::assertSentTo($owner, ContactVerifiedByStaff::class, fn ($n) => $n->channel === 'email');
     });
 
-    it('moves the account on to KYC once email and the required mobile are both confirmed', function () {
+    it('moves the account on to package selection once email and the required mobile are both confirmed', function () {
         $owner = manualVerifyOwner();
         $account = $owner->businessAccount;
 
@@ -74,7 +74,8 @@ describe('a Client/Partner owner', function () {
 
         $this->post(route('admin.accounts.verify-contact', $account), ['channel' => 'mobile', 'reason' => 'Confirmed by phone call.']);
 
-        expect($account->fresh()->status)->toBe(AccountStatus::KycPending);
+        // D39: the package is chosen and paid for before identity verification.
+        expect($account->fresh()->status)->toBe(AccountStatus::PackageSelectionPending);
     });
 
     it('respects the switch that makes mobile verification optional', function () {
@@ -83,7 +84,7 @@ describe('a Client/Partner owner', function () {
 
         $this->actingAs($this->staff)->post(route('admin.accounts.verify-contact', $owner->businessAccount), ['channel' => 'email', 'reason' => 'Confirmed by phone.']);
 
-        expect($owner->businessAccount->fresh()->status)->toBe(AccountStatus::KycPending);
+        expect($owner->businessAccount->fresh()->status)->toBe(AccountStatus::PackageSelectionPending);
     });
 
     it('never overwrites an existing verification and records one event per channel', function () {
@@ -191,7 +192,7 @@ describe('activation is never a shortcut', function () {
         $this->actingAs($this->staff)->post(route('admin.accounts.verify-contact', $account), ['channel' => 'email', 'reason' => 'Confirmed by phone.']);
         $this->post(route('admin.accounts.verify-contact', $account), ['channel' => 'mobile', 'reason' => 'Confirmed by phone.']);
 
-        expect($account->fresh()->status)->toBe(AccountStatus::KycPending)
+        expect($account->fresh()->status)->toBe(AccountStatus::PackageSelectionPending)
             ->and($account->fresh()->isActivated())->toBeFalse()
             ->and(Payment::query()->where('business_account_id', $account->id)->count())->toBe(0);
     });

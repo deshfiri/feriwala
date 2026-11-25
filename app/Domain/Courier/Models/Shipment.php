@@ -8,6 +8,7 @@ use App\Concerns\HasReference;
 use App\Concerns\HasStateMachine;
 use App\Concerns\RecordsStatusHistory;
 use App\Domain\Courier\Actions\RecordManualCourierStatusUpdate;
+use App\Domain\Inventory\Models\Warehouse;
 use App\Domain\Order\Enums\OrderCourierStatus;
 use App\Domain\Order\Enums\OrderDeliveryStatus;
 use App\Domain\Order\Models\Order;
@@ -19,6 +20,7 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 /**
  * One courier-neutral shipment (Advanced Order Management batch, Commit 5;
@@ -36,6 +38,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string $reference
  * @property int $order_id
  * @property int $courier_provider_id
+ * @property int|null $warehouse_id the Banij warehouse the parcel left from; fixed once known
  * @property OrderCourierStatus $status
  * @property string|null $tracking_number
  * @property string $currency_code
@@ -44,7 +47,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property Money|null $cod_amount
  * @property Money|null $return_charge
  * @property CarbonImmutable|null $pickup_requested_at
- * @property string|null $label_path
+ * @property string|null $label_path unused; the label is {@see ShipmentLabel}
+ * @property string|null $label_blocker why a label could not be issued yet, as a safe code
  * @property int|null $cancelled_by
  * @property string|null $cancellation_reason
  * @property CarbonImmutable|null $cancelled_at
@@ -58,6 +62,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property CarbonImmutable $updated_at
  * @property-read Order $order
  * @property-read CourierProvider $courierProvider
+ * @property-read Warehouse|null $warehouse
+ * @property-read Collection<int, ShipmentLabel> $labels
+ * @property-read ShipmentLabel|null $currentLabel
  * @property-read User|null $cancelledBy
  * @property-read Collection<int, ShipmentPackage> $packages
  * @property-read Collection<int, ShipmentTrackingEvent> $trackingEvents
@@ -109,6 +116,32 @@ class Shipment extends Model
     public function courierProvider(): BelongsTo
     {
         return $this->belongsTo(CourierProvider::class);
+    }
+
+    /**
+     * @return BelongsTo<Warehouse, $this>
+     */
+    public function warehouse(): BelongsTo
+    {
+        return $this->belongsTo(Warehouse::class);
+    }
+
+    /**
+     * Every version of this parcel's label, oldest first.
+     *
+     * @return HasMany<ShipmentLabel, $this>
+     */
+    public function labels(): HasMany
+    {
+        return $this->hasMany(ShipmentLabel::class)->orderBy('version');
+    }
+
+    /**
+     * @return HasOne<ShipmentLabel, $this>
+     */
+    public function currentLabel(): HasOne
+    {
+        return $this->hasOne(ShipmentLabel::class)->whereNull('superseded_at');
     }
 
     /**

@@ -28,6 +28,9 @@ beforeEach(function () {
     // Sitting one step short of the gate: verified, and waiting on KYC and
     // payment, which is where the orchestration has something to do.
     $this->applicant = testBusinessAccount(AccountStatus::PaymentVerificationPending);
+
+    // The application itself is in (D39): what is left is KYC and payment.
+    $this->applicant->forceFill(['application_submitted_at' => now()])->save();
 });
 
 function approveApplicantKyc(): KycSubmission
@@ -123,6 +126,7 @@ describe('an applicant still marked as awaiting payment', function () {
         // Where a real applicant is when they pay: choosing a package moves
         // them here, and nothing else moves them on before the payment lands.
         $this->applicant = testBusinessAccount(AccountStatus::PaymentPending);
+        $this->applicant->forceFill(['application_submitted_at' => now()])->save();
     });
 
     it('reaches the gate once paid, recording the payment being received', function () {

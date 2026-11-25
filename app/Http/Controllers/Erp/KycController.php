@@ -13,8 +13,10 @@ use App\Domain\Kyc\Models\KycDocumentType;
 use App\Domain\Kyc\Queries\ApplicableRequirements;
 use App\Domain\Kyc\Queries\ApplicantKycHistory;
 use App\Http\Controllers\Controller;
+use App\Support\Localization\InternationalMobile;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -53,10 +55,53 @@ class KycController extends Controller
                 'status_tone' => $submission->status->tone(),
                 'is_editable' => $submission->status->isEditable(),
                 'deadline_at' => $submission->deadline_at?->toIso8601String(),
+                // The country that issued the document (D39), defaulting to
+                // where the partner lives.
+                'issuing_country' => $submission->issuing_country ?? $account->owner?->country,
             ],
+            'issuing_countries' => $this->issuingCountries(),
             'requirements' => $requirements->forForm($account, $submission),
             'feedback' => $submission->reviews()->first()?->user_visible_feedback,
         ]);
+    }
+
+    /**
+     * The country that issued the identity document (D39 step 4), saved on the
+     * draft as soon as it is chosen — the form saves one thing at a time.
+     */
+    public function issuingCountry(Request $request, OpenKycDraft $openDraft): RedirectResponse
+    {
+        $account = $this->businessAccountFor($request);
+
+        // An ISO code is the same country whatever its case.
+        $request->merge(['issuing_country' => strtoupper(trim((string) $request->input('issuing_country')))]);
+
+        $validated = $request->validate([
+            'issuing_country' => ['required', 'string', 'size:2', Rule::in(array_keys(app(InternationalMobile::class)->codes()))],
+        ]);
+
+        $submission = $openDraft->handle($account);
+
+        if (! $submission->status->isEditable()) {
+            throw ValidationException::withMessages(['issuing_country' => __('kyc.submission.with_team_title')]);
+        }
+
+        $submission->forceFill(['issuing_country' => strtoupper($validated['issuing_country'])])->save();
+
+        return back();
+    }
+
+    /**
+     * Every country, for "which country issued this document?" (D39).
+     *
+     * @return array<int, array{value: string, label: string}>
+     */
+    protected function issuingCountries(): array
+    {
+        return array_values(array_map(
+            fn (array $option) => ['value' => $option['value'], 'label' => preg_replace('/ \(\+\d+\)$/', '', $option['label']) ?? $option['label']],
+            app(InternationalMobile::class)->options(),
+        ));
     }
 
     /**
@@ -99,7 +144,7 @@ class KycController extends Controller
             throw ValidationException::withMessages(['file' => __('kyc.batch.refused.use_new_form')]);
         }
 
-        if (!$submission->status->isEditable()) {
+        if (! $submission->status->isEditable()) {
             throw ValidationException::withMessages([
                 'file' => 'This submission is being reviewed and cannot be changed.',
             ]);
@@ -128,7 +173,7 @@ class KycController extends Controller
             );
         }
 
-        return back()->with('success', $type->name . ' saved.');
+        return back()->with('success', $type->name.' saved.');
     }
 
     /**
@@ -147,6 +192,20 @@ class KycController extends Controller
         // that what they gave is theirs and complete.
         if ($submission->kyc_batch_version_id !== null) {
             $request->validate(['confirm' => ['accepted']]);
+        }
+
+        // The country that issued the document (D39). Any country; when not
+        // sent (an older client), the partner's country of residence.
+        if ($request->filled('issuing_country')) {
+            $request->merge(['issuing_country' => strtoupper(trim((string) $request->input('issuing_country')))]);
+        }
+
+        $issuing = $request->validate([
+            'issuing_country' => ['nullable', 'string', 'size:2', Rule::in(array_keys(app(InternationalMobile::class)->codes()))],
+        ])['issuing_country'] ?? $account->owner?->country;
+
+        if ($submission->status->isEditable() && $issuing !== null) {
+            $submission->forceFill(['issuing_country' => strtoupper($issuing)])->save();
         }
 
         try {

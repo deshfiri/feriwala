@@ -6,6 +6,7 @@ use App\Domain\Audit\Actions\RecordAuditLog;
 use App\Domain\Audit\Data\AuditEntry;
 use App\Domain\Courier\Enums\CourierProviderCode;
 use App\Domain\Courier\Exceptions\CourierReferencesRefused;
+use App\Domain\Courier\Jobs\IssueShipmentLabelJob;
 use App\Domain\Courier\Models\Shipment;
 use App\Domain\Order\Enums\OrderCourierStatus;
 use App\Models\User;
@@ -27,7 +28,8 @@ use InvalidArgumentException;
  * a wrong one is a matter for the courier panel and a new booking, not an
  * edit here. **Never calls the courier**: this records what a person read, it
  * does not ask, book or change anything at the provider. Audited with the
- * person and their reason.
+ * person and their reason; a parcel whose label was waiting for these
+ * references has it issued after commit.
  */
 class RecordShipmentCourierReferences
 {
@@ -91,6 +93,9 @@ class RecordShipmentCourierReferences
                     reason: $reason,
                     module: 'courier',
                 ));
+
+                // A parcel waiting on these references for its label gets one now.
+                IssueShipmentLabelJob::dispatch($locked->id)->afterCommit();
 
                 return $locked;
             });

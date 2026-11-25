@@ -21,6 +21,13 @@ export type OnboardingProgress = {
     blocked_reason: string | null;
     /** The reviewer's message to the applicant. Never their internal note. */
     feedback: string | null;
+    /** Submitted and waiting on Banij (D39); null otherwise. */
+    pending?: {
+        heading: string;
+        body: string;
+        note: string | null;
+        invoice_url: string;
+    } | null;
     status: {
         value: string;
         label: string;

@@ -14,7 +14,9 @@ use App\Domain\Catalog\WholesalePriceResolver;
 use App\Domain\Inventory\Enums\ReservationKind;
 use App\Domain\Inventory\Exceptions\InventoryRefused;
 use App\Domain\Inventory\Models\StockReservation;
+use App\Domain\Inventory\PartnerLotWarehouseScope;
 use App\Domain\Inventory\Queries\PartnerStockAvailability;
+use App\Domain\Inventory\Queries\PartnerStockSingleWarehouse;
 use App\Domain\Inventory\ReservationWindows;
 use App\Domain\Inventory\StockReservations;
 use App\Domain\Order\Data\WebsiteOrderLine;
@@ -98,6 +100,8 @@ class PlaceWebsiteOrder
         protected Entitlements $entitlements,
         protected ChooseWebsiteOrderGateway $gatewayChoice,
         protected RecordPaymentLog $paymentLogs,
+        protected PartnerStockSingleWarehouse $singleWarehouse,
+        protected PartnerLotWarehouseScope $lotScope,
     ) {}
 
     /**
@@ -353,6 +357,10 @@ class PlaceWebsiteOrder
                 ? OrderStatus::CustomerVerificationPending
                 : OrderStatus::PaymentPending,
             'business_account_id' => $website->business_account_id,
+            // The account's type as it is now, frozen with the order: how a sale
+            // settles is decided by what the account was when it was placed,
+            // never by what it is when someone looks later.
+            'account_type' => $website->businessAccount->account_type,
             'website_id' => $website->id,
             'website_customer_id' => $customer->id,
             'storefront_order_reference' => $submission->reference,
@@ -465,6 +473,28 @@ class PlaceWebsiteOrder
             $lines[$b]->product->id, $lines[$b]->variant->id ?? 0,
         ]);
 
+        // One parcel leaves from one Banij warehouse: the one whose proven
+        // Partner lots cover every line is chosen first, and the holds draw only
+        // from it. None covers them all -- the order is still taken, and waits
+        // for staff before any courier is booked.
+        $warehouse = $this->singleWarehouse->for($website->businessAccount, array_map(fn (int $position) => [
+            'product_id' => $lines[$position]->product->id,
+            'product_variant_id' => $lines[$position]->variant?->id,
+            'quantity' => $lines[$position]->quantity,
+        ], $positions));
+
+        return $this->lotScope->within($warehouse, fn () => $this->reserveLines($order, $website, $lines, $positions, $kind));
+    }
+
+    /**
+     * @param  array<int, mixed>  $lines
+     * @param  list<int>  $positions
+     * @return array<int, StockReservation>
+     *
+     * @throws WebsiteOrderRefused
+     */
+    protected function reserveLines(Order $order, Website $website, array $lines, array $positions, ReservationKind $kind): array
+    {
         $reservations = [];
 
         foreach ($positions as $position) {

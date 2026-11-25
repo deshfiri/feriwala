@@ -30,6 +30,9 @@ beforeEach(function () {
     ]);
 
     $this->applicant = testBusinessAccount(AccountStatus::ApprovalPending);
+
+    // At the approval gate means the application was submitted (D39).
+    $this->applicant->forceFill(['application_submitted_at' => now()])->save();
 });
 
 function approveKyc(): void

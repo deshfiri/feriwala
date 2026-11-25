@@ -257,6 +257,15 @@ function testAccountReadyForActivation(int $readyDaysAgo = 0): BusinessAccount
         'completed_at' => now()->subDays($readyDaysAgo),
     ]);
 
+    // The partner's application, completed and submitted (D39).
+    $account->forceFill([
+        'personal_details_completed_at' => now()->subDays($readyDaysAgo + 1),
+        'business_setup_completed_at' => now()->subDays($readyDaysAgo + 1),
+        'preferred_domain_name' => 'ready-shop',
+        'preferred_domain_extension' => '.shop',
+        'application_submitted_at' => now()->subDays($readyDaysAgo),
+    ])->save();
+
     app(EvaluateActivationReadiness::class)->handle($account);
 
     if ($readyDaysAgo > 0) {

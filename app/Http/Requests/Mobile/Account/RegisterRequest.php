@@ -8,6 +8,7 @@ use App\Concerns\ProfileValidationRules;
 use App\Domain\Account\Enums\Gender;
 use App\Models\User;
 use App\Support\Localization\Countries;
+use App\Support\Localization\InternationalMobile;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -45,6 +46,14 @@ class RegisterRequest extends FormRequest
              * @example +8801712345678
              */
             'mobile' => ['required', 'string', 'max:20', Rule::unique(User::class, 'mobile')],
+            /**
+             * The country the mobile belongs to: a `value` from `dialling_codes` on
+             * `GET /register/options`. Any country (D39). Defaults to `country`;
+             * the number is stored in E.164.
+             *
+             * @example BD
+             */
+            'mobile_country' => ['nullable', 'string', 'size:2', Rule::in(array_keys(app(InternationalMobile::class)->codes()))],
             /** Password; the policy is `password_rules` on `GET /register/options`. */
             'password' => $this->passwordRules(),
             /** Must equal `password`. */

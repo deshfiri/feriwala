@@ -2,12 +2,13 @@
 
 namespace App\Http\Resources\Mobile\Onboarding;
 
+use App\Domain\Account\OnboardingProgress;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
  * Where the account is in the activation funnel (§33.4), as
- * {@see \App\Domain\Account\OnboardingProgress} works it out — the same words
+ * {@see OnboardingProgress} works it out — the same words
  * the web stepper uses.
  *
  * @property array<string, mixed> $resource
@@ -26,6 +27,10 @@ class OnboardingProgressResource extends JsonResource
         'kyc.create' => 'kyc',
         'packages.index' => 'packages',
         'checkout.show' => 'checkout',
+        // The application, onboarding v2 (D39).
+        'onboarding.details.edit' => 'personal_details',
+        'onboarding.business.edit' => 'business_setup',
+        'onboarding.review.show' => 'review',
     ];
 
     /**
@@ -36,11 +41,13 @@ class OnboardingProgressResource extends JsonResource
      *     action: array{label: string, screen: string|null}|null,
      *     blocked_reason: string|null,
      *     feedback: string|null,
+     *     pending: array{heading: string, body: string, note: string|null}|null,
      *     status: array{value: string, label: string, tone: string}
      * }
      */
     public function toArray(Request $request): array
     {
+        /** @var array{is_complete: bool, current_step: string, steps: list<array{key: string, label: string, position: int, state: string}>, action: array{label: string, url: string}|null, blocked_reason: string|null, feedback: string|null, pending?: array{heading: string, body: string, note: string|null}|null, status: array{value: string, label: string, tone: string}} $progress */
         $progress = $this->resource;
 
         return [
@@ -55,7 +62,7 @@ class OnboardingProgressResource extends JsonResource
                 'position' => $step['position'],
                 'state' => $step['state'],
             ], $progress['steps']),
-            /** The single next thing to do, or null when there is only waiting. `screen` is one of `mobile_verification`, `email_verification`, `kyc`, `packages`, `checkout`. */
+            /** The single next thing to do, or null when there is only waiting. `screen` is one of `mobile_verification`, `email_verification`, `packages`, `checkout`, `kyc`, `personal_details`, `business_setup`, `review`. */
             'action' => $progress['action'] === null ? null : [
                 'label' => $progress['action']['label'],
                 'screen' => $this->screenFor($progress['action']['url']),
@@ -64,6 +71,12 @@ class OnboardingProgressResource extends JsonResource
             'blocked_reason' => $progress['blocked_reason'],
             /** The reviewer's message to the applicant, never the internal note. */
             'feedback' => $progress['feedback'],
+            /** Submitted and waiting on Banij (D39): the message, with its 24–48 hour estimate; null otherwise. */
+            'pending' => ($progress['pending'] ?? null) === null ? null : [
+                'heading' => $progress['pending']['heading'],
+                'body' => $progress['pending']['body'],
+                'note' => $progress['pending']['note'],
+            ],
             'status' => [
                 'value' => $progress['status']['value'],
                 'label' => $progress['status']['label'],

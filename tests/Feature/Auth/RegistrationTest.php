@@ -88,6 +88,11 @@ describe('the form and the validator agree', function () {
             // Carried in a hidden input only when an invitation is being
             // accepted, so it is legitimately absent from the default form.
             'invitation',
+            // Optional, still validated because the mobile API may send them,
+            // but asked on the web at personal details, after payment (D39).
+            'date_of_birth',
+            'gender',
+            'nationality',
         ]);
 
         expect($fields)->not->toBeEmpty();

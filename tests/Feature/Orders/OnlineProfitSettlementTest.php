@@ -218,14 +218,15 @@ describe('a Platform-gateway order', function () {
         onlineProfitDeliver($order);
 
         $settlement = onlineProfitSettlement($order);
-        $entry = LedgerEntry::query()->sole();
 
+        // The line's facts and figures are recorded at delivery; the credit
+        // itself is the Storefront settlement's, once, 24 hours after Delivered
+        // (StorefrontProfitSettlementTest) — never posted here as well.
         expect($settlement->eligible_at)->not->toBeNull()
             ->and($settlement->reseller_earning->toDecimal())->toBe('200.00')
             ->and($settlement->flagged_for_review)->toBeFalse()
-            ->and($entry->type)->toBe(LedgerTransactionType::SalesCredit)
-            ->and($entry->balance_type)->toBe(BalanceType::Withdrawable)
-            ->and(onlineProfitWallet()->total->toDecimal())->toBe('200.00');
+            ->and($settlement->wallet_transaction_id)->toBeNull()
+            ->and(LedgerEntry::query()->count())->toBe(0);
     });
 
     it('credits nothing at delivery when the order was never paid online', function () {
@@ -248,8 +249,7 @@ describe('a Platform-gateway order', function () {
         app(SynchronizeOnlineCollectionWithPayment::class)->handle($order->refresh()->load('items'), $payment);
 
         expect(OrderProceedsSettlement::query()->where('order_id', $order->id)->count())->toBe(1)
-            ->and(LedgerEntry::query()->count())->toBe(1)
-            ->and(onlineProfitWallet()->total->toDecimal())->toBe('200.00')
+            ->and(LedgerEntry::query()->count())->toBe(0)
             ->and(AuditLog::query()->where('action', 'order_proceeds_settlement.eligible')->count())->toBe(1);
     });
 
@@ -266,7 +266,7 @@ describe('a Platform-gateway order', function () {
 
         expect(onlineProfitSettlement($order)->collection_channel)->toBe(CollectionChannel::PlatformGateway)
             ->and(onlineProfitSettlement($order)->reseller_earning->toDecimal())->toBe('200.00')
-            ->and(LedgerEntry::query()->count())->toBe(1);
+            ->and(LedgerEntry::query()->count())->toBe(0);
     });
 
     it('gives staff no cash on delivery to confirm for an online-collected line', function () {
@@ -310,7 +310,8 @@ describe('cash on delivery is unchanged', function () {
             ->and($settlement->cod_amount_collected->toDecimal())->toBe('5200.00')
             ->and($settlement->payment_collected_at)->toBeNull()
             ->and($settlement->reseller_earning->toDecimal())->toBe('200.00')
-            ->and(LedgerEntry::query()->count())->toBe(1);
+            // Credited by the Storefront settlement after its hold, not here.
+            ->and(LedgerEntry::query()->count())->toBe(0);
     });
 
     it('is never settled by the payment path: a cash order has no verified payment to collect from', function () {
@@ -386,7 +387,8 @@ describe('a payment with no frozen ownership', function () {
         app(RecordCodCollection::class)->handle($this->staff, $order->items()->sole(), Money::fromDecimal('5200.00', Currency::BDT));
 
         expect(onlineProfitSettlement($order)->collection_channel)->toBe(CollectionChannel::Cod)
-            ->and(LedgerEntry::query()->count())->toBe(1);
+            ->and(onlineProfitSettlement($order)->eligible_at)->not->toBeNull()
+            ->and(LedgerEntry::query()->count())->toBe(0);
     });
 });
 

@@ -99,6 +99,45 @@ class AnnounceCourierEvent
         });
     }
 
+    /**
+     * Partner: their parcel's shipping label is ready to print. Once per
+     * shipment, whatever later corrections are made; the link is their own
+     * order page, which resolves it through their own authority -- never a
+     * file address.
+     */
+    public function labelReady(Shipment $shipment): void
+    {
+        $order = $shipment->order;
+        $accountId = $order->business_account_id;
+        $reference = $order->reference;
+        $orderId = $order->public_id;
+        $shipmentId = $shipment->public_id;
+
+        $this->afterCommit(function () use ($accountId, $reference, $orderId, $shipmentId): void {
+            $owner = BusinessAccount::query()->find($accountId)?->owner;
+
+            if (! $owner instanceof User) {
+                return;
+            }
+
+            $notification = new CourierPartnerUpdate('label_ready', $reference, $orderId);
+            $notification->id = $this->idFor('courier.partner.label_ready', $shipmentId, $owner);
+
+            Notification::send($owner, $notification);
+        });
+    }
+
+    /**
+     * Staff: a parcel's label cannot be issued until a person fixes something
+     * (`$code` is the safe reason). Once per shipment and reason.
+     */
+    public function labelBlocked(Shipment $shipment, string $code): void
+    {
+        $order = $shipment->order;
+
+        $this->tellStaff('label_blocked', $order->reference, $order->public_id, $shipment->public_id.':'.$code);
+    }
+
     protected function tellStaff(string $alert, string $reference, string $orderId, string $subject): void
     {
         $this->afterCommit(function () use ($alert, $reference, $orderId, $subject): void {

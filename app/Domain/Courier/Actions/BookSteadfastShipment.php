@@ -11,6 +11,7 @@ use App\Domain\Courier\Exceptions\CourierProviderUnavailable;
 use App\Domain\Courier\Models\CourierBookingAttempt;
 use App\Domain\Courier\Models\CourierProvider;
 use App\Domain\Courier\Models\Shipment;
+use App\Domain\Courier\Queries\ResolveShipmentWarehouse;
 use App\Domain\Courier\Queries\SteadfastOrderRequestBuilder;
 use App\Domain\Notification\Actions\AnnounceCourierEvent;
 use App\Domain\Order\Enums\OrderCourierStatus;
@@ -58,6 +59,7 @@ class BookSteadfastShipment
         protected RecordSteadfastBooking $record,
         protected RecordAuditLog $audit,
         protected AnnounceCourierEvent $announce,
+        protected ResolveShipmentWarehouse $warehouses,
     ) {}
 
     /**
@@ -144,7 +146,19 @@ class BookSteadfastShipment
                 throw CourierBookingRefused::because('order_not_ready');
             }
 
+            // One parcel leaves from one Banij warehouse. An order whose stock is
+            // spread over several, or held where no warehouse is recorded, is
+            // left for staff before any consignment exists -- never booked as
+            // one parcel with a return address that is only half true.
+            // Checked after the request itself, so a missing recipient or address
+            // is still named first.
             $request = $this->requests->handle($locked);
+
+            $warehouseRefusal = $this->warehouses->handle($locked)->refusal();
+
+            if ($warehouseRefusal !== null) {
+                throw CourierBookingRefused::because($warehouseRefusal);
+            }
 
             /** @var CourierProvider $provider */
             $provider = CourierProvider::query()->where('code', CourierProviderCode::Steadfast->value)->firstOrFail();

@@ -2,8 +2,9 @@
 
 namespace App\Domain\Kyc\Actions;
 
-use App\Domain\Account\Actions\ActivateAccountAutomatically;
+use App\Domain\Account\Actions\AdvanceOnboarding;
 use App\Domain\Account\Actions\ChangeAccountStatus;
+use App\Domain\Account\ActivationRequirements;
 use App\Domain\Account\Data\AccountStatusChange;
 use App\Domain\Account\Enums\AccountStatus;
 use App\Domain\Kyc\Batch\KycApprovalReadiness;
@@ -35,7 +36,8 @@ class ReviewKyc
 {
     public function __construct(
         protected ChangeAccountStatus $changeAccountStatus,
-        protected ActivateAccountAutomatically $automaticActivation,
+        protected AdvanceOnboarding $onboarding,
+        protected ActivationRequirements $activation,
         protected LiftKycDeadlineRestriction $liftRestriction,
         protected DatabaseManager $database,
         protected KycApprovalReadiness $readiness,
@@ -108,7 +110,7 @@ class ReviewKyc
              * same route: the action re-evaluates readiness either way, and an
              * account that is no longer ready leaves the gate.
              */
-            $this->automaticActivation->handle($account->refresh(), 'KYC decision recorded.');
+            $this->onboarding->handle($account->refresh(), 'KYC decision recorded.');
         }
 
         return $review;
@@ -206,9 +208,12 @@ class ReviewKyc
             userVisibleNote: $decision->userVisibleFeedback,
         ));
 
-        // Clearing KYC opens package selection (§5.1). It does not activate the
-        // account — payment and administrative approval still stand between.
+        // Under the earlier order, clearing KYC opens package selection (§5.1).
+        // Since D39 the package is chosen and paid for first, so an account that
+        // has paid stays at KycApproved until its application reaches the
+        // approval gate. Neither activates the account.
         if ($decision->outcome === KycStatus::Approved
+            && ! $this->activation->activationPaid($account)
             && $account->canTransitionTo(AccountStatus::PackageSelectionPending)) {
             $this->changeAccountStatus->handle($account, new AccountStatusChange(
                 to: AccountStatus::PackageSelectionPending,

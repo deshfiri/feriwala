@@ -20,7 +20,7 @@ return [
     'summary' => [
         'kyc_pending' => 'KYC pending',
         'payment_pending' => 'Payment pending',
-        'approval_pending' => 'Approval pending',
+        'approval_pending' => 'Pending verification',
         'active' => 'Active',
         'suspended' => 'Suspended',
         'expired' => 'Expired',

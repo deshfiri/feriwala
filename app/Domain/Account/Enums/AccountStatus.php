@@ -13,10 +13,12 @@ use App\Support\Status\HasTranslatedLabel;
  * and no conversion between them. Everything that looks like a "type" is either
  * a status here, a package entitlement, or a role.
  *
- * The transition map encodes the activation funnel of §5.1 — register, verify,
- * submit KYC, choose a package, pay, be verified, be approved — plus the ways an
- * active account can be restricted and restored. Anything not listed is refused,
- * which is what stops an account reaching Active without KYC approval.
+ * The transition map encodes the activation funnel — since D39: register,
+ * verify, choose a package, pay, submit KYC, be verified, be approved — plus the
+ * ways an active account can be restricted and restored. The earlier order (KYC
+ * before the package) is kept alongside, so an account already part-way through
+ * it finishes where it is. Anything not listed is refused, which is what stops an
+ * account reaching Active without KYC approval.
  */
 enum AccountStatus: string implements TransitionableState
 {
@@ -60,20 +62,24 @@ enum AccountStatus: string implements TransitionableState
     public function transitionsTo(): array
     {
         return match ($this) {
+            // Verified → package selection (D39); → KYC is the earlier order.
             self::Registered => [
                 self::MobileVerificationPending,
                 self::EmailVerificationPending,
+                self::PackageSelectionPending,
                 self::KycPending,
                 self::Closed,
             ],
 
             self::MobileVerificationPending => [
                 self::EmailVerificationPending,
+                self::PackageSelectionPending,
                 self::KycPending,
                 self::Closed,
             ],
 
             self::EmailVerificationPending => [
+                self::PackageSelectionPending,
                 self::KycPending,
                 self::Closed,
             ],
@@ -111,7 +117,11 @@ enum AccountStatus: string implements TransitionableState
                 self::Closed,
             ],
 
+            // Paid first (D39): approved KYC is the last requirement, so the
+            // account goes to the approval gate. Not yet paid (the earlier
+            // order): on to package selection.
             self::KycApproved => [
+                self::ApprovalPending,
                 self::PackageSelectionPending,
                 self::Closed,
             ],
@@ -129,16 +139,26 @@ enum AccountStatus: string implements TransitionableState
             ],
 
             // A failed or cancelled payment returns to payment, not forward.
+            // A verified one goes on to KYC (D39), or — when KYC was already
+            // approved under the earlier order — to the approval gate.
             self::PaymentVerificationPending => [
+                self::KycPending,
+                // Paid with KYC already approved, application still to come (D39).
+                self::KycApproved,
                 self::ApprovalPending,
                 self::PaymentPending,
                 self::Closed,
             ],
 
             // Activation needs payment verified, KYC approved, and administrative
-            // approval (§5.1, §44). This is the only route into Active.
+            // approval (§5.1, §44, D39: always a person). This is the only route
+            // into Active. Partners see this status as "Pending verification".
+            // A reviewer asking for part of the application to be corrected
+            // (D39) returns it to the partner: back to KycApproved, where the
+            // application is edited and resubmitted.
             self::ApprovalPending => [
                 self::Active,
+                self::KycApproved,
                 self::KycResubmissionRequired,
                 self::Suspended,
                 self::Closed,

@@ -21,6 +21,8 @@ return [
             'already_booked' => 'This order is already booked with Steadfast.',
             'order_not_ready' => 'This order cannot be booked with a courier in its current state.',
             'not_uncertain' => 'Only a booking with an unknown outcome can be settled this way.',
+            'multiple_warehouses' => 'This order requires fulfilment from multiple warehouses and cannot use a single parcel.',
+            'warehouse_undetermined' => 'Fulfilment warehouse could not be determined',
         ],
         'uncertain_message' => 'Steadfast did not give a clear answer, so it is not known whether the parcel was booked. It has not been booked again.',
         'not_found_message' => 'Steadfast has no parcel for this order, so booking may be tried again.',

@@ -691,7 +691,11 @@ cannot produce a 100-times overcharge or undercharge. The migration strategy is 
 [05-storefront-api-contract.md](05-storefront-api-contract.md) §4.1 rather than the contract being
 silently changed.
 
-## D27 — Activation is automatic once its conditions are met (2026-09-27)
+## D27 — Activation is automatic once its conditions are met (2026-09-27) — **SUPERSEDED 2026-11-25 by D39**
+
+> **Superseded by [D39](#d39--partner-onboarding-v2-pay-first-then-kyc-details-and-business-every-account-reviewed-2026-11-25).**
+> Every new account is now reviewed and approved by a person. The holds, the requirement re-check
+> and the idempotency described below still stand; only the automatic activation itself is gone.
 
 **Instructed directly by the Project Owner on 2026-09-27**, as a beta-critical correction. Amends
 [D22](#d22--activation-review-outcomes-and-readiness-2026-09-03). Does not touch any
@@ -1858,3 +1862,116 @@ contract is frozen at v1), so none is sent.
 Seven focused commits: decision, schema and permissions; calculation and preview;
 customer/address/note revision; lines, quantities and stock; payment, wallet, payable and invoice
 adjustments; courier and Replace order; admin UI, translations, notifications and browser checks.
+
+## D39 — Partner onboarding v2: pay first, then KYC, details and business; every account reviewed (2026-11-25) — **supersedes D27; amends D9 and D22**
+
+**Instructed by the Project Owner on 2026-11-25**, with the specification _Banij — Registration &
+onboarding_ (product & engineering specification, two pages), and these answers:
+
+- **Every new account is reviewed by a person.** After the partner submits their application it
+  waits in Pending Verification until an agent approves it, asks for a correction or suspends it.
+  D27's automatic activation no longer activates anyone.
+- **No live domain availability check.** The partner gives a preferred name and picks one of the
+  extensions the admin has enabled; staff check availability during review and ask for another name
+  when it is taken. Nothing is ever bought automatically (D9 stands: provisioning stays manual).
+- **Mobile numbers from any country.** A country-code picker; numbers are kept in E.164 and
+  verified by SMS through the existing provider. Whether a foreign SMS arrives depends on that
+  provider.
+
+### The order
+
+1. **Register** — legal full name as shown on the ID, country of residence, mobile with country
+   code, email, password, terms and privacy accepted. Email and mobile verified through the
+   existing authentication (mobile per `account.mobile_verification_required`).
+2. **Package** — the active packages, with price, included services and terms.
+3. **Payment** — the selected package, discount, total and methods; confirmed server-side; invoice
+   issued; retried without a duplicate purchase (the existing idempotent checkout).
+4. **KYC** — issuing country and document type, uploaded through the existing KYC batches (D30).
+   Selfie only when the admin enables it, globally or for the one partner.
+5. **Personal details** — name, mobile, email and country filled in from registration; mobile
+   changeable with re-verification; nationality, date of birth and residential address (the
+   existing structured BD location data, which is JSON, not CSV).
+6. **Business setup** — business or shop name (required), preferred domain (required: a name and an
+   admin-enabled extension), business mobile and email (optional, defaulting to the personal ones),
+   business address (optional, structured).
+7. **Submit application** — a review of everything above; the account is then **Pending
+   Verification** (the `ApprovalPending` status, relabelled), and the partner sees their status and
+   invoice while they wait, with a 24–48 hour estimate.
+8. **Verification** — an agent reviews payment, KYC, personal and business details and the domain,
+   contacts the partner, and approves, requests a correction (per section, with a reason the
+   partner sees) or suspends. Approval opens the dashboard; website setup stays separate.
+
+### How the existing machinery carries it
+
+- **Statuses stay the 22 of §5.3.** The transition map gains the new order — verification →
+  package selection, payment verified → KYC, KYC approved → approval — and keeps the old one, so an
+  account already part-way through on the old order finishes where it is rather than being
+  stranded.
+- **The KYC review is unchanged.** KYC is still approved, rejected or returned by the KYC
+  reviewers. The partner may fill in personal details and business setup, and submit, while their
+  KYC is being reviewed.
+- **Submitting is a recorded fact** (`business_accounts.application_submitted_at`), not a status:
+  the account reaches `ApprovalPending` only once KYC is approved, payment settled, the owner
+  verified, personal details and business setup complete **and** the application submitted.
+  Accounts already at `ApprovalPending` under the old order are treated as submitted.
+- **Activation is only ever manual.** `ActivateAccount` is unchanged; nothing calls it without an
+  approver. A correction request clears `application_submitted_at`, says what needs fixing and
+  notifies the partner; they resubmit.
+- **The dashboard stays closed until approval** (`business.activated`, `mobile.activated`).
+
+### Not changed
+
+D22's three reviewer outcomes, the activation requirements re-checked under a row lock, the
+idempotent checkout, the KYC batch templates, D9's manual domain provisioning, and the 22 statuses.
+
+## D40 — Partner Storefront profit: both account types, FIFO cost, credited 24 hours after delivery (2026-11-25) 🔒 — **amends D34 and D36's settlement timing**
+
+**Approved by the owner on 2026-11-25**, after a report showing Storefront profit was not reaching
+Partners' wallets: website orders never recorded the placing account's type (so every one read as
+Conditional and the COD-collection control was hidden), no COD collection fact could be recorded
+for them, and Conditional/Partner-stock lines had no settlement at all.
+
+### The rule
+
+- **Both kinds of Partner earn Storefront profit.**
+  - **Non-Conditional, Banij central stock:** net selling amount − the platform/suggested price
+    frozen on the line at placement (`platform_retained_amount`, D34).
+  - **Partner-owned stock (Conditional, or a Non-Conditional Partner's own units):** net selling
+    amount − the exact acquisition cost of the units sold, **first in, first out**.
+- **Net** means after the line's discount (an order discount is already shared across lines,
+  exactly, when the order is priced) and **excluding tax**; delivery, delivery tax, gateway and
+  courier charges are never part of it. A purchase discount reduces acquisition cost the same way.
+- **Credited as WITHDRAWABLE exactly 24 hours after the authoritative Delivered time**
+  (`order_delivery_status_history.changed_at`), and only once the money is collected: COD
+  confirmed by staff (for the whole order, once), or Banij's gateway settled for the order total.
+  A delivered COD order stays "awaiting collection" until that fact exists.
+- **One credit per order**, `SalesCredit` under the key `partner-storefront-profit:{order}`,
+  posted by a minute sweep. The earlier per-line settlement still records each line's facts but
+  never credits a Storefront line.
+- **Partner-owned gateway (D36):** the margin is shown for reporting and never credited; Banij's
+  receivable is collected under D36.
+- **Blocked** while a return, damage case or refund is open or the order is cancelled; a partial
+  return recalculates before release. **After release**, what the returned units earned is taken
+  back by a compensating debit from withdrawable money; what the wallet cannot cover is recorded
+  as owed and taken when it can — never a negative balance.
+- **Below zero, or a cost that cannot be proven** (sold before cost lots existed and bought at
+  more than one price) → staff review, no debit. **Exactly zero** → no ledger entry.
+- **Historical orders:** a read-only audit (`storefront-profit:audit`) classifies them;
+  `--apply` records the classification but credits nothing — due profits are credited by the
+  sweep, ambiguous ones never automatically. Finance resolves an unproven cost by choosing the
+  purchase lots and quantities, with a reason, a reference, a confirmed password and two-factor;
+  the decision is append-only and the credit follows the normal hold and key.
+
+### The account type
+
+`PlaceWebsiteOrder` freezes the placing account's type on the order. Existing website orders are
+corrected only from the frozen `account_type_at_placement` on their platform receivable — never
+from the account's type today.
+
+### FIFO cost lots
+
+Every paid wholesale purchase line is an immutable cost lot (net cost excluding tax, purchased
+quantity, remaining quantity, purchase time). Holds take the oldest lots first and record each lot
+and quantity; releases and returns go back to the same lots; every change is an append-only,
+uniquely keyed movement, so nothing is taken or restored twice. The lots always hold exactly the
+Partner's `available` units.

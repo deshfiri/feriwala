@@ -55,6 +55,7 @@ class AdvanceOrderDeliveryStatus
         protected SynchronizeSupplierPayablesWithDelivery $supplierPayables,
         protected SynchronizeDeliverySuccessFeesWithDelivery $deliverySuccessFees,
         protected SynchronizeOrderProceedsWithDelivery $orderProceeds,
+        protected SettleStorefrontProfit $storefrontProfit,
     ) {}
 
     public function handle(
@@ -96,6 +97,10 @@ class AdvanceOrderDeliveryStatus
             $this->supplierPayables->handle($locked, $to, $reason);
             $this->deliverySuccessFees->handle($locked, $to);
             $this->orderProceeds->handle($locked, $to);
+
+            // The Partner's Storefront profit reads Delivered from the history
+            // row just written; brought up to date once this commits.
+            $this->storefrontProfit->syncAfterCommit($locked);
 
             $this->audit->handle(new AuditEntry(
                 action: 'order.delivery_status.advanced',

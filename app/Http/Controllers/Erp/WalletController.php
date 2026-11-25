@@ -4,12 +4,14 @@ namespace App\Http\Controllers\Erp;
 
 use App\Concerns\ResolvesBusinessAccount;
 use App\Domain\Account\Models\BusinessAccount;
+use App\Domain\Order\Queries\StorefrontProfitSummary;
 use App\Domain\Wallet\Actions\ExportWalletStatement;
 use App\Domain\Wallet\Models\Wallet;
 use App\Domain\Wallet\Models\WalletRestriction;
 use App\Domain\Wallet\Models\WalletTransaction;
 use App\Domain\Wallet\Queries\WalletStatement;
 use App\Http\Controllers\Controller;
+use App\Support\Money\Currency;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -48,6 +50,10 @@ class WalletController extends Controller
 
         return Inertia::render('wallet/show', [
             'balances' => $wallet->toBalances(),
+
+            // Storefront profit on its way to the withdrawable balance: not
+            // money in the wallet yet, so shown beside it, never added to it.
+            'pending_storefront_profit' => app(StorefrontProfitSummary::class)->pendingFor($account, Currency::from($wallet->currency_code)),
 
             // Never with the internal note. The account holder is the person a
             // staff note is *about* (§23.2, §7.3).

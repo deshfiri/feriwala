@@ -15,6 +15,7 @@ use App\Http\Responses\RegisterResponse;
 use App\Http\Responses\TwoFactorLoginResponse;
 use App\Http\Responses\VerifyEmailResponse;
 use App\Support\Localization\Countries;
+use App\Support\Localization\InternationalMobile;
 use App\Support\Security\LoginThrottle;
 use App\Support\Security\PasswordPolicy;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -132,6 +133,8 @@ class FortifyServiceProvider extends ServiceProvider
             'countries' => app(Countries::class)->options(),
             'defaultCountry' => app(Countries::class)->default(),
             'genders' => Gender::options(),
+            // A mobile from any country (D39), as a calling code plus the number.
+            'diallingCodes' => app(InternationalMobile::class)->options(),
 
             // Prefilled from a referral link so the code is not retyped, and so
             // a referrer who shared a link is actually credited (§25.1).

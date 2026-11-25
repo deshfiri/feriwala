@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\Mobile\V1\MobileController;
 use App\Http\Requests\Mobile\Account\RegisterRequest;
 use App\Http\Resources\Mobile\Auth\UserResource;
 use App\Support\Localization\Countries;
+use App\Support\Localization\InternationalMobile;
 use App\Support\Security\PasswordPolicy;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\JsonResponse;
@@ -53,6 +54,8 @@ class RegisterController extends MobileController
         return new JsonResponse([
             'countries' => $countries->options(),
             'default_country' => $countries->default(),
+            // Every country's calling code, for the mobile picker (D39).
+            'dialling_codes' => app(InternationalMobile::class)->options(),
             'genders' => Gender::options(),
             'password_rules' => PasswordPolicy::hint(),
             'referral_code' => $request->string('ref')->toString() ?: null,

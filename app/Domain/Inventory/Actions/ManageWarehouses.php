@@ -28,7 +28,7 @@ class ManageWarehouses
     ) {}
 
     /**
-     * @param  array{code: string, name: string, address?: string|null, priority?: int|null, is_active?: bool|null}  $attributes
+     * @param  array{code: string, name: string, address?: string|null, priority?: int|null, is_active?: bool|null, courier_contact_name?: string|null, courier_phone?: string|null, return_address_line?: string|null, return_area?: string|null, return_district?: string|null, return_postcode?: string|null, usable_for_courier_labels?: bool|null}  $attributes
      *
      * @throws AuthorizationException
      */
@@ -50,6 +50,7 @@ class ManageWarehouses
                 'priority' => (int) ($attributes['priority'] ?? 0),
                 'is_active' => $active,
                 'is_default' => $isFirst && $active,
+                ...$this->courierDetails($attributes, null),
             ]);
 
             $this->record($actor, 'inventory.warehouse_created', $warehouse, null, $this->snapshot($warehouse));
@@ -59,7 +60,7 @@ class ManageWarehouses
     }
 
     /**
-     * @param  array{name: string, address?: string|null, priority?: int|null, is_active?: bool|null}  $attributes
+     * @param  array{name: string, address?: string|null, priority?: int|null, is_active?: bool|null, courier_contact_name?: string|null, courier_phone?: string|null, return_address_line?: string|null, return_area?: string|null, return_district?: string|null, return_postcode?: string|null, usable_for_courier_labels?: bool|null}  $attributes
      *
      * @throws AuthorizationException
      * @throws InventoryRefused when the default would be switched off
@@ -84,6 +85,7 @@ class ManageWarehouses
                 'address' => $attributes['address'] ?? null,
                 'priority' => (int) ($attributes['priority'] ?? $locked->priority),
                 'is_active' => $active,
+                ...$this->courierDetails($attributes, $locked),
             ])->save();
 
             $this->record($actor, 'inventory.warehouse_updated', $locked, $before, $this->snapshot($locked));
@@ -150,7 +152,40 @@ class ManageWarehouses
      */
     protected function snapshot(Warehouse $warehouse): array
     {
-        return $warehouse->only(['code', 'name', 'address', 'priority', 'is_active', 'is_default']);
+        return $warehouse->only([
+            'code', 'name', 'address', 'priority', 'is_active', 'is_default',
+            'courier_contact_name', 'courier_phone', 'return_address_line', 'return_area',
+            'return_district', 'return_postcode', 'usable_for_courier_labels',
+        ]);
+    }
+
+    /**
+     * The courier contact and return address a shipping label freezes, and the
+     * switch approving them for labels. Fields left out keep their value; the
+     * database refuses the switch on while a required part is blank.
+     * Labels already issued keep the details they froze.
+     *
+     * @param  array<string, mixed>  $attributes
+     * @return array<string, mixed>
+     */
+    protected function courierDetails(array $attributes, ?Warehouse $current): array
+    {
+        $details = [];
+
+        foreach (['courier_contact_name', 'courier_phone', 'return_address_line', 'return_area', 'return_district', 'return_postcode'] as $field) {
+            if (array_key_exists($field, $attributes)) {
+                $value = is_string($attributes[$field]) ? trim($attributes[$field]) : null;
+                $details[$field] = $value === '' ? null : $value;
+            }
+        }
+
+        if (array_key_exists('usable_for_courier_labels', $attributes)) {
+            $details['usable_for_courier_labels'] = (bool) $attributes['usable_for_courier_labels'];
+        } elseif ($current === null) {
+            $details['usable_for_courier_labels'] = false;
+        }
+
+        return $details;
     }
 
     /**

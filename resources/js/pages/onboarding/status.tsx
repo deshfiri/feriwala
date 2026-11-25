@@ -70,8 +70,35 @@ export default function OnboardingStatus({
                     </section>
                 )}
 
+                {/* Submitted and waiting on Banij (D39): what happens next, and the invoice. */}
+                {progress.pending && (
+                    <section className="bg-success-subtle border-success/25 space-y-2 rounded-lg border p-4">
+                        <p className="flex items-center gap-2 text-sm font-semibold">
+                            <CheckCircle2
+                                className="text-success size-4 shrink-0"
+                                aria-hidden="true"
+                            />
+                            {progress.pending.heading}
+                        </p>
+                        <p className="text-ink-2 text-sm">
+                            {progress.pending.body}
+                        </p>
+                        {progress.pending.note && (
+                            <p className="text-muted-foreground text-xs">
+                                {progress.pending.note}
+                            </p>
+                        )}
+                        <Link
+                            href={progress.pending.invoice_url}
+                            className="text-foreground inline-block text-sm underline underline-offset-4"
+                        >
+                            {t('onboarding.pending.invoice')}
+                        </Link>
+                    </section>
+                )}
+
                 <section className="bg-card border-border flex flex-wrap items-center gap-4 rounded-xl border p-5 shadow-sm">
-                    <div className="min-w-0 flex-1 space-y-1">
+                    <div className="min-w-48 flex-1 space-y-1">
                         <p className="text-muted-foreground text-xs font-medium">
                             {t('onboarding.status.current_status')}
                         </p>

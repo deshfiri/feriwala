@@ -6,9 +6,14 @@ use App\Domain\Courier\Actions\ConfigureSteadfast;
 use App\Domain\Courier\Actions\CreateShipmentFromAllocations;
 use App\Domain\Courier\Enums\CourierProviderCode;
 use App\Domain\Courier\Models\Shipment;
+use App\Domain\Inventory\Models\Warehouse;
+use App\Domain\Order\Enums\AllocationSourceType;
+use App\Domain\Order\Enums\AllocationStatus;
 use App\Domain\Order\Enums\OrderSource;
 use App\Domain\Order\Enums\OrderStatus;
 use App\Domain\Order\Models\Order;
+use App\Domain\Order\Models\OrderItem;
+use App\Domain\Order\Models\OrderItemAllocation;
 use App\Domain\Website\Models\Website;
 use App\Domain\Website\Models\WebsiteCustomer;
 use App\Support\Money\Currency;
@@ -20,6 +25,49 @@ use Illuminate\Support\Str;
  * only runs *Test.php. Names are prefixed because Pest's helpers share one
  * global namespace.
  */
+
+/**
+ * Give a Store Order one line held in one Banij warehouse, by an active
+ * warehouse allocation: a parcel is booked only once its stock resolves to
+ * exactly one warehouse.
+ */
+function steadfastFixtureWarehouseLine(Order $order, ?Warehouse $warehouse = null, int $quantity = 2): Order
+{
+    $warehouse ??= Warehouse::create(['code' => 'SF-'.Str::upper(Str::random(5)), 'name' => 'Banij Tejgaon Hub', 'is_active' => true]);
+    $product = websiteTestProduct();
+    $unit = Money::fromDecimal('625.00', Currency::BDT);
+
+    $line = OrderItem::create([
+        'order_id' => $order->id,
+        'line_number' => OrderItem::query()->where('order_id', $order->id)->count() + 1,
+        'product_id' => $product->id,
+        'sku' => $product->sku,
+        'product_name' => $product->name,
+        'quantity' => $quantity,
+        'currency_code' => 'BDT',
+        'unit_price' => $unit,
+        'line_subtotal' => $unit->multipliedBy($quantity),
+        'line_total' => $unit->multipliedBy($quantity),
+        'created_at' => now(),
+    ]);
+
+    OrderItemAllocation::create([
+        'order_id' => $order->id,
+        'order_item_id' => $line->id,
+        'source_type' => AllocationSourceType::Warehouse,
+        'warehouse_id' => $warehouse->id,
+        'quantity' => $quantity,
+        'unit_cost' => Money::fromDecimal('400.00', Currency::BDT),
+        'platform_rate' => Money::fromDecimal('500.00', Currency::BDT),
+        'expected_margin' => Money::fromDecimal(bcmul('100.00', (string) $quantity, 2), Currency::BDT),
+        'currency_code' => 'BDT',
+        'status' => AllocationStatus::Active,
+        'allocated_at' => now(),
+        'idempotency_key' => 'alloc:'.Str::ulid(),
+    ]);
+
+    return $order;
+}
 
 function steadfastFixtureEnable(): void
 {
@@ -44,7 +92,7 @@ function steadfastFixtureOrder(): Order
         'name' => 'Rahim Uddin',
     ]);
 
-    return Order::factory()->create([
+    return steadfastFixtureWarehouseLine(Order::factory()->create([
         'source' => OrderSource::Website,
         'status' => OrderStatus::Shipped,
         'business_account_id' => $account->id,
@@ -55,7 +103,7 @@ function steadfastFixtureOrder(): Order
         'cart_id' => null,
         'customer' => ['name' => 'Rahim Uddin', 'mobile' => '+8801712345678'],
         'shipping_address' => ['line1' => 'House 12, Road 5', 'city' => 'Dhaka'],
-    ]);
+    ]));
 }
 
 /**

@@ -3,6 +3,10 @@ import PageContainer from '@/components/page-container';
 import PageHeader from '@/components/page-header';
 import SectionCard from '@/components/section-card';
 import StatusPill from '@/components/status-pill';
+import {
+    PendingStorefrontProfitCard,
+    type PendingStorefrontProfit,
+} from '@/components/storefront-profit-card';
 import { Button } from '@/components/ui/button';
 import WalletBalanceCards from '@/components/wallet/balance-cards';
 import WalletStatementTable from '@/components/wallet/statement-table';
@@ -25,6 +29,8 @@ type Props = {
     filters: WalletStatementFilters;
     options: WalletFilterOptions;
     restrictions: WalletRestrictionRow[];
+    /** Storefront profit on its way to the withdrawable balance — not in the wallet yet. */
+    pending_storefront_profit?: PendingStorefrontProfit;
 };
 
 /**
@@ -44,6 +50,7 @@ export default function WalletShow({
     filters,
     options,
     restrictions,
+    pending_storefront_profit,
 }: Props) {
     const { t, locale } = useTranslation();
 
@@ -151,6 +158,10 @@ export default function WalletShow({
                 )}
 
                 <WalletBalanceCards balances={balances} />
+
+                <PendingStorefrontProfitCard
+                    pending={pending_storefront_profit}
+                />
 
                 <SectionCard
                     title={t('wallet.statement.title')}

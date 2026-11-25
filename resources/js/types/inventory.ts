@@ -30,6 +30,16 @@ export type WarehouseRow = WarehouseOption & {
     address: string | null;
     priority: number;
     is_default: boolean;
+    /** What a shipping label prints as the sender and return address. */
+    courier_contact_name: string | null;
+    courier_phone: string | null;
+    return_address_line: string | null;
+    return_area: string | null;
+    return_district: string | null;
+    return_postcode: string | null;
+    usable_for_courier_labels: boolean;
+    /** Approved, active and complete: labels may name this warehouse. */
+    ready_for_courier_labels: boolean;
     stock_items_count: number;
 };
 

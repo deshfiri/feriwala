@@ -61,9 +61,10 @@ class VerifyMobile
 
         $next = match ($account->status) {
             AccountStatus::Registered,
+            // Verified: package selection is next (D39).
             AccountStatus::MobileVerificationPending => $user->email_verified_at === null
                 ? AccountStatus::EmailVerificationPending
-                : AccountStatus::KycPending,
+                : AccountStatus::PackageSelectionPending,
 
             default => null,
         };

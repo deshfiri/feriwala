@@ -2,6 +2,7 @@
 
 namespace App\Domain\Kyc\Batch;
 
+use App\Domain\Kyc\Enums\KycSelfieMode;
 use App\Domain\Kyc\KycDocumentStore;
 use App\Domain\Kyc\Models\KycBatchVersion;
 use App\Domain\Kyc\Models\KycDocument;
@@ -35,7 +36,11 @@ final class PartnerKycRound implements KycRound
             return null;
         }
 
-        return KycRoundDefinition::fromVersion(KycBatchVersion::query()->whereKey($versionId)->firstOrFail());
+        return KycRoundDefinition::fromVersion(
+            KycBatchVersion::query()->whereKey($versionId)->firstOrFail(),
+            // The selfie as resolved for this partner (D39); null follows the batch.
+            is_string($this->submission->selfie_mode) ? KycSelfieMode::tryFrom($this->submission->selfie_mode) : null,
+        );
     }
 
     public function audience(): string

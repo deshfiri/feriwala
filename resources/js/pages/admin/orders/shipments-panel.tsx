@@ -4,6 +4,10 @@ import ShipmentController from '@/actions/App/Http/Controllers/Admin/ShipmentCon
 import FormField from '@/components/forms/form-field';
 import SubmitButton from '@/components/forms/submit-button';
 import SectionCard from '@/components/section-card';
+import {
+    StaffShippingLabelPanel,
+    type StaffShippingLabel,
+} from '@/components/shipping-label';
 import StatusPill from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
 import {
@@ -33,6 +37,7 @@ export type OrderShipment = {
     status_label: string;
     status_tone: StatusTone;
     tracking_number: string | null;
+    label: StaffShippingLabel;
 };
 
 export type CourierProviderOption = {
@@ -123,26 +128,31 @@ export default function ShipmentsPanel({
             ) : (
                 <ul className="divide-border divide-y">
                     {shipments.map((shipment) => (
-                        <li
-                            key={shipment.id}
-                            className="flex flex-wrap items-center justify-between gap-2 py-2"
-                        >
-                            <div className="min-w-0">
-                                <Link
-                                    href={ShipmentController.show(shipment.id)}
-                                    className="font-mono text-sm font-medium underline-offset-4 hover:underline"
-                                >
-                                    {shipment.reference}
-                                </Link>
-                                <div className="text-muted-foreground text-xs">
-                                    {shipment.provider}
-                                    {shipment.tracking_number &&
-                                        ` · ${shipment.tracking_number}`}
+                        <li key={shipment.id} className="space-y-3 py-3">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                                <div className="min-w-0">
+                                    <Link
+                                        href={ShipmentController.show(
+                                            shipment.id,
+                                        )}
+                                        className="font-mono text-sm font-medium underline-offset-4 hover:underline"
+                                    >
+                                        {shipment.reference}
+                                    </Link>
+                                    <div className="text-muted-foreground text-xs">
+                                        {shipment.provider}
+                                        {shipment.tracking_number &&
+                                            ` · ${shipment.tracking_number}`}
+                                    </div>
                                 </div>
+                                <StatusPill
+                                    tone={shipment.status_tone}
+                                    label={shipment.status_label}
+                                />
                             </div>
-                            <StatusPill
-                                tone={shipment.status_tone}
-                                label={shipment.status_label}
+                            <StaffShippingLabelPanel
+                                label={shipment.label}
+                                compact
                             />
                         </li>
                     ))}

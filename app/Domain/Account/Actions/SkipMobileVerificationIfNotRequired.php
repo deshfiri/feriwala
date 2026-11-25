@@ -54,9 +54,10 @@ class SkipMobileVerificationIfNotRequired
 
             $next = match ($locked->status) {
                 AccountStatus::Registered,
+                // Verified: package selection is next (D39).
                 AccountStatus::MobileVerificationPending => $owner === null || $owner->email_verified_at === null
                     ? AccountStatus::EmailVerificationPending
-                    : AccountStatus::KycPending,
+                    : AccountStatus::PackageSelectionPending,
 
                 default => null,
             };

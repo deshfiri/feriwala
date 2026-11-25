@@ -2,6 +2,9 @@ import { Form, Head, Link } from '@inertiajs/react';
 import { AlertTriangle, ArrowLeft } from 'lucide-react';
 import { useState } from 'react';
 import OrderController from '@/actions/App/Http/Controllers/Admin/OrderController';
+import AdminStorefrontProfitPanel, {
+    type AdminStorefrontProfit,
+} from '@/components/admin-storefront-profit-panel';
 import InputError from '@/components/input-error';
 import ExchangeOriginNotice from '@/components/cases/exchange-origin';
 import MoneyAmount from '@/components/money-amount';
@@ -71,6 +74,8 @@ export type AdminOrderDetail = {
     status: string;
     status_tone: StatusTone;
     account_type: 'conditional' | 'non_conditional';
+    /** A Storefront order's Partner profit, and whether staff may confirm its COD; null for any other order. */
+    storefront_profit?: AdminStorefrontProfit | null;
     lifecycle: OrderLifecycle;
     account: string;
     placed_by: string | null;
@@ -575,6 +580,13 @@ export default function AdminOrder({
                         ) : (
                             <OrderCustomerCard
                                 customer={order.customer_details}
+                            />
+                        )}
+
+                        {order.storefront_profit && (
+                            <AdminStorefrontProfitPanel
+                                orderId={order.id}
+                                data={order.storefront_profit}
                             />
                         )}
 

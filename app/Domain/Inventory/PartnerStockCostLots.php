@@ -3,13 +3,17 @@
 namespace App\Domain\Inventory;
 
 use App\Domain\Inventory\Data\MovementContext;
+use App\Domain\Inventory\Data\WarehouseEvidence;
 use App\Domain\Inventory\Enums\PartnerStockMovementType;
 use App\Domain\Inventory\Enums\StockBucket;
+use App\Domain\Inventory\Exceptions\InventoryRefused;
 use App\Domain\Inventory\Models\PartnerStockCostLot;
 use App\Domain\Inventory\Models\PartnerStockItem;
 use App\Domain\Inventory\Models\PartnerStockLotMovement;
 use App\Domain\Inventory\Models\PartnerStockMovement;
+use App\Domain\Inventory\Queries\PartnerStockWarehouseEvidence;
 use App\Domain\Order\Models\OrderItem;
+use App\Domain\Order\Models\OrderReturnItem;
 use App\Support\Money\Currency;
 use App\Support\Money\Money;
 use Carbon\CarbonImmutable;
@@ -39,6 +43,11 @@ use Illuminate\Support\Collection;
  */
 class PartnerStockCostLots
 {
+    public function __construct(
+        protected PartnerStockWarehouseEvidence $warehouses,
+        protected PartnerLotWarehouseScope $scope,
+    ) {}
+
     /**
      * Follow one movement of a Partner's stock. Only movements into or out of
      * `available` touch a lot.
@@ -176,6 +185,11 @@ class PartnerStockCostLots
 
         $net = $this->netCostOf($line);
 
+        // The Banij warehouse the purchase was filled from -- its own allocation
+        // or central-stock reservation -- where these units now sit. Left
+        // unknown, for staff, unless exactly one warehouse is proven.
+        $evidence = $this->warehouses->forPurchaseLine($line->id);
+
         $lot = PartnerStockCostLot::query()->firstOrCreate(
             ['source_order_item_id' => $line->id],
             [
@@ -183,6 +197,8 @@ class PartnerStockCostLots
                 'partner_stock_item_id' => $item->id,
                 'product_id' => $item->product_id,
                 'product_variant_id' => $item->product_variant_id,
+                'warehouse_id' => $evidence->warehouse(),
+                'warehouse_evidence' => $evidence->warehouse() === null ? null : $evidence->source,
                 'source_order_id' => $line->order_id,
                 'provenance' => PartnerStockCostLot::PROVENANCE_PURCHASE,
                 'purchased_quantity' => $quantity,
@@ -218,12 +234,22 @@ class PartnerStockCostLots
      * hold fewer (units bought before lots existed and not yet opened), the hold
      * keeps the units it could take and the rest have no lot — their cost is then
      * unproven, which {@see keptCost()} reports rather than guesses.
+     *
+     * Inside a {@see PartnerLotWarehouseScope} -- a Storefront order placed
+     * under the single-parcel model -- only that warehouse's lots are drawn, so
+     * the hold is frozen to one warehouse. If they turn out short (another order
+     * took them meanwhile), the hold is refused and its whole transaction rolls
+     * back: never split across warehouses, and never held without lots, which
+     * would leave the lots holding more than the Partner's available units.
+     *
+     * @throws InventoryRefused when the scoped warehouse's lots cannot cover the hold
      */
     protected function allocate(PartnerStockItem $item, int $reservationId, int $quantity, PartnerStockMovement $movement): void
     {
         $needed = $quantity;
+        $warehouseId = $this->scope->current();
 
-        foreach ($this->openLots($item) as $lot) {
+        foreach ($this->openLots($item, $warehouseId) as $lot) {
             if ($needed === 0) {
                 break;
             }
@@ -237,6 +263,10 @@ class PartnerStockCostLots
             );
 
             $needed -= $take;
+        }
+
+        if ($warehouseId !== null && $needed > 0) {
+            throw InventoryRefused::insufficient(StockBucket::Available, $quantity - $needed, $quantity);
         }
     }
 
@@ -270,11 +300,23 @@ class PartnerStockCostLots
      * Sold units back on the shelf: to the lots the sale took them from, newest
      * first, never more to a lot than the sale took from it. Units of a sale that
      * took nothing from a lot come back with no cost known.
+     *
+     * A lot names where its units physically are, so a return received at a
+     * different Banij warehouse than its lot's does not go back into that lot:
+     * it becomes a lot of its own at the receiving warehouse, whose cost is then
+     * unknown, rather than making the original lot claim units it no longer holds.
      */
     protected function returnToShelf(PartnerStockItem $item, int $orderItemId, int $quantity, MovementContext $context, PartnerStockMovement $movement): void
     {
         $line = OrderItem::query()->find($orderItemId);
         $left = $quantity;
+
+        // Where staff received the returned goods, when a return recorded it.
+        $receivedAt = $line === null ? null : OrderReturnItem::query()
+            ->where('order_item_id', $line->id)
+            ->whereNotNull('warehouse_id')
+            ->latest('id')
+            ->value('warehouse_id');
 
         if ($line?->stock_reservation_id !== null) {
             $alreadyBack = PartnerStockLotMovement::query()
@@ -293,7 +335,9 @@ class PartnerStockCostLots
                 $back = (int) ($alreadyBack[$lotId] ?? 0);
                 $give = min($left, $allocation['quantity'] - $back);
 
-                if ($give <= 0) {
+                $lotWarehouse = $allocation['lot']->getAttribute('warehouse_id');
+
+                if ($give <= 0 || ($receivedAt !== null && $lotWarehouse !== null && (int) $lotWarehouse !== (int) $receivedAt)) {
                     continue;
                 }
 
@@ -313,15 +357,16 @@ class PartnerStockCostLots
         }
 
         if ($left > 0) {
-            $this->adjustIn($item, $left, $context, $movement);
+            $this->adjustIn($item, $left, $context, $movement, $receivedAt === null ? null : (int) $receivedAt);
         }
     }
 
     /**
      * Units entering `available` with no purchase behind them: a lot of their
-     * own, whose cost is unknown.
+     * own, whose cost is unknown -- held at `$receivedAt` when staff recorded the
+     * warehouse that received them, otherwise unproven.
      */
-    protected function adjustIn(PartnerStockItem $item, int $quantity, MovementContext $context, PartnerStockMovement $movement): void
+    protected function adjustIn(PartnerStockItem $item, int $quantity, MovementContext $context, PartnerStockMovement $movement, ?int $receivedAt = null): void
     {
         $key = 'lot-adjusted-in:'.$movement->id;
 
@@ -334,6 +379,8 @@ class PartnerStockCostLots
             'partner_stock_item_id' => $item->id,
             'product_id' => $item->product_id,
             'product_variant_id' => $item->product_variant_id,
+            'warehouse_id' => $receivedAt,
+            'warehouse_evidence' => $receivedAt === null ? null : WarehouseEvidence::SOURCE_RETURN_RECEIPT,
             'provenance' => PartnerStockCostLot::PROVENANCE_ADJUSTMENT,
             'purchased_quantity' => $quantity,
             'remaining_quantity' => $quantity,
@@ -369,14 +416,16 @@ class PartnerStockCostLots
     }
 
     /**
-     * The lots of one stock row that still hold units, oldest first, locked.
+     * The lots of one stock row that still hold units, oldest first, locked --
+     * only one warehouse's when `$warehouseId` is given.
      *
      * @return Collection<int, PartnerStockCostLot>
      */
-    protected function openLots(PartnerStockItem $item): Collection
+    protected function openLots(PartnerStockItem $item, ?int $warehouseId = null): Collection
     {
         return PartnerStockCostLot::query()
             ->where('partner_stock_item_id', $item->id)
+            ->when($warehouseId !== null, fn ($query) => $query->where('warehouse_id', $warehouseId))
             ->where('remaining_quantity', '>', 0)
             ->orderBy('purchased_at')
             ->orderBy('id')

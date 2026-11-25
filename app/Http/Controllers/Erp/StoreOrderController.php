@@ -7,6 +7,7 @@ use App\Domain\Account\Exceptions\ResendTooSoon;
 use App\Domain\Billing\Exceptions\DeliveryChargeRefused;
 use App\Domain\Cases\Queries\CaseLinks;
 use App\Domain\Cases\Queries\PartnerCasePayload;
+use App\Domain\Courier\Queries\ShipmentLabelPanel;
 use App\Domain\Courier\Queries\StoreOrderCourierPanel;
 use App\Domain\Damage\Queries\DamageReportEligibility;
 use App\Domain\Location\Enums\BdLocationType;
@@ -26,6 +27,7 @@ use App\Domain\Order\Models\Order;
 use App\Domain\Order\Queries\CreatableStorefronts;
 use App\Domain\Order\Queries\OrderCustomerDetails;
 use App\Domain\Order\Queries\ReturnEligibility;
+use App\Domain\Order\Queries\StorefrontProfitSummary;
 use App\Domain\Order\Queries\StoreOrderIndex;
 use App\Domain\Order\Queries\StoreOrderTimeline;
 use App\Domain\Website\Models\Website;
@@ -130,9 +132,13 @@ class StoreOrderController extends Controller
             'timeline' => ['next_action' => null] + $timeline,
             // Customer-safe: the courier, its reference and Banij's own status.
             'courier' => $this->courier->forPartner($record),
+            // Each parcel's printable label, through the Partner's own print page.
+            'shipping_labels' => app(ShipmentLabelPanel::class)->forPartner($record),
             // Every return and exchange asked for on this order (D35).
             'cases' => $this->cases->forOrder($record),
             'exchange_origin' => $this->links->exchangeOriginForPartner($record),
+            // The Partner's profit on this order: how much, and when it is credited.
+            'profit' => app(StorefrontProfitSummary::class)->forOrder($record),
             'can' => [
                 'advance' => false,
                 'cancel' => StoreOrderStep::for($record->status) === StoreOrderStep::Pending && ! $timeline['cancelled'],

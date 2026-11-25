@@ -77,7 +77,7 @@ describe('advancing an account the requirement is off for', function () {
         expect($user->businessAccount->fresh()->status)->toBe(AccountStatus::EmailVerificationPending);
     });
 
-    it('moves straight to KYC when email is already confirmed', function () {
+    it('moves straight to package selection when email is already confirmed (D39)', function () {
         $admin = testPlatformStaff(PlatformRole::Admin);
         app(ConfigureMobileVerificationRequirement::class)->handle($admin, false);
 
@@ -85,7 +85,7 @@ describe('advancing an account the requirement is off for', function () {
 
         app(SkipMobileVerificationIfNotRequired::class)->handle($user->businessAccount);
 
-        expect($user->businessAccount->fresh()->status)->toBe(AccountStatus::KycPending);
+        expect($user->businessAccount->fresh()->status)->toBe(AccountStatus::PackageSelectionPending);
     });
 
     it('does not drag a further-along account backwards', function () {
@@ -119,7 +119,7 @@ describe('the mobile verification screen with the requirement off', function () 
 
         $this->actingAs($user)->get(route('verification.mobile'));
 
-        expect($user->businessAccount->fresh()->status)->toBe(AccountStatus::KycPending)
+        expect($user->businessAccount->fresh()->status)->toBe(AccountStatus::PackageSelectionPending)
             ->and(app(VerificationCodes::class)->isPending(SendMobileVerificationCode::PURPOSE, (string) $user->mobile))
             ->toBeFalse();
     });

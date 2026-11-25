@@ -7,6 +7,7 @@ use App\Domain\Audit\Actions\RecordAuditLog;
 use App\Domain\Audit\Data\AuditEntry;
 use App\Domain\Billing\Models\Payment;
 use App\Domain\Order\Enums\CollectionChannel;
+use App\Domain\Order\Enums\OrderSource;
 use App\Domain\Order\Models\OrderItem;
 use App\Domain\Order\Models\OrderProceedsSettlement;
 use App\Domain\Supplier\Actions\EvaluateSupplierPayableEligibility;
@@ -258,6 +259,13 @@ class EvaluateOrderProceedsEligibility
         ));
 
         if ($shortfall || ! $earning->isPositive()) {
+            return;
+        }
+
+        // A Storefront order's profit is credited once, for the whole order,
+        // after its 24-hour hold ({@see SettleStorefrontProfit}). This row keeps
+        // its facts and figures; it never credits a Storefront line itself.
+        if ($locked->order->source === OrderSource::Website) {
             return;
         }
 

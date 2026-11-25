@@ -117,6 +117,18 @@ export default function AdminWarehouses({ warehouses, can }: Props) {
                                                     : 'inventory.warehouses.inactive',
                                             )}
                                         />
+                                        <StatusPill
+                                            tone={
+                                                warehouse.ready_for_courier_labels
+                                                    ? 'success'
+                                                    : 'warning'
+                                            }
+                                            label={t(
+                                                warehouse.ready_for_courier_labels
+                                                    ? 'inventory.warehouses.courier.ready'
+                                                    : 'inventory.warehouses.courier.not_ready',
+                                            )}
+                                        />
                                     </div>
 
                                     {warehouse.address && (

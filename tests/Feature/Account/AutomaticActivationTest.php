@@ -2,7 +2,7 @@
 
 use App\Domain\Access\Enums\PlatformRole;
 use App\Domain\Account\Actions\ActivateAccount;
-use App\Domain\Account\Actions\ActivateAccountAutomatically;
+use App\Domain\Account\Actions\AdvanceOnboarding;
 use App\Domain\Account\Actions\HoldAccountActivation;
 use App\Domain\Account\Enums\AccountStatus;
 use App\Domain\Account\Models\BusinessAccount;
@@ -26,18 +26,26 @@ use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Notification;
 
+/*
+ * Activation is always a person's decision (D39, superseding D27).
+ *
+ * A settled payment and an approved KYC move an account along onboarding and,
+ * once its application is submitted, to the approval gate — never past it. The
+ * file keeps its name from D27; what it asserts is the opposite of what it did.
+ */
+
 beforeEach(function () {
     Notification::fake();
     $this->seed(RolesAndPermissionsSeeder::class);
 });
 
-/** Runs the automatic path the way a settled payment does. */
+/** What a settled payment or a KYC decision runs. */
 function autoActivate(BusinessAccount $account, string $trigger = 'Activation payment settled.'): bool
 {
-    return app(ActivateAccountAutomatically::class)->handle($account, $trigger);
+    return app(AdvanceOnboarding::class)->handle($account, $trigger);
 }
 
-/** An account waiting only on its activation payment. */
+/** An account whose application is submitted and KYC approved, waiting only on its activation payment. */
 function autoActivationApplicantAwaitingPayment(): BusinessAccount
 {
     $account = testBusinessAccount(AccountStatus::PaymentVerificationPending);
@@ -48,6 +56,8 @@ function autoActivationApplicantAwaitingPayment(): BusinessAccount
         'round' => 1,
         'reviewed_at' => now(),
     ]);
+
+    $account->forceFill(['application_submitted_at' => now()])->save();
 
     return $account;
 }
@@ -64,180 +74,98 @@ function autoActivationSettlePayment(BusinessAccount $account, PaymentStatus $st
     ]);
 }
 
-describe('the normal path', function () {
-    it('activates the account with no administrator, once every condition is met', function () {
+describe('the platform never activates on its own', function () {
+    it('brings a ready account to the approval gate and stops there', function () {
         $account = testAccountReadyForActivation();
-
-        expect($account->status)->toBe(AccountStatus::ApprovalPending);
 
         expect(autoActivate($account))->toBeTrue()
-            ->and($account->fresh()->status)->toBe(AccountStatus::Active);
+            ->and($account->fresh()->status)->toBe(AccountStatus::ApprovalPending)
+            ->and($account->fresh()->approval_pending_at)->not->toBeNull()
+            ->and(Wallet::query()->where('business_account_id', $account->id)->count())->toBe(0);
+
+        Notification::assertNotSentTo($account->owner, AccountActivated::class);
     });
 
-    it('records the activation as the platform\'s own, naming no reviewer who never looked', function () {
+    it('activates only when a named reviewer approves', function () {
         $account = testAccountReadyForActivation();
-        autoActivate($account);
+        $reviewer = testPlatformStaff(PlatformRole::Admin);
 
-        $entry = AuditLog::query()
-            ->where('action', 'account.activated')
-            ->where('auditable_id', $account->id)
-            ->sole();
+        app(ActivateAccount::class)->handle($account, $reviewer->id, 'Payment, KYC, details and domain checked.');
 
-        expect($entry->actor_id)->toBeNull()
-            ->and($entry->actor_type)->toBe('system')
-            ->and($entry->after['automatic'])->toBeTrue();
+        $entry = AuditLog::query()->where('action', 'account.activated')->where('auditable_id', $account->id)->sole();
+
+        expect($account->fresh()->status)->toBe(AccountStatus::Active)
+            ->and($entry->actor_id)->toBe($reviewer->id)
+            ->and($entry->after['automatic'])->toBeFalse()
+            ->and(Wallet::query()->where('business_account_id', $account->id)->count())->toBe(1);
     });
 
-    it('gives the account everything a manual activation would', function () {
+    it('keeps an account out of the gate until its application is submitted', function () {
         $account = testAccountReadyForActivation();
-        autoActivate($account);
+        $account->forceFill(['application_submitted_at' => null])->save();
 
-        // The same ActivateAccount transaction, so §23's "every Active Account
-        // has a Wallet" holds on this path too.
-        expect(Wallet::query()->where('business_account_id', $account->id)->count())->toBe(1)
+        expect(autoActivate($account))->toBeFalse()
             ->and($account->fresh()->approval_pending_at)->toBeNull();
-
-        Notification::assertSentTo($account->owner, AccountActivated::class);
     });
 
-    it('does nothing while a requirement is still outstanding', function () {
+    it('does nothing while the payment is still outstanding', function () {
         $account = autoActivationApplicantAwaitingPayment();
 
         expect(autoActivate($account))->toBeFalse()
             ->and($account->fresh()->status)->toBe(AccountStatus::PaymentVerificationPending);
     });
 
-    it('refuses a payment that has not actually settled', function () {
+    it('refuses a payment that has not actually settled, or is under reconciliation', function (PaymentStatus $status) {
         $account = autoActivationApplicantAwaitingPayment();
-        autoActivationSettlePayment($account, PaymentStatus::Pending);
+        autoActivationSettlePayment($account, $status);
 
         expect(autoActivate($account))->toBeFalse()
-            ->and($account->fresh()->status)->not->toBe(AccountStatus::Active);
-    });
-
-    it('refuses a payment still under reconciliation', function () {
-        // Money the platform cannot yet account for is not money received.
-        $account = autoActivationApplicantAwaitingPayment();
-        autoActivationSettlePayment($account, PaymentStatus::ReconciliationRequired);
-
-        expect(autoActivate($account))->toBeFalse()
-            ->and($account->fresh()->status)->not->toBe(AccountStatus::Active);
-    });
+            ->and($account->fresh()->status)->toBe(AccountStatus::PaymentVerificationPending);
+    })->with([
+        'pending' => [PaymentStatus::Pending],
+        'under reconciliation' => [PaymentStatus::ReconciliationRequired],
+    ]);
 
     it('takes an account back out of the queue when a requirement is reversed', function () {
         $account = testAccountReadyForActivation();
 
-        Payment::query()->where('business_account_id', $account->id)
-            ->update(['status' => PaymentStatus::Refunded]);
+        Payment::query()->where('business_account_id', $account->id)->update(['status' => PaymentStatus::Refunded]);
 
         expect(autoActivate($account))->toBeFalse()
-            ->and($account->fresh()->status)->not->toBe(AccountStatus::Active)
             ->and($account->fresh()->approval_pending_at)->toBeNull();
     });
-});
 
-describe('arriving more than once', function () {
-    it('activates exactly once however many times it is called', function () {
-        // One settlement is announced by the IPN, the browser returning and the
-        // reconciliation sweep. All three land here.
-        $account = testAccountReadyForActivation();
+    it('arrives at the gate once however many times it is triggered', function () {
+        $account = testBusinessAccount(AccountStatus::PaymentVerificationPending);
+        KycSubmission::create(['business_account_id' => $account->id, 'status' => KycStatus::Approved, 'round' => 1, 'reviewed_at' => now()]);
+        autoActivationSettlePayment($account);
+        $account->forceFill(['application_submitted_at' => now()])->save();
 
-        expect(autoActivate($account))->toBeTrue()
-            ->and(autoActivate($account))->toBeTrue()
-            ->and(autoActivate($account))->toBeTrue();
+        autoActivate($account);
+        autoActivate($account);
+        autoActivate($account);
 
-        expect($account->fresh()->status)->toBe(AccountStatus::Active)
-            ->and($account->statusHistory()->where('to_status', AccountStatus::Active)->count())->toBe(1)
-            ->and(AuditLog::query()->where('action', 'account.activated')
-                ->where('auditable_id', $account->id)->count())->toBe(1)
-            ->and(Wallet::query()->where('business_account_id', $account->id)->count())->toBe(1);
-    });
-
-    it('reports an already-active account as active rather than failing', function () {
-        $account = testAccountReadyForActivation();
-        $approver = testPlatformStaff(PlatformRole::Admin);
-
-        app(ActivateAccount::class)->handle($account, $approver->id);
-
-        // A settlement callback arriving after a reviewer got there by hand.
-        expect(autoActivate($account->refresh()))->toBeTrue()
-            ->and($account->statusHistory()->where('to_status', AccountStatus::Active)->count())->toBe(1);
+        expect($account->fresh()->status)->toBe(AccountStatus::ApprovalPending)
+            ->and($account->statusHistory()->where('to_status', AccountStatus::ApprovalPending)->count())->toBe(1);
     });
 });
 
-describe('an account held for manual review', function () {
-    beforeEach(function () {
-        $this->staff = testPlatformStaff(PlatformRole::Admin);
-        $this->account = testAccountReadyForActivation();
+describe('the onboarding order of D39', function () {
+    it('opens KYC once the package is paid for', function () {
+        $account = testBusinessAccount(AccountStatus::PaymentPending);
+        autoActivationSettlePayment($account);
 
-        app(HoldAccountActivation::class)->hold(
-            $this->account,
-            $this->staff,
-            'Bank name does not match the trade licence.',
-        );
+        expect(autoActivate($account))->toBeFalse()
+            ->and($account->fresh()->status)->toBe(AccountStatus::KycPending);
     });
 
-    it('is not activated automatically, however many times the trigger fires', function () {
-        expect(autoActivate($this->account))->toBeFalse()
-            ->and(autoActivate($this->account))->toBeFalse()
-            ->and($this->account->fresh()->status)->toBe(AccountStatus::ApprovalPending);
-    });
-
-    it('still reaches the review queue, where a person can find it', function () {
-        autoActivate($this->account);
-
-        expect($this->account->fresh()->approval_pending_at)->not->toBeNull()
-            ->and($this->account->fresh()->activationIsHeld())->toBeTrue();
-    });
-
-    it('says once that it would have been activated and was not', function () {
-        autoActivate($this->account);
-        autoActivate($this->account);
-        autoActivate($this->account);
-
-        $entries = AuditLog::query()
-            ->where('action', 'account.activation_held_back')
-            ->where('auditable_id', $this->account->id)
-            ->get();
-
-        expect($entries)->toHaveCount(1)
-            ->and($entries->first()->actor_type)->toBe('system');
-    });
-
-    it('can still be activated by hand — the hold summons a reviewer, it does not block one', function () {
-        app(ActivateAccount::class)->handle($this->account, $this->staff->id, 'Checked against the licence register.');
-
-        expect($this->account->fresh()->status)->toBe(AccountStatus::Active);
-
-        $entry = AuditLog::query()->where('action', 'account.activated')
-            ->where('auditable_id', $this->account->id)->sole();
-
-        expect($entry->actor_id)->toBe($this->staff->id)
-            ->and($entry->after['automatic'])->toBeFalse();
-    });
-
-    it('activates automatically once the hold is released and the trigger fires again', function () {
-        app(HoldAccountActivation::class)->release($this->account, $this->staff, 'Licence register confirms the name.');
-
-        expect($this->account->fresh()->activationIsHeld())->toBeFalse()
-            // Releasing is not itself an activation.
-            ->and($this->account->fresh()->status)->toBe(AccountStatus::ApprovalPending);
-
-        expect(autoActivate($this->account))->toBeTrue()
-            ->and($this->account->fresh()->status)->toBe(AccountStatus::Active);
-    });
-});
-
-describe('reached from the events that actually trigger it', function () {
-    it('activates when the activation payment settles through the gateway', function () {
-        // The seam that matters: not the action called directly, but a real
-        // settlement running the whole way through SettlePayment.
+    it('opens KYC when the activation payment settles through the gateway', function () {
         $settings = app(SettingsRepository::class);
         $settings->define('payment.sslcommerz.mode', 'payment', SettingType::String, 'sandbox');
         $settings->define('payment.sslcommerz.sandbox.store_id', 'payment', SettingType::String, 'store', isEncrypted: true);
         $settings->define('payment.sslcommerz.sandbox.store_password', 'payment', SettingType::String, 'pass', isEncrypted: true);
 
-        $account = autoActivationApplicantAwaitingPayment();
+        $account = testBusinessAccount(AccountStatus::PaymentPending);
 
         $payment = Payment::create([
             'business_account_id' => $account->id,
@@ -257,27 +185,55 @@ describe('reached from the events that actually trigger it', function () {
 
         app(SettlePayment::class)->handle($payment, 'val-'.$payment->id);
 
-        expect($account->fresh()->status)->toBe(AccountStatus::Active)
-            ->and(Wallet::query()->where('business_account_id', $account->id)->count())->toBe(1);
+        expect($account->fresh()->status)->toBe(AccountStatus::KycPending)
+            ->and(Wallet::query()->where('business_account_id', $account->id)->count())->toBe(0);
     });
 
-    it('activates when the KYC approval is the last condition to land', function () {
-        // The other order: paid first, approved second.
-        $account = testBusinessAccount(AccountStatus::PaymentVerificationPending);
+    it('brings a paid, submitted application to the gate when KYC approval lands last', function () {
+        $account = testBusinessAccount(AccountStatus::KycPending);
         autoActivationSettlePayment($account);
+        $account->forceFill(['application_submitted_at' => now()])->save();
 
         $submission = KycSubmission::create([
             'business_account_id' => $account->id,
             'status' => KycStatus::UnderReview,
             'round' => 1,
         ]);
+        $account->forceFill(['status' => AccountStatus::KycUnderReview])->save();
 
         app(ReviewKyc::class)->handle($submission, KycDecision::approve(
             reviewerId: testPlatformStaff(PlatformRole::Admin)->id,
             internalNote: 'Documents check out.',
         ));
 
-        expect($account->fresh()->status)->toBe(AccountStatus::Active);
+        expect($account->fresh()->status)->toBe(AccountStatus::ApprovalPending);
+    });
+});
+
+describe('an account held for manual review', function () {
+    beforeEach(function () {
+        $this->staff = testPlatformStaff(PlatformRole::Admin);
+        $this->account = testAccountReadyForActivation();
+
+        app(HoldAccountActivation::class)->hold(
+            $this->account,
+            $this->staff,
+            'Bank name does not match the trade licence.',
+        );
+    });
+
+    it('stays in the review queue, where a person can find it', function () {
+        autoActivate($this->account);
+
+        expect($this->account->fresh()->status)->toBe(AccountStatus::ApprovalPending)
+            ->and($this->account->fresh()->approval_pending_at)->not->toBeNull()
+            ->and($this->account->fresh()->activationIsHeld())->toBeTrue();
+    });
+
+    it('can still be activated by hand — the hold summons a reviewer, it does not block one', function () {
+        app(ActivateAccount::class)->handle($this->account, $this->staff->id, 'Checked against the licence register.');
+
+        expect($this->account->fresh()->status)->toBe(AccountStatus::Active);
     });
 });
 
@@ -315,7 +271,7 @@ describe('placing a hold', function () {
 
     it('refuses to hold an account that is already active', function () {
         $account = testAccountReadyForActivation();
-        autoActivate($account);
+        app(ActivateAccount::class)->handle($account, $this->staff->id, 'Approved.');
 
         expect(fn () => app(HoldAccountActivation::class)->hold($account->refresh(), $this->staff, 'Too late.'))
             ->toThrow(InvalidArgumentException::class, 'already active');
@@ -329,7 +285,6 @@ describe('placing a hold', function () {
     });
 
     it('cannot leave a half-written hold behind, even from raw SQL', function () {
-        // The CHECK is the guarantee, not the action's care.
         $account = testAccountReadyForActivation();
 
         expect(fn () => BusinessAccount::query()->where('id', $account->id)

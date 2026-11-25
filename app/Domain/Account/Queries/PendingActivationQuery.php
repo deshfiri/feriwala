@@ -97,6 +97,9 @@ class PendingActivationQuery
     protected function meetsEveryRequirement(Builder $query): void
     {
         $query
+            // The partner's own "Submit application" (D39), as
+            // ActivationRequirements has it: nothing reaches a reviewer before.
+            ->whereNotNull('application_submitted_at')
             // Verification is a fact about the owner, not the business — an
             // invited staff member's unverified mobile is nothing to do with
             // whether the business may trade.
