@@ -16,5 +16,7 @@ final class MovementContext
         public readonly ?string $sourceType = null,
         public readonly ?int $sourceId = null,
         public readonly ?string $idempotencyKey = null,
+        /** The order line the units belong to, when they are one sale's units coming back (a return, a restocked damage). */
+        public readonly ?int $orderItemId = null,
     ) {}
 }

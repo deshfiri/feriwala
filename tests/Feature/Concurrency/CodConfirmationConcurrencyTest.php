@@ -128,6 +128,7 @@ afterEach(function () {
     }
 
     DB::table('order_status_history')->whereIn('order_id', $orders)->delete();
+    concurrencyTestForgetCostLots($this->account->id);
     DB::table('order_items')->whereIn('order_id', $orders)->delete();
     $deliveries = DB::table('webhook_deliveries')->where('id', '>', $this->deliveriesFrom)->pluck('id');
 

@@ -56,6 +56,7 @@ class MoveDamageStock
             sourceType: 'order_damage',
             sourceId: $damage->id,
             idempotencyKey: 'order-damage:'.$damage->public_id.':'.$purpose,
+            orderItemId: $item->id,
         );
 
         try {

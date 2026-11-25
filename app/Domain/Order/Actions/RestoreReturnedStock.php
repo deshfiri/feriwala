@@ -181,6 +181,7 @@ class RestoreReturnedStock
                     sourceType: 'order_return',
                     sourceId: $item->orderReturn->id,
                     idempotencyKey: 'order-return-item:'.$item->public_id,
+                    orderItemId: $orderItem->id,
                 ),
             );
         } catch (InventoryRefused) {

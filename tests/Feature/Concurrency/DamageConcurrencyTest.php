@@ -162,6 +162,7 @@ afterEach(function () {
     DB::table('order_damages')->whereIn('id', $damages)->delete();
 
     DB::table('order_status_history')->whereIn('order_id', $orders)->delete();
+    concurrencyTestForgetCostLots($this->account->id);
     DB::table('order_items')->whereIn('order_id', $orders)->delete();
     DB::table('orders')->whereIn('id', $orders)->delete();
     DB::table('stock_movements')->where('id', '>', $this->watermarks['stock_movements'])->delete();

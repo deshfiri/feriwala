@@ -158,6 +158,7 @@ afterEach(function () {
     DB::table('order_returns')->whereIn('id', $returns)->delete();
     DB::table('refund_requests')->where('id', '>', $this->watermarks['refund_requests'])->delete();
     DB::table('order_status_history')->whereIn('order_id', $orders)->delete();
+    concurrencyTestForgetCostLots($this->account->id);
     DB::table('order_items')->whereIn('order_id', $orders)->delete();
 
     $deliveries = DB::table('webhook_deliveries')->where('id', '>', $this->watermarks['webhook_deliveries'])->pluck('id');

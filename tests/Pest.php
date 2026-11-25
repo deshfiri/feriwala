@@ -101,8 +101,10 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
 use Monolog\Handler\TestHandler;
@@ -1559,4 +1561,41 @@ function partnerCheckoutSentStore(string $storeId): bool
 {
     return Http::recorded()->contains(fn (array $pair) => ($pair[0]->data()['store_id'] ?? null) === $storeId
         || (partnerCheckoutQuery($pair[0])['store_id'] ?? null) === $storeId);
+}
+
+/**
+ * For the concurrency tests, whose rows are committed: take back an account's
+ * Partner-stock cost lots and their movements before its order lines, which
+ * they reference. Both tables are append-only by trigger; the guards come off
+ * for the cleanup and go straight back on.
+ */
+function concurrencyTestForgetCostLots(int $accountId): void
+{
+    $stockItems = DB::table('partner_stock_items')->where('business_account_id', $accountId)->pluck('id');
+
+    // The Partner's Storefront profit on those orders, where that table exists.
+    if (Schema::hasTable('partner_storefront_profits')) {
+        $profits = DB::table('partner_storefront_profits')->where('business_account_id', $accountId)->pluck('id');
+        $tables = [
+            'partner_storefront_profit_corrections' => 'partner_storefront_profit_corrections_no_delete',
+            'partner_storefront_profit_reversals' => 'partner_storefront_profit_reversals_no_delete',
+            'partner_storefront_profit_lines' => 'partner_storefront_profit_lines_no_delete',
+            'partner_storefront_profits' => 'partner_storefront_profits_no_delete',
+        ];
+
+        foreach ($tables as $table => $trigger) {
+            DB::statement("ALTER TABLE {$table} DISABLE TRIGGER {$trigger}");
+            DB::table($table)->whereIn($table === 'partner_storefront_profits' ? 'id' : 'partner_storefront_profit_id', $profits)->delete();
+            DB::statement("ALTER TABLE {$table} ENABLE TRIGGER {$trigger}");
+        }
+    }
+
+    DB::statement('ALTER TABLE partner_stock_lot_movements DISABLE TRIGGER partner_stock_lot_movements_no_delete');
+    DB::statement('ALTER TABLE partner_stock_cost_lots DISABLE TRIGGER partner_stock_cost_lots_no_delete');
+
+    DB::table('partner_stock_lot_movements')->whereIn('partner_stock_item_id', $stockItems)->delete();
+    DB::table('partner_stock_cost_lots')->whereIn('partner_stock_item_id', $stockItems)->delete();
+
+    DB::statement('ALTER TABLE partner_stock_lot_movements ENABLE TRIGGER partner_stock_lot_movements_no_delete');
+    DB::statement('ALTER TABLE partner_stock_cost_lots ENABLE TRIGGER partner_stock_cost_lots_no_delete');
 }

@@ -34,6 +34,7 @@ class PartnerStock
 {
     public function __construct(
         protected DatabaseManager $database,
+        protected PartnerStockCostLots $lots,
     ) {}
 
     /**
@@ -176,6 +177,10 @@ class PartnerStock
                     'idempotency_key' => $context->idempotencyKey,
                     'occurred_at' => now(),
                 ]);
+
+                // What the units cost follows them, in the same transaction and
+                // under the same lock: the lots never disagree with `available`.
+                $this->lots->follow($locked, $from, $to, $quantity, $type, $context, $movement);
 
                 $item->setRawAttributes($locked->getAttributes(), sync: true);
 
