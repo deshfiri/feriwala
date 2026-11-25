@@ -65,6 +65,7 @@ return [
         'fields' => [
             'provider' => 'Courier',
             'tracking_number' => 'Tracking number',
+            'consignment_id' => 'Consignment ID',
             'delivery_charge' => 'Delivery charge',
             'cod_amount' => 'Cash on delivery',
             'pickup_requested_at' => 'Pickup requested',
@@ -102,6 +103,25 @@ return [
             'failed_delivery' => 'Record failed delivery',
             'returned_to_origin' => 'Mark returned to origin',
             'cancelled' => 'Cancel shipment',
+        ],
+    ],
+
+    'references' => [
+        'title' => 'Courier references missing',
+        'description' => 'Copy them exactly from the courier\'s own merchant panel. A reference recorded here cannot be edited, and the courier is not contacted.',
+        'consignment_id' => 'Consignment ID',
+        'tracking_code' => 'Tracking code',
+        'reason' => 'Where you read them',
+        'submit' => 'Record references',
+        'refused' => [
+            'nothing_to_record' => 'Enter a consignment ID or a tracking code.',
+            'cancelled' => 'This shipment is cancelled.',
+            'no_consignment_for_provider' => 'This courier has no consignment ID to record.',
+            'already_recorded' => 'That reference is already recorded and cannot be changed here.',
+            'consignment_in_use' => 'Another shipment already has that consignment ID.',
+        ],
+        'flash' => [
+            'recorded' => 'Courier references recorded.',
         ],
     ],
 

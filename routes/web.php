@@ -1641,6 +1641,9 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
             ->name('orders.shipments.store');
         Route::post('shipments/{shipment}/status/advance', [ShipmentController::class, 'advanceStatus'])
             ->name('shipments.status.advance');
+        // The courier's own references, read from its panel; never calls it.
+        Route::post('shipments/{shipment}/courier-references', [ShipmentController::class, 'recordReferences'])
+            ->name('shipments.courier-references.store');
 
         /*
          * Steadfast booking. Every real call creates a live consignment, so the

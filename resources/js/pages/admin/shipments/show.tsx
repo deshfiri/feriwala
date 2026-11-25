@@ -12,6 +12,7 @@ import PageHeader from '@/components/page-header';
 import SectionCard from '@/components/section-card';
 import StatusPill from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import {
     Dialog,
     DialogContent,
@@ -54,6 +55,8 @@ type ShipmentDetail = {
     order: { id: string; reference: string };
     provider: string;
     tracking_number: string | null;
+    consignment_id: string | null;
+    missing_references: Array<'consignment_id' | 'tracking_code'>;
     delivery_charge: Money;
     cod_amount: Money | null;
     status: string;
@@ -160,6 +163,13 @@ export default function AdminShipmentShow({
                         >
                             {shipment.tracking_number ?? '—'}
                         </DetailItem>
+                        {shipment.consignment_id && (
+                            <DetailItem
+                                label={t('courier.admin.fields.consignment_id')}
+                            >
+                                {shipment.consignment_id}
+                            </DetailItem>
+                        )}
                         <DetailItem
                             label={t('courier.admin.fields.delivery_charge')}
                         >
@@ -211,6 +221,13 @@ export default function AdminShipmentShow({
                             </div>
                         )}
                 </SectionCard>
+
+                {shipment.missing_references.length > 0 && (
+                    <CourierReferencesForm
+                        shipmentId={shipment.id}
+                        missing={shipment.missing_references}
+                    />
+                )}
 
                 <SectionCard title={t('courier.admin.packages_title')}>
                     {shipment.packages.length === 0 ? (
@@ -356,6 +373,105 @@ export default function AdminShipmentShow({
                 </DialogContent>
             </Dialog>
         </>
+    );
+}
+
+/**
+ * Fills a consignment id or tracking code the parcel is missing, copied from
+ * the courier's own panel. Only the blanks are offered; nothing is overwritten.
+ */
+function CourierReferencesForm({
+    shipmentId,
+    missing,
+}: {
+    shipmentId: string;
+    missing: Array<'consignment_id' | 'tracking_code'>;
+}) {
+    const { t } = useTranslation();
+    const form = useForm({ consignment_id: '', tracking_code: '', reason: '' });
+    const errors = form.errors as Record<string, string | undefined>;
+
+    const submit = (event: FormEvent) => {
+        event.preventDefault();
+        form.post(ShipmentController.recordReferences.url(shipmentId), {
+            preserveScroll: true,
+            onSuccess: () => form.reset(),
+        });
+    };
+
+    return (
+        <SectionCard
+            title={t('courier.references.title')}
+            description={t('courier.references.description')}
+        >
+            <form onSubmit={submit} className="space-y-4">
+                {errors.references && (
+                    <p className="text-destructive text-sm" role="alert">
+                        {errors.references}
+                    </p>
+                )}
+                {missing.includes('consignment_id') && (
+                    <FormField
+                        label={t('courier.references.consignment_id')}
+                        error={form.errors.consignment_id}
+                    >
+                        {(field) => (
+                            <Input
+                                {...field}
+                                value={form.data.consignment_id}
+                                onChange={(e) =>
+                                    form.setData(
+                                        'consignment_id',
+                                        e.target.value,
+                                    )
+                                }
+                                autoComplete="off"
+                            />
+                        )}
+                    </FormField>
+                )}
+                {missing.includes('tracking_code') && (
+                    <FormField
+                        label={t('courier.references.tracking_code')}
+                        error={form.errors.tracking_code}
+                    >
+                        {(field) => (
+                            <Input
+                                {...field}
+                                value={form.data.tracking_code}
+                                onChange={(e) =>
+                                    form.setData(
+                                        'tracking_code',
+                                        e.target.value,
+                                    )
+                                }
+                                autoComplete="off"
+                            />
+                        )}
+                    </FormField>
+                )}
+                <FormField
+                    label={t('courier.references.reason')}
+                    error={form.errors.reason}
+                    required
+                >
+                    {(field) => (
+                        <TextArea
+                            {...field}
+                            rows={2}
+                            value={form.data.reason}
+                            onChange={(e) =>
+                                form.setData('reason', e.target.value)
+                            }
+                            required
+                        />
+                    )}
+                </FormField>
+                <SubmitButton processing={form.processing}>
+                    {t('courier.references.submit')}
+                </SubmitButton>
+            </form>
+        </SectionCard>
     );
 }
 

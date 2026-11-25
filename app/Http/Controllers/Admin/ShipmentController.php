@@ -4,9 +4,11 @@ namespace App\Http\Controllers\Admin;
 
 use App\Domain\Courier\Actions\CreateShipmentFromAllocations;
 use App\Domain\Courier\Actions\RecordManualCourierStatusUpdate;
+use App\Domain\Courier\Actions\RecordShipmentCourierReferences;
 use App\Domain\Courier\Enums\CourierProviderCode;
 use App\Domain\Courier\Enums\ShipmentStatusChangeSource;
 use App\Domain\Courier\Exceptions\CourierProviderUnavailable;
+use App\Domain\Courier\Exceptions\CourierReferencesRefused;
 use App\Domain\Courier\Models\Shipment;
 use App\Domain\Order\Enums\OrderCourierStatus;
 use App\Domain\Order\Models\Order;
@@ -115,6 +117,12 @@ class ShipmentController extends Controller
                 ],
                 'provider' => $record->courierProvider->name,
                 'tracking_number' => $record->tracking_number,
+                'consignment_id' => $record->external_id,
+                // Blanks a person may fill from the courier's own panel.
+                'missing_references' => $canManage && $record->status !== OrderCourierStatus::Cancelled ? array_values(array_filter([
+                    $record->courierProvider->code === CourierProviderCode::Steadfast && $record->external_id === null ? 'consignment_id' : null,
+                    $record->tracking_number === null ? 'tracking_code' : null,
+                ])) : [],
                 'delivery_charge' => $record->delivery_charge->jsonSerialize(),
                 'cod_amount' => $record->cod_amount?->jsonSerialize(),
                 'status' => $record->status->value,
@@ -227,6 +235,40 @@ class ShipmentController extends Controller
         }
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('courier.admin.status_updated')]);
+
+        return back();
+    }
+
+    /**
+     * Staff typing in the courier's own references, read from its merchant
+     * panel, for a parcel Banij holds without them. Fills blanks only and
+     * never calls the courier ({@see RecordShipmentCourierReferences}).
+     */
+    public function recordReferences(Request $request, string $shipment, RecordShipmentCourierReferences $record): RedirectResponse
+    {
+        $actor = $this->actor($request);
+
+        Gate::forUser($actor)->authorize('manageShipments', Shipment::class);
+
+        $validated = $request->validate([
+            'consignment_id' => ['nullable', 'string', 'max:64', 'regex:/^[A-Za-z0-9-]+$/'],
+            'tracking_code' => ['nullable', 'string', 'max:64', 'regex:/^[A-Za-z0-9-]+$/'],
+            'reason' => ['required', 'string', 'max:500'],
+        ]);
+
+        try {
+            $record->handle(
+                $this->shipment($shipment),
+                $actor,
+                $validated['consignment_id'] ?? null,
+                $validated['tracking_code'] ?? null,
+                $validated['reason'],
+            );
+        } catch (CourierReferencesRefused $exception) {
+            throw ValidationException::withMessages(['references' => $exception->getMessage()]);
+        }
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('courier.references.flash.recorded')]);
 
         return back();
     }

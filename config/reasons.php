@@ -70,5 +70,9 @@ return [
         // Telling Banij a courier booking never happened lets the same parcel be
         // booked again, and a chargeable parcel twice if that is wrong.
         'admin.courier.booking-attempts.not-booked',
+
+        // A consignment id or tracking code typed in by hand is printed on the
+        // parcel's label and matched against the courier's webhooks.
+        'admin.shipments.courier-references.*',
     ],
 ];
