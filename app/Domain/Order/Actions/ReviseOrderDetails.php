@@ -206,7 +206,7 @@ class ReviseOrderDetails
      * @param  list<string>  $allowed
      * @return array<string, mixed>|null null when the order has no such snapshot
      */
-    protected function corrected(?array $current, array $requested, array $allowed): ?array
+    public function corrected(?array $current, array $requested, array $allowed): ?array
     {
         if ($current === null) {
             return null;
@@ -283,7 +283,7 @@ class ReviseOrderDetails
         return 'order-revision:'.$order->public_id.':'.$request->idempotencyKey;
     }
 
-    protected function clean(?string $value): ?string
+    public function clean(?string $value): ?string
     {
         $value = $value === null ? null : trim($value);
 

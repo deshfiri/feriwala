@@ -51,6 +51,7 @@ import EditableOrderDetails, {
     type OrderRevisionPanel,
 } from '@/pages/admin/orders/editable-order-details';
 import RevisionHistory from '@/pages/admin/orders/revision-history';
+import AmendOrderDialog from '@/pages/admin/orders/amend-order-dialog';
 
 export type SupplierPayableSummary = {
     id: string;
@@ -249,6 +250,14 @@ export default function AdminOrder({
     const mayRevise =
         revision !== null &&
         (revision.can.edit_customer || revision.can.edit_address);
+    // The full Order Details editor (D38, amended 2026-11-26): only while the
+    // order may still be revised, for staff who may change any part of it.
+    const mayAmend =
+        revision !== null &&
+        revision.blocker === null &&
+        (mayRevise ||
+            revision.can.revise_items === true ||
+            revision.can.revise_financials === true);
     // A storefront order is cancelled as a store order: before it leaves the
     // warehouse, paid or not. Every other order keeps the unpaid-order cancel.
     const mayCancel = store_order ? store_order.can.cancel : can.cancel;
@@ -283,6 +292,13 @@ export default function AdminOrder({
                                 tone={order.status_tone}
                                 label={t(`orders.statuses.${order.status}`)}
                             />
+                            {mayAmend && revision?.amend && (
+                                <AmendOrderDialog
+                                    orderId={order.id}
+                                    revision={revision}
+                                    amend={revision.amend}
+                                />
+                            )}
                             {mayCancel && (
                                 <Button
                                     variant="outline"

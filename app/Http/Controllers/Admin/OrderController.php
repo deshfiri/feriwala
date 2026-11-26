@@ -52,6 +52,7 @@ use App\Domain\Supplier\Enums\SupplierStatusChangeSource;
 use App\Domain\Supplier\Enums\SupplyMode;
 use App\Domain\Supplier\Models\SupplierFulfilmentCommitment;
 use App\Domain\Website\Models\Website;
+use App\Domain\Website\Models\WebsiteProduct;
 use App\Http\Controllers\Controller;
 use App\Integrations\Courier\CourierManager;
 use App\Models\User;
@@ -463,7 +464,10 @@ class OrderController extends Controller
             'can' => [
                 'edit_customer' => $actor->can('order.edit_customer'),
                 'edit_address' => $actor->can('order.edit_address'),
+                'revise_items' => $actor->can('order.revise_items'),
+                'revise_financials' => $actor->can('order.revise_financials'),
             ],
+            'amend' => $this->amendPanel($record),
             'form' => [
                 'customer' => $editable($record->customer, ReviseOrderDetails::CUSTOMER_FIELDS),
                 'shipping_address' => $editable($record->shipping_address, ReviseOrderDetails::ADDRESS_FIELDS),
@@ -486,6 +490,95 @@ class OrderController extends Controller
                 'is_current' => $revision->revision_number === $record->revision_number,
             ])->all(),
         ];
+    }
+
+    /**
+     * What the Order Details editor's Items, Pricing, Payment and Fulfilment
+     * tabs start from (D38, amended 2026-11-26). Figures are the server's own;
+     * the editor never computes a total.
+     *
+     * @return array<string, mixed>
+     */
+    protected function amendPanel(Order $record): array
+    {
+        $payment = $record->payment;
+        $editableLines = $record->source === OrderSource::Website && $record->website_id !== null;
+
+        return [
+            'reference' => $record->reference,
+            'lines_editable' => $editableLines && $payment?->isPartnerOwned() !== true,
+            'lines' => $record->items()->get()->map(fn (OrderItem $item) => [
+                'id' => $item->public_id,
+                'sku' => $item->sku,
+                'name' => $item->product_name,
+                'variant' => $item->variant_label,
+                'quantity' => $item->quantity,
+                'unit_price' => $item->unit_price->toDecimal(),
+                'line_total' => $item->line_total->jsonSerialize(),
+            ])->values()->all(),
+            'discount' => $record->discount->toDecimal(),
+            'delivery' => $record->delivery->toDecimal(),
+            'totals' => [
+                'subtotal' => $record->subtotal->jsonSerialize(),
+                'discount' => $record->discount->jsonSerialize(),
+                'delivery' => $record->delivery->jsonSerialize(),
+                'tax' => $record->tax->jsonSerialize(),
+                'total' => $record->total->jsonSerialize(),
+            ],
+            'payment' => $payment === null ? null : [
+                'status' => $payment->status->label(),
+                'method' => match (true) {
+                    $payment->isPartnerOwned() => 'partner_gateway',
+                    $record->isCashOnDelivery() => 'cod',
+                    default => 'online',
+                },
+                'amount' => $payment->amount->jsonSerialize(),
+            ],
+            'fulfilment' => [
+                'courier' => $record->courier_status->label(),
+                'delivery' => $record->delivery_status->label(),
+            ],
+            'products' => $editableLines ? $this->amendableProducts($record) : [],
+        ];
+    }
+
+    /**
+     * What staff may add to a Storefront order: what its website sells now,
+     * at its price now.
+     *
+     * @return list<array{sku: string, name: string, price: string}>
+     */
+    protected function amendableProducts(Order $record): array
+    {
+        $products = [];
+
+        WebsiteProduct::query()
+            ->where('website_id', $record->website_id)
+            ->published()
+            ->with(['product.variants' => fn ($query) => $query->where('is_active', true)])
+            ->limit(200)
+            ->get()
+            ->each(function (WebsiteProduct $selection) use (&$products): void {
+                $price = $selection->sellingPrice();
+
+                if ($price === null || $selection->product === null) {
+                    return;
+                }
+
+                $variants = $selection->product->variants;
+
+                if ($variants->isEmpty()) {
+                    $products[] = ['sku' => $selection->product->sku, 'name' => $selection->product->name, 'price' => $price->toDecimal()];
+
+                    return;
+                }
+
+                foreach ($variants as $variant) {
+                    $products[] = ['sku' => $variant->sku, 'name' => $selection->product->name.' — '.$variant->sku, 'price' => $price->toDecimal()];
+                }
+            });
+
+        return $products;
     }
 
     /**

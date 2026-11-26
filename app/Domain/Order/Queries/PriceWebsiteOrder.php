@@ -134,6 +134,93 @@ class PriceWebsiteOrder
     }
 
     /**
+     * An amended order priced again (D38, D40): the same tax, discount sharing
+     * and delivery tax as {@see quote()}, but each line's unit price is given.
+     *
+     * A line staff kept from the order (`selection` given) keeps its frozen
+     * price unless staff set another, and is not held to today's listing — the
+     * sale already happened. A line staff add (`selection` null) must be one the
+     * website sells today, at its selling price unless staff set another.
+     * Delivery is the order's own amount, not looked up again: its area was
+     * frozen when the order was placed.
+     *
+     * @param  list<array{sku: string, quantity: int, unit_price: Money|null, kept: array{selection: WebsiteProduct, product: Product, variant: ProductVariant|null}|null}>  $items
+     *
+     * @throws WebsiteOrderRefused
+     */
+    public function requote(Website $website, array $items, Money $discount, Money $delivery, CarbonImmutable $taxAt, ?CarbonImmutable $at = null): WebsiteOrderQuote
+    {
+        $at ??= CarbonImmutable::now();
+        $currency = Currency::tryFrom($website->currency_code) ?? Currency::BDT;
+        $lines = [];
+        $subtotal = Money::zero($currency);
+
+        foreach ($items as $item) {
+            $kept = $item['kept'];
+
+            if ($kept === null) {
+                $line = $this->line($website, $item['sku'], $item['quantity'], $currency, $at);
+            } else {
+                $line = $this->priced($kept['selection'], $kept['product'], $kept['variant'], $item['sku'], $item['quantity'], $item['unit_price'] ?? throw WebsiteOrderRefused::productUnavailable($item['sku']), $taxAt);
+            }
+
+            if ($item['unit_price'] !== null && ! $item['unit_price']->equals($line->unitPrice)) {
+                $line = $this->priced($line->selection, $line->product, $line->variant, $line->sku, $line->quantity, $item['unit_price'], $taxAt);
+            }
+
+            if (! $line->unitPrice->isPositive() || $line->unitPrice->currency !== $currency) {
+                throw WebsiteOrderRefused::productUnavailable($line->sku);
+            }
+
+            $lines[] = $line;
+            $subtotal = $subtotal->plus($line->subtotal);
+        }
+
+        if ($discount->isPositive()) {
+            if ($discount->currency !== $currency || ! $discount->lessThan($subtotal)) {
+                throw WebsiteOrderRefused::discountTooLarge();
+            }
+
+            $shares = $this->shareDiscount($discount, array_map(fn (WebsiteOrderLine $line) => $line->subtotal, $lines));
+
+            foreach ($lines as $position => $line) {
+                $lines[$position] = $shares[$position]->isZero() ? $line : $this->discounted($line, $shares[$position], $taxAt);
+            }
+        }
+
+        $deliveryTax = $this->tax->charge(amount: $delivery, at: $taxAt, scope: TaxScope::Fee, scopeValue: OrderDeliveryCharges::taxScopeValue());
+        $tax = TaxBreakdown::of([...array_map(fn (WebsiteOrderLine $line) => $line->tax, $lines), $deliveryTax], $currency);
+
+        return new WebsiteOrderQuote(
+            lines: $lines,
+            currency: $currency,
+            subtotal: $subtotal,
+            discount: $discount,
+            delivery: $delivery,
+            deliveryTax: $deliveryTax,
+            tax: $tax,
+            total: $subtotal->minus($discount)->plus($delivery)->plus($tax->addedTotal()),
+        );
+    }
+
+    protected function priced(WebsiteProduct $selection, Product $product, ?ProductVariant $variant, string $sku, int $quantity, Money $unitPrice, CarbonImmutable $at): WebsiteOrderLine
+    {
+        $subtotal = $unitPrice->multipliedBy($quantity);
+
+        return new WebsiteOrderLine(
+            selection: $selection,
+            product: $product,
+            variant: $variant,
+            sku: $sku,
+            quantity: $quantity,
+            unitPrice: $unitPrice,
+            subtotal: $subtotal,
+            discount: Money::zero($subtotal->currency),
+            tax: $this->tax->chargeGoods(amount: $subtotal, productSku: $product->sku, categorySlugs: $this->categorySlugs($product), at: $at),
+        );
+    }
+
+    /**
      * @throws WebsiteOrderRefused
      */
     protected function line(Website $website, string $sku, int $quantity, Currency $currency, CarbonImmutable $at): WebsiteOrderLine

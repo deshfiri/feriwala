@@ -1863,6 +1863,44 @@ Seven focused commits: decision, schema and permissions; calculation and preview
 customer/address/note revision; lines, quantities and stock; payment, wallet, payable and invoice
 adjustments; courier and Replace order; admin UI, translations, notifications and browser checks.
 
+### Amendment, 2026-11-26 — the Order Details editor
+
+**Requested by the owner on 2026-11-26.**
+
+- **One dialog, one revision.** The tabs are Customer, Address, Items, Pricing, Payment and
+  Fulfilment. One save is one applied revision with a reason (`AmendOrder`). There is no status
+  control. The inline pencil edits stay as they are.
+- **Priced on the server** (`PriceWebsiteOrder::requote`):
+  - Kept lines stay at their frozen price unless staff set another. Added lines take the
+    website's selling price today.
+  - The order discount is shared across lines exactly, and tax is worked out per line.
+  - The delivery charge is the order's own figure unless staff override it.
+  - The preview runs the real amendment inside a transaction that always rolls back.
+- **A changed line is superseded, never edited.**
+  - What the old line held is released through `StockReservations`. Central units a confirmed
+    order had committed, not yet dispatched, go back from processing to available through
+    `StockLedger`, once, under a key.
+  - The new line's stock is held the way placement holds it: the Partner's own units first
+    (FIFO lots), central stock for a Non-Conditional Partner.
+  - The Product Base Price per unit frozen at placement is carried to the replacement line.
+- **Money follows the new total.**
+  - An unpaid (Draft) payment is re-recorded at the new total, component by component. COD is
+    held to the shop's COD limit.
+  - A settled payment that is now too much gets a refund request for exactly the difference.
+  - A settled payment never grows here; a separate order is placed for extra items.
+  - An online payment that is in progress is refused.
+  - A Partner-gateway order's amounts never change here (D36).
+- **A price, discount or delivery change** needs `order.revise_financials`, a confirmed password
+  (entered in the editor) and two-factor. Line changes need `order.revise_items`.
+- **The Storefront profit is brought up to date after the commit.** Unreleased profit is
+  recalculated. Released profit is compensated by the existing reversal path, which takes back the
+  reduction or records it as owed, never a negative balance. In practice the state rules mean
+  lines and prices change only before dispatch, so a profit is never released when the editor
+  runs.
+- **Courier-held details are never changed silently.** The existing state rules refuse every
+  change once a courier is booked or assigned, the parcel has left, or the order has been
+  delivered.
+
 ## D39 — Partner onboarding v2: pay first, then KYC, details and business; every account reviewed (2026-11-25) — **supersedes D27; amends D9 and D22**
 
 **Instructed by the Project Owner on 2026-11-25**, with the specification _Banij — Registration &

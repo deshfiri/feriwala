@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
 import { useTranslation } from '@/hooks/use-translation';
+import type { OrderAmendPanel } from '@/pages/admin/orders/amend-order-dialog';
 
 type Fields = Record<string, string | null>;
 
@@ -14,7 +15,14 @@ export type OrderRevisionPanel = {
     number: number;
     blocker: string | null;
     blocker_message: string | null;
-    can: { edit_customer: boolean; edit_address: boolean };
+    can: {
+        edit_customer: boolean;
+        edit_address: boolean;
+        revise_items?: boolean;
+        revise_financials?: boolean;
+    };
+    /** What the Order Details editor starts from (D38, amended 2026-11-26). */
+    amend?: OrderAmendPanel;
     form: {
         customer: Fields | null;
         shipping_address: Fields | null;

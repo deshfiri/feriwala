@@ -1618,6 +1618,14 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
         Route::post('orders/{order}/revisions/details', [OrderRevisionController::class, 'details'])
             ->middleware('throttle:20,1')
             ->name('orders.revisions.details');
+        // The Order Details editor: one save for every tab, and its preview —
+        // named outside `revisions.*`, which demands a reason a preview need not have.
+        Route::post('orders/{order}/revisions/amendment', [OrderRevisionController::class, 'amend'])
+            ->middleware('throttle:20,1')
+            ->name('orders.revisions.amend');
+        Route::post('orders/{order}/amendment-preview', [OrderRevisionController::class, 'preview'])
+            ->middleware('throttle:120,1')
+            ->name('orders.amendment-preview');
 
         /*
          * Staff source allocation (§5-§8 of the allocation batch, D25).
