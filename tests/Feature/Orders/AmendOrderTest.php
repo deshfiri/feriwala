@@ -368,6 +368,18 @@ describe('over HTTP', function () {
         expect($order->refresh()->total->toDecimal())->toBe('7800.00');
     });
 
+    it('leaves a deleted product out of what the editor offers, without failing the page', function () {
+        config(['inertia.ssr.enabled' => false]);
+        $order = amendOrderPlace(2);
+        $this->other->delete();
+
+        $this->actingAs($this->staff)
+            ->get(route('admin.orders.show', $order->public_id))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('revision.amend.products', fn ($products) => collect($products)->pluck('sku')->all() === [$this->product->sku]));
+    });
+
     it('takes the password in the editor before a price changes', function () {
         $order = amendOrderPlace(2);
         $payload = [

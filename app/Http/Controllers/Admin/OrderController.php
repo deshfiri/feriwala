@@ -555,13 +555,14 @@ class OrderController extends Controller
         WebsiteProduct::query()
             ->where('website_id', $record->website_id)
             ->published()
+            ->whereHas('product')
             ->with(['product.variants' => fn ($query) => $query->where('is_active', true)])
             ->limit(200)
             ->get()
             ->each(function (WebsiteProduct $selection) use (&$products): void {
                 $price = $selection->sellingPrice();
 
-                if ($price === null || $selection->product === null) {
+                if ($price === null) {
                     return;
                 }
 

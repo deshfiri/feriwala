@@ -9,6 +9,7 @@ use App\Domain\Inventory\Models\Warehouse;
 use App\Domain\Order\Enums\OrderCourierStatus;
 use App\Domain\Order\Enums\OrderSource;
 use App\Domain\Order\Models\Order;
+use App\Domain\Order\Models\OrderItem;
 use App\Domain\Website\Models\Website;
 use App\Support\Barcode\Code128;
 use App\Support\Localization\MobileNumber;
@@ -105,6 +106,8 @@ class ShipmentLabelSnapshot
             'parcel_count' => $parcelCount,
             'package_count' => max(1, $shipment->packages->count()),
             'item_quantity' => $this->itemQuantity($order, $warehouse, $parcelCount, $sameWarehouseParcels),
+            'items' => $parcelCount === 1 ? $this->items($order) : null,
+            'parcel_weight_kg' => $this->weight($shipment),
             'order_reference' => $order->reference,
             'storefront_order_reference' => $this->clean($order->storefront_order_reference),
             'order_placed_at' => $order->placed_at,
@@ -172,6 +175,7 @@ class ShipmentLabelSnapshot
             'upazila' => $this->first([$address['upazila'] ?? null]),
             'city' => $this->first([$address['city'] ?? null]),
             'district' => $this->first([$address['district'] ?? null]),
+            'division' => $this->first([$address['division'] ?? null]),
             'postcode' => $this->first([$address['postcode'] ?? null]),
         ]];
     }
@@ -276,6 +280,52 @@ class ShipmentLabelSnapshot
         return $sameWarehouseParcels === 1 && $resolution->includes($warehouse->id)
             ? $resolution->quantityFrom($warehouse->id)
             : null;
+    }
+
+    /**
+     * What the parcel holds, line by line, when it is the order's only parcel:
+     * the order's current lines as placed (or as last revised). Names, never
+     * prices, costs or stock.
+     *
+     * @return list<array{name: string, variant: string|null, sku: string, quantity: int}>
+     */
+    protected function items(Order $order): array
+    {
+        return array_values($order->items
+            ->sortBy('line_number')
+            ->map(fn (OrderItem $line): array => [
+                'name' => trim($line->product_name),
+                'variant' => $this->clean($line->variant_label),
+                'sku' => $line->sku,
+                'quantity' => (int) $line->quantity,
+            ])
+            ->all());
+    }
+
+    /**
+     * The parcel's weight in kg as recorded on its packages, only when every
+     * package has one. Never estimated: a label shows no weight rather than a
+     * guess.
+     */
+    protected function weight(Shipment $shipment): ?string
+    {
+        if ($shipment->packages->isEmpty()) {
+            return null;
+        }
+
+        $total = '0.000';
+
+        foreach ($shipment->packages as $package) {
+            $weight = (string) $package->weight;
+
+            if (! is_numeric($weight) || bccomp($weight, '0', 3) <= 0) {
+                return null;
+            }
+
+            $total = bcadd($total, $weight, 3);
+        }
+
+        return $total;
     }
 
     /**

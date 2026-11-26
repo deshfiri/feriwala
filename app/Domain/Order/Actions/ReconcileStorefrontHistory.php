@@ -541,6 +541,7 @@ class ReconcileStorefrontHistory
     protected function orders(StorefrontReconciliationOptions $options, ?object $run): \Generator
     {
         $after = $run === null ? 0 : (int) $run->checkpoint_order_id;
+        $runId = $run?->id;
 
         do {
             $ids = Order::query()
@@ -552,7 +553,7 @@ class ReconcileStorefrontHistory
                 ->when($options->from !== null, fn (Builder $query) => $query->where('placed_at', '>=', CarbonImmutable::parse((string) $options->from)->startOfDay()))
                 ->when($options->to !== null, fn (Builder $query) => $query->where('placed_at', '<=', CarbonImmutable::parse((string) $options->to)->endOfDay()))
                 ->when($options->provider !== null, fn (Builder $query) => $query->whereIn('id', Shipment::query()->whereHas('courierProvider', fn (Builder $provider) => $provider->where('code', $options->provider))->select('order_id')))
-                ->when($run !== null, fn (Builder $query) => $query->whereNotIn('id', DB::table('storefront_reconciliation_items')->where('storefront_reconciliation_run_id', $run->id)->select('order_id')))
+                ->when($runId !== null, fn (Builder $query) => $query->whereNotIn('id', DB::table('storefront_reconciliation_items')->where('storefront_reconciliation_run_id', $runId)->select('order_id')))
                 ->orderBy('id')
                 ->limit(50)
                 ->pluck('id');

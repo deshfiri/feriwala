@@ -309,7 +309,7 @@ class AmendOrder
                     'revision_number' => $revision->revision_number,
                     'sections' => $revision->sections,
                     'fields' => [...$changed, ...($noteChanged ? ['customer_note'] : [])],
-                    'lines' => array_map(fn (array $entry) => ['sku' => $entry['sku'], 'change' => $entry['change']?->value], $lineChanges),
+                    'lines' => array_map(fn (array $entry) => ['sku' => $entry['sku'], 'change' => $entry['change']->value], $lineChanges),
                     'total' => $totalAfter->toDecimal(),
                     'total_difference' => $totalAfter->minus($totalBefore)->toDecimal(),
                     'payment_consequence' => $revision->payment_consequence->value,
@@ -539,7 +539,7 @@ class AmendOrder
 
             $previous = $entry['item'];
             $fromCentral = $account->isNonConditional() && ! $reservation->isPartnerSourced();
-            $suggested = $previous?->suggested_unit_price ?? $this->priceRules->for($line->product, $package)->suggested;
+            $suggested = $previous->suggested_unit_price ?? $this->priceRules->for($line->product, $package)->suggested;
             $suggested = $suggested?->isPositive() === true ? $suggested : null;
             $taxed = ! $line->tax->isZero();
 
@@ -627,7 +627,7 @@ class AmendOrder
             'new_order_item_id' => $new?->id,
             'sku' => Str::limit($entry['sku'], 61),
             'product_name' => Str::limit($previous->product_name ?? $line?->product->name ?? $entry['sku'], 157),
-            'variant_label' => $previous?->variant_label ?? $new?->variant_label,
+            'variant_label' => $previous->variant_label ?? $new->variant_label ?? null,
             'quantity_before' => $previous?->quantity,
             'quantity_after' => $line?->quantity,
             'currency_code' => $revision->currency_code,
@@ -944,13 +944,13 @@ class AmendOrder
      */
     protected function lineSnapshot(Order $order): array
     {
-        return $order->items()->get()->map(fn (OrderItem $item) => [
+        return array_values($order->items()->get()->map(fn (OrderItem $item) => [
             'id' => $item->public_id,
             'sku' => $item->sku,
             'quantity' => $item->quantity,
             'unit_price' => $item->unit_price->toDecimal(),
             'line_total' => $item->line_total->toDecimal(),
-        ])->values()->all();
+        ])->all());
     }
 
     protected function amount(?string $value, Currency $currency, string $field): ?Money

@@ -269,13 +269,13 @@ class ReviseOrderDetails
      */
     protected function lines(Order $order): array
     {
-        return $order->items()->get()->map(fn (OrderItem $item) => [
+        return array_values($order->items()->get()->map(fn (OrderItem $item) => [
             'id' => $item->public_id,
             'sku' => $item->sku,
             'quantity' => $item->quantity,
             'unit_price' => $item->unit_price->toDecimal(),
             'line_total' => $item->line_total->toDecimal(),
-        ])->values()->all();
+        ])->all());
     }
 
     protected function key(Order $order, OrderDetailsRevision $request): string

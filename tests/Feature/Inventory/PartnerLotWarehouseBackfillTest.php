@@ -29,9 +29,10 @@ beforeEach(function () {
 });
 
 /**
- * A paid wholesale purchase whose one line was filled from `$sources` (each a
- * warehouse allocation; none for a line nothing traces), credited to the
- * Partner as lots exist today -- without a warehouse on the lot.
+ * A historical paid wholesale purchase: credited to the Partner while nothing
+ * yet named its warehouse -- so its lot holds none, as every lot opened before
+ * lots carried a warehouse does -- with the line's allocation to `$sources`
+ * (none for a line nothing traces) on record afterwards.
  *
  * @param  list<Warehouse>  $sources
  */
@@ -47,6 +48,8 @@ function partnerLotBackfillPurchase(array $sources, int $quantity = 4): OrderIte
         'unit_price' => $unit, 'line_subtotal' => $unit->multipliedBy($quantity), 'line_total' => $unit->multipliedBy($quantity),
     ]);
 
+    app(ReceivePartnerPurchase::class)->handle($order->refresh());
+
     $share = intdiv($quantity, max(1, count($sources)));
 
     foreach ($sources as $warehouse) {
@@ -60,8 +63,6 @@ function partnerLotBackfillPurchase(array $sources, int $quantity = 4): OrderIte
             'idempotency_key' => 'alloc:'.Str::ulid(),
         ]);
     }
-
-    app(ReceivePartnerPurchase::class)->handle($order->refresh());
 
     return $line;
 }

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { fireEvent, render, screen } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
     PartnerShippingLabel,
@@ -53,44 +53,22 @@ describe('shipping label', () => {
         );
     });
 
-    it('prints 3 × 4 until a size is chosen, then remembers the choice in this browser', () => {
-        const { unmount } = render(
-            <StaffShippingLabelPanel label={shippingLabelStaff()} />,
-        );
-
-        expect(
-            screen.getByRole('link', {
-                name: /shipping_label.panel.print_size/,
-            }),
-        ).toHaveAttribute('href', expect.stringContaining('size=3x4'));
-
-        fireEvent.click(screen.getByRole('radio', { name: '3 × 3' }));
-
-        expect(window.localStorage.getItem('banij.shipping-label-size')).toBe(
-            '3x3',
-        );
-        unmount();
-
+    it('offers Print and Save as PDF at both sizes, each opening the same page per size', () => {
         render(<StaffShippingLabelPanel label={shippingLabelStaff()} />);
 
-        expect(
-            screen.getByRole('link', {
-                name: /shipping_label.panel.print_size/,
-            }),
-        ).toHaveAttribute('href', expect.stringContaining('size=3x3'));
-    });
+        const prints = screen
+            .getAllByRole('link', { name: /shipping_label.panel.print_size/ })
+            .map((link) => link.getAttribute('href'));
+        const pdfs = screen
+            .getAllByRole('link', { name: /shipping_label.panel.pdf_size/ })
+            .map((link) => link.getAttribute('href'));
 
-    it('opens print and PDF on the same page, so the two cannot differ', () => {
-        render(<StaffShippingLabelPanel label={shippingLabelStaff()} />);
-
-        const print = screen.getByRole('link', {
-            name: /shipping_label.panel.print_size/,
-        });
-        const pdf = screen.getByRole('link', {
-            name: /shipping_label.panel.download_pdf/,
-        });
-
-        expect(pdf.getAttribute('href')).toBe(print.getAttribute('href'));
+        expect(prints).toEqual([
+            expect.stringContaining('size=3x3'),
+            expect.stringContaining('size=3x4'),
+        ]);
+        // The PDF is the printed page saved: it cannot differ from the print.
+        expect(pdfs).toEqual(prints);
     });
 
     it('offers no printing while the label waits, and says why', () => {
@@ -140,11 +118,12 @@ describe('shipping label', () => {
 
         render(<PartnerShippingLabels labels={labels} />);
 
+        // Print 3 × 3 and Print 3 × 4 for the ready parcel only.
         expect(
             screen.getAllByRole('link', {
                 name: /shipping_label.panel.print_size/,
             }),
-        ).toHaveLength(1);
+        ).toHaveLength(2);
         expect(
             screen.getByText('shipping_label.panel.partner_waiting'),
         ).toBeInTheDocument();

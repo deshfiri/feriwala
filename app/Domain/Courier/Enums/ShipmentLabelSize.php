@@ -8,10 +8,10 @@ namespace App\Domain\Courier\Enums;
  */
 enum ShipmentLabelSize: string
 {
-    /** Compact: recipient, COD, barcode and references. */
+    /** Compact: the same blocks, with the item list condensed to one line. */
     case ThreeByThree = '3x3';
 
-    /** Detailed: adds the Storefront reference, counts, instructions and full courier details. */
+    /** Detailed: room for a longer address and up to three item lines. */
     case ThreeByFour = '3x4';
 
     public function widthInches(): int
@@ -30,8 +30,26 @@ enum ShipmentLabelSize: string
     public function barcodeHeightInches(): float
     {
         return match ($this) {
-            self::ThreeByThree => 0.36,
-            self::ThreeByFour => 0.55,
+            self::ThreeByThree => 0.32,
+            self::ThreeByFour => 0.46,
+        };
+    }
+
+    /** The most room the QR code may take, quiet zone included, in inches square. */
+    public function qrMaxInches(): float
+    {
+        return match ($this) {
+            self::ThreeByThree => 0.6,
+            self::ThreeByFour => 0.75,
+        };
+    }
+
+    /** How many item lines are listed before the rest are counted as "+N more". */
+    public function itemLines(): int
+    {
+        return match ($this) {
+            self::ThreeByThree => 1,
+            self::ThreeByFour => 3,
         };
     }
 

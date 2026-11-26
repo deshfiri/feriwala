@@ -4,11 +4,17 @@ use App\Domain\Access\Enums\PermissionAction;
 use App\Domain\Access\Enums\PermissionModule;
 use App\Domain\Access\Enums\PlatformRole;
 use App\Domain\Access\PermissionCatalogue;
+use App\Domain\Courier\Actions\CreateShipmentFromAllocations;
 use App\Domain\Courier\Actions\IssueShipmentLabel;
+use App\Domain\Courier\Actions\ReissueShipmentLabel;
+use App\Domain\Courier\Enums\CourierProviderCode;
 use App\Domain\Courier\Models\Shipment;
 use App\Domain\Courier\Models\ShipmentLabel;
 use App\Domain\Website\Actions\ManageWebsiteBranding;
 use App\Support\Barcode\Code128;
+use App\Support\Barcode\QrCode;
+use App\Support\Money\Currency;
+use App\Support\Money\Money;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -73,14 +79,27 @@ describe('layout', function () {
             ->assertSee('data-size="3x4"', false);
     });
 
-    it('puts "Powered by Banij" at the bottom of both sizes', function (string $size) {
+    it('puts "Powered by Banij", the courier and the print time in the footer of both sizes', function (string $size) {
+        $this->travelTo(now()->setTimezone(config('app.timezone'))->setDate(2026, 11, 4)->setTime(10, 45));
         $shipment = shipmentLabelBook($this->order);
 
         $html = shipmentLabelPrint($shipment, $size)->assertOk()->getContent();
+        preg_match('/<footer class="footer" data-field="footer">(.*?)<\/footer>/s', $html, $footer);
 
-        expect($html)->toContain('data-field="powered-by">Powered by Banij</footer>')
+        expect($footer[1])->toContain('data-field="powered-by">Powered by Banij</span>')
+            ->and($footer[1])->toContain('Steadfast')
+            ->and($footer[1])->toContain('Printed 04/11/26 10:45am')
             ->and(strrpos($html, 'Powered by Banij'))->toBeGreaterThan(strrpos($html, 'data-field="return"'));
     })->with(['3x3', '3x4']);
+
+    it('is black on white only: no accent colour, tint or shadow from the Storefront', function () {
+        $shipment = shipmentLabelBook($this->order);
+
+        shipmentLabelPrint($shipment)->assertOk()
+            ->assertDontSee('#c2410c')
+            ->assertDontSee('--accent', false)
+            ->assertDontSee('box-shadow', false);
+    });
 
     it('contains only the label: no application shell, script bundle or navigation', function () {
         $shipment = shipmentLabelBook($this->order);
@@ -96,39 +115,149 @@ describe('layout', function () {
             ->and($headers->get('X-Robots-Tag'))->toContain('noindex');
     });
 
-    it('steps long addresses down in size so they stay inside the label', function () {
+    it('starts a long address smaller, and never clamps or ellipsises it', function () {
+        $address = str_repeat('Flat 7B, Shanti Niketan Tower, Plot 1023, Road 44, ', 4);
         $order = shipmentLabelOrder($this->site, ['shipping_address' => [
-            'line1' => str_repeat('Flat 7B, Shanti Niketan Tower, Plot 1023, Road 44, ', 4),
-            'area' => 'Gulshan 2', 'city' => 'Dhaka', 'district' => 'Dhaka', 'postcode' => '1212',
+            'line1' => $address, 'area' => 'Gulshan 2', 'city' => 'Dhaka', 'district' => 'Dhaka', 'postcode' => '1212',
         ]]);
         shipmentLabelLine($order, $this->warehouse);
         $shipment = shipmentLabelManual($order);
 
-        shipmentLabelPrint($shipment, '3x3')->assertOk()
-            ->assertSee('recipient__address--tighter', false);
+        $html = shipmentLabelPrint($shipment, '3x3')->assertOk()->getContent();
+        preg_match('/\.recipient__address \{[^}]*\}/', $html, $rule);
+
+        expect($html)->toContain('fit-1 fit-2"')
+            ->and($html)->toContain('data-fit="2"')
+            // The whole address is in the page, and its rule cuts nothing off.
+            ->and($html)->toContain(trim($address).', Gulshan 2')
+            ->and($rule[0])->not->toContain('line-clamp')
+            ->and($rule[0])->not->toContain('ellipsis');
+    });
+
+    it('fits each label in the browser once its fonts have loaded, before printing', function () {
+        $shipment = shipmentLabelBook($this->order);
+
+        $html = $this->actingAs($this->staff)
+            ->get(route('admin.shipments.label.show', [$shipment->public_id, 'size' => '3x3', 'autoprint' => 1]))
+            ->assertOk()
+            ->getContent();
+
+        expect($html)->toContain("label.classList.add('fit-' + level)")
+            ->and(strpos($html, 'window.print()'))->toBeGreaterThan(strpos($html, 'document.fonts.ready'))
+            ->and(shipmentLabelPrint($shipment, '3x3')->getContent())->not->toContain('window.print()');
     });
 });
 
 describe('content', function () {
-    it('shows the recipient, COD, references, courier and the warehouse return block', function () {
+    it('shows the recipient, COD, references, parcel summary, items and the warehouse return block', function () {
         $shipment = shipmentLabelBook($this->order);
+        $line = $this->order->items()->first();
 
         shipmentLabelPrint($shipment)->assertOk()
             ->assertSee('Rupkotha Fashion')
-            ->assertSee('01911111111')
+            ->assertSee('Parcel 1 of 1')
             ->assertSee('Rahim Uddin')
             ->assertSee('01712345678')
-            ->assertSee('House 12, Road 5, Block C')
-            ->assertSee('COD ৳1,250.00')
-            ->assertSee($this->order->reference)
+            ->assertSee('House 12, Road 5, Block C, Mirpur 10')
+            ->assertSee('data-field="area">Dhaka 1216</dd>', false)
+            ->assertSeeInOrder(['CASH ON DELIVERY', '৳1,250.00'])
+            ->assertSee('data-field="invoice">'.$this->order->reference.'</dd>', false)
             ->assertSee($this->order->storefront_order_reference)
-            ->assertSee('Steadfast')
-            ->assertSee('1424107')
+            ->assertSee('data-field="consignment">1424107</dd>', false)
+            ->assertSee('data-field="tracking">15BAEB8A</dd>', false)
+            ->assertSee('data-field="delivery">Home Delivery</dd>', false)
+            ->assertSee($line->product_name.' × 2')
+            ->assertSee('2 units')
             ->assertSee('Call before delivery')
             ->assertSee('Fulfilled by Banij')
             ->assertSee('Banij Tejgaon Hub')
             ->assertSee('12 Tejgaon Industrial Area')
             ->assertSee('01800000001');
+    });
+
+    it('names the upazila, district and division under Area, each once', function () {
+        $order = shipmentLabelOrder($this->site, ['shipping_address' => [
+            'line1' => 'Dewan Bari Road', 'area' => 'Lichubagan', 'upazila' => 'Ulipur', 'district' => 'Kurigram', 'division' => 'Rangpur',
+        ]]);
+        shipmentLabelLine($order, $this->warehouse);
+        $sameAsDistrict = shipmentLabelOrder($this->site, ['shipping_address' => [
+            'line1' => 'Station Road', 'upazila' => 'Rangpur Sadar', 'city' => 'Rangpur', 'district' => 'Rangpur', 'division' => 'Rangpur',
+        ]]);
+        shipmentLabelLine($sameAsDistrict, $this->warehouse);
+
+        shipmentLabelPrint(shipmentLabelManual($order))->assertOk()
+            ->assertSee('data-field="address">Dewan Bari Road, Lichubagan</dd>', false)
+            ->assertSee('data-field="area">Ulipur, Kurigram, Rangpur</dd>', false);
+        shipmentLabelPrint(shipmentLabelManual($sameAsDistrict, tracking: 'MAN-0002'))->assertOk()
+            ->assertSee('data-field="area">Rangpur Sadar, Rangpur</dd>', false);
+    });
+
+    it('shows the recorded weight, and no weight row at all when none was recorded', function () {
+        shipmentLabelPrint(shipmentLabelManual($this->order))->assertOk()
+            ->assertSee('data-field="weight">1 KG</dd>', false);
+
+        $unweighed = shipmentLabelOrder($this->site);
+        shipmentLabelLine($unweighed, $this->warehouse);
+        $shipment = app(CreateShipmentFromAllocations::class)->handle(
+            $unweighed, CourierProviderCode::Manual, Money::fromDecimal('80.00', Currency::BDT), [['weight' => null]],
+            $this->staff, 'MAN-0002', Money::fromDecimal('1250.00', Currency::BDT),
+        );
+
+        shipmentLabelPrint($shipment)->assertOk()
+            ->assertDontSee('data-field="weight"', false)
+            ->assertDontSee('KG');
+    });
+
+    it('lists up to three items on 3 × 4 and condenses the rest; 3 × 3 shows the first and a count', function () {
+        foreach (range(1, 3) as $extra) {
+            shipmentLabelLine($this->order, $this->warehouse, quantity: 1);
+        }
+        $names = $this->order->items()->orderBy('line_number')->pluck('product_name');
+        $shipment = shipmentLabelManual($this->order);
+
+        $detailed = shipmentLabelPrint($shipment, '3x4')->assertOk()->getContent();
+        preg_match('/<span class="items__full">(.*?)<\/span>\s*<span class="items__summary">/s', $detailed, $full);
+
+        expect($full[1])->toContain($names[0].' × 2')
+            ->and($full[1])->toContain($names[1].' × 1')
+            ->and($full[1])->toContain($names[2].' × 1')
+            ->and($full[1])->not->toContain($names[3])
+            ->and($full[1])->toContain('+ 1 more item')
+            ->and($detailed)->toContain('5 units');
+
+        $compact = shipmentLabelPrint($shipment, '3x3')->assertOk()->getContent();
+        preg_match('/<span class="items__full">(.*?)<\/span>\s*<span class="items__summary">/s', $compact, $condensed);
+
+        expect($condensed[1])->toContain($names[0].' × 2')
+            ->and($condensed[1])->not->toContain($names[1])
+            ->and($condensed[1])->toContain('+ 3 more items');
+    });
+
+    it('draws a QR code of the courier\'s identifier in whole 203 DPI dots', function (string $size) {
+        $shipment = shipmentLabelBook($this->order);
+        $html = shipmentLabelPrint($shipment, $size)->assertOk()->getContent();
+
+        preg_match('/data-field="qr" data-value="([^"]+)"[^>]*><svg[^>]* width="([\d.]+)in" height="([\d.]+)in" viewBox="0 0 (\d+) (\d+)"[^>]*>.*?<path d="([^"]+)"/s', $html, $qr);
+        [, $value, $width, $height, $modules] = $qr;
+        $dots = (float) $width * Code128::PRINTER_DPI / (int) $modules;
+        $dark = collect(QrCode::matrix('15BAEB8A'))->flatten()->filter()->count();
+
+        expect($value)->toBe('15BAEB8A')
+            ->and($width)->toBe($height)
+            ->and((int) $modules)->toBe(count(QrCode::matrix('15BAEB8A')) + 2 * QrCode::QUIET_ZONE)
+            ->and(abs($dots - round($dots)))->toBeLessThan(0.01)
+            ->and((int) round($dots))->toBeGreaterThanOrEqual(QrCode::MIN_MODULE_DOTS)
+            // One square per dark module of the symbol the encoder produced.
+            ->and(substr_count($qr[6], 'h1v1h-1z'))->toBe($dark);
+    })->with(['3x3', '3x4']);
+
+    it('never shows a unit price, cost or platform figure next to the items', function () {
+        $shipment = shipmentLabelBook($this->order);
+
+        shipmentLabelPrint($shipment)->assertOk()
+            ->assertDontSee('625.00')
+            ->assertDontSee('400.00')
+            ->assertDontSee('৳500.00');
     });
 
     it('never shows the Storefront contact address, the Partner, the email or a figure of the platform\'s', function () {
@@ -146,17 +275,18 @@ describe('content', function () {
             ->assertDontSee('80.00');
     });
 
-    it('says PAID on a prepaid parcel and the amount on a COD one', function () {
+    it('says PAID / PREPAID with nothing due on a prepaid parcel, and the amount on a COD one', function () {
         $paid = shipmentLabelOrder($this->site, ['paid_at' => now()]);
         shipmentLabelLine($paid, $this->warehouse);
 
         shipmentLabelPrint(shipmentLabelManual($paid, cod: null))->assertOk()
-            ->assertSee('PAID')
-            ->assertDontSee('COD ৳');
+            ->assertSeeInOrder(['PAID / PREPAID', '৳0.00 DUE'])
+            ->assertDontSee('CASH ON DELIVERY');
 
-        shipmentLabelPrint(shipmentLabelManual($this->order, cod: '1250.00'))->assertOk()
-            ->assertSee('COD ৳1,250.00')
-            ->assertSee('payment--cod', false);
+        shipmentLabelPrint(shipmentLabelManual($this->order, cod: '1250.00', tracking: 'MAN-0002'))->assertOk()
+            ->assertSee('<span class="payment__caption">CASH ON DELIVERY</span>', false)
+            ->assertSee('<span class="payment__amount">৳1,250.00</span>', false)
+            ->assertDontSee('PAID / PREPAID');
     });
 
     it('encodes the courier\'s tracking code, and says it in text beneath', function () {
@@ -224,7 +354,7 @@ describe('branding', function () {
 
         $html = shipmentLabelPrint($shipment)->assertOk()->getContent();
 
-        expect($html)->toContain('class="brand__logo" src="data:image/png;base64,')
+        expect($html)->toContain('class="head__logo" src="data:image/png;base64,')
             ->and($html)->toContain('alt="Rupkotha Fashion"')
             ->and($html)->toContain('data-field="store-name">Rupkotha Fashion</div>');
     });
@@ -276,6 +406,25 @@ describe('branding', function () {
 
         expect($byStore['rupkotha'])->toContain('MAN-0001')->not->toContain('Nokshi Crafts')->not->toContain('01922222222')
             ->and($byStore['nokshi'])->toContain('MAN-0002')->not->toContain('Rupkotha Fashion')->not->toContain('01911111111');
+    });
+});
+
+describe('versions', function () {
+    it('marks a corrected label in its footer and still reprints the version it replaced as issued', function () {
+        $shipment = shipmentLabelManual($this->order);
+        $this->warehouse->forceFill(['name' => 'Banij Tejgaon Hub (North gate)'])->save();
+        app(ReissueShipmentLabel::class)->handle($shipment, $this->staff, 'Gate moved');
+
+        shipmentLabelPrint($shipment)->assertOk()
+            ->assertSee('Corrected v2')
+            ->assertSee('Banij Tejgaon Hub (North gate)');
+
+        $this->actingAs($this->staff)
+            ->get(route('admin.shipments.label.show', [$shipment->public_id, 'size' => '3x4', 'version' => 1]))
+            ->assertOk()
+            ->assertSee('Banij Tejgaon Hub,', false)
+            ->assertDontSee('North gate')
+            ->assertDontSee('Corrected v');
     });
 });
 

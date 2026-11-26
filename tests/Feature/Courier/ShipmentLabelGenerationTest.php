@@ -2,12 +2,14 @@
 
 use App\Domain\Access\Enums\PlatformRole;
 use App\Domain\Courier\Actions\BookSteadfastShipment;
+use App\Domain\Courier\Actions\CreateShipmentFromAllocations;
 use App\Domain\Courier\Actions\IssueShipmentLabel;
 use App\Domain\Courier\Actions\ReconcileSteadfastBooking;
 use App\Domain\Courier\Actions\RecordShipmentCourierReferences;
 use App\Domain\Courier\Actions\ReissueShipmentLabel;
 use App\Domain\Courier\Actions\SynchroniseSteadfastShipment;
 use App\Domain\Courier\Enums\CourierBookingStatus;
+use App\Domain\Courier\Enums\CourierProviderCode;
 use App\Domain\Courier\Exceptions\ShipmentLabelRefused;
 use App\Domain\Courier\Jobs\IssueShipmentLabelJob;
 use App\Domain\Courier\Models\CourierBookingAttempt;
@@ -16,6 +18,8 @@ use App\Domain\Courier\Models\ShipmentLabel;
 use App\Domain\Order\Enums\OrderCourierStatus;
 use App\Domain\Order\Enums\OrderStatus;
 use App\Notifications\Courier\CourierStaffAlert;
+use App\Support\Money\Currency;
+use App\Support\Money\Money;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Client\ConnectionException;
@@ -255,6 +259,30 @@ describe('the frozen snapshot', function () {
             ->and(ShipmentLabel::query()->where('shipment_id', $prepaid->id)->sole()->cod_amount->toDecimal())->toBe('0.00');
     });
 
+    it('freezes what is in the parcel by name, variation and quantity, never its price', function () {
+        $this->order->items()->first()->forceFill(['variant_label' => 'Size L'])->save();
+        $line = $this->order->items()->first();
+
+        shipmentLabelManual($this->order);
+        $label = ShipmentLabel::query()->sole();
+
+        expect($label->items)->toBe([['name' => $line->product_name, 'variant' => 'Size L', 'sku' => $line->sku, 'quantity' => 2]])
+            ->and($label->item_quantity)->toBe(2)
+            ->and(json_encode($label->getAttributes()))->not->toContain('625.00');
+    });
+
+    it('freezes the parcel weight only when every package has one recorded', function (array $packages, ?string $expected) {
+        app(CreateShipmentFromAllocations::class)->handle(
+            $this->order, CourierProviderCode::Manual, Money::fromDecimal('80.00', Currency::BDT), $packages,
+            $this->staff, 'MAN-0001', Money::fromDecimal('1250.00', Currency::BDT),
+        );
+
+        expect(ShipmentLabel::query()->sole()->parcel_weight_kg)->toBe($expected);
+    })->with([
+        'two weighed packages, summed' => [[['weight' => '0.5'], ['weight' => '0.54']], '1.040'],
+        'one package unweighed' => [[['weight' => '0.5'], ['weight' => null]], null],
+    ]);
+
     it('refuses to call an unpaid cash-on-delivery parcel paid', function () {
         $shipment = shipmentLabelManual($this->order, cod: null);
 
@@ -363,7 +391,10 @@ describe('several parcels', function () {
             ->and($secondLabel->parcel_count)->toBe(2)
             ->and($secondLabel->warehouse_name)->toBe('Banij Chattogram Hub')
             ->and($secondLabel->warehouse_return_address['line'])->toBe('7 Agrabad C/A')
-            ->and($secondLabel->store_name)->toBe($firstLabel->store_name);
+            ->and($secondLabel->store_name)->toBe($firstLabel->store_name)
+            // Which lines are in which parcel is not recorded: no list rather than a guess.
+            ->and($firstLabel->items)->not->toBeNull()
+            ->and($secondLabel->items)->toBeNull();
     });
 });
 

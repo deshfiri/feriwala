@@ -58,6 +58,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int $parcel_count
  * @property int $package_count
  * @property int|null $item_quantity null when it cannot be stated exactly (two parcels from one warehouse)
+ * @property list<array{name: string, variant: string|null, sku: string, quantity: int}>|null $items null when not stated exactly, and on labels issued before it was frozen
+ * @property string|null $parcel_weight_kg recorded package weights summed; null unless every package has one
  * @property string $order_reference
  * @property string|null $storefront_order_reference
  * @property CarbonImmutable $order_placed_at
@@ -103,6 +105,8 @@ class ShipmentLabel extends Model
             'parcel_count' => 'integer',
             'package_count' => 'integer',
             'item_quantity' => 'integer',
+            'items' => 'array',
+            'parcel_weight_kg' => 'decimal:3',
             'order_placed_at' => 'immutable_datetime',
             'issued_at' => 'immutable_datetime',
             'superseded_at' => 'immutable_datetime',

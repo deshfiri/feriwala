@@ -133,41 +133,45 @@ export function ShippingLabelSizePicker({
     );
 }
 
+const LABEL_SIZES: Array<[ShippingLabelSize, string]> = [
+    ['3x3', '3 × 3'],
+    ['3x4', '3 × 4'],
+];
+
 /**
- * Print and "Download PDF" for one label. Both open the same print page, so
- * the PDF can only ever show what the printed label shows.
+ * Print and "Save as PDF" for one label, at each size. All four open the same
+ * print page, so the PDF can only ever show what the printed label shows.
  */
-export function ShippingLabelPrintButtons({
-    url,
-    size,
-}: {
-    url: string;
-    size: ShippingLabelSize;
-}) {
+export function ShippingLabelPrintButtons({ url }: { url: string }) {
     const { t } = useTranslation();
-    const target = shippingLabelUrl(url, size);
 
     return (
         <div className="flex flex-wrap gap-2">
-            <Button asChild size="sm">
-                <a href={target} target="_blank" rel="noopener noreferrer">
-                    <Printer aria-hidden="true" />
-                    {t('shipping_label.panel.print_size', {
-                        size: size === '3x3' ? '3 × 3' : '3 × 4',
-                    })}
-                </a>
-            </Button>
-            <Button asChild size="sm" variant="outline">
-                <a
-                    href={target}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    title={t('shipping_label.panel.pdf_hint')}
-                >
-                    <Download aria-hidden="true" />
-                    {t('shipping_label.panel.download_pdf')}
-                </a>
-            </Button>
+            {LABEL_SIZES.map(([size, name]) => (
+                <Button key={`print-${size}`} asChild size="sm">
+                    <a
+                        href={shippingLabelUrl(url, size)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                    >
+                        <Printer aria-hidden="true" />
+                        {t('shipping_label.panel.print_size', { size: name })}
+                    </a>
+                </Button>
+            ))}
+            {LABEL_SIZES.map(([size, name]) => (
+                <Button key={`pdf-${size}`} asChild size="sm" variant="outline">
+                    <a
+                        href={shippingLabelUrl(url, size)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title={t('shipping_label.panel.pdf_hint')}
+                    >
+                        <Download aria-hidden="true" />
+                        {t('shipping_label.panel.pdf_size', { size: name })}
+                    </a>
+                </Button>
+            ))}
         </div>
     );
 }
@@ -184,7 +188,7 @@ export function StaffShippingLabelPanel({
     compact?: boolean;
 }) {
     const { t, locale } = useTranslation();
-    const [size, setSize] = useShippingLabelSize();
+    const [size] = useShippingLabelSize();
     const [correcting, setCorrecting] = useState(false);
     const [issuing, setIssuing] = useState(false);
     const form = useForm({ reason: '' });
@@ -243,13 +247,7 @@ export function StaffShippingLabelPanel({
             )}
 
             {label.can.print && (
-                <div className="flex flex-wrap items-center gap-3">
-                    <ShippingLabelSizePicker size={size} onChange={setSize} />
-                    <ShippingLabelPrintButtons
-                        url={label.print_url}
-                        size={size}
-                    />
-                </div>
+                <ShippingLabelPrintButtons url={label.print_url} />
             )}
 
             {(label.can.issue || label.can.reissue) && (
@@ -411,20 +409,14 @@ export function PartnerShippingLabels({
     labels: PartnerShippingLabel[];
 }) {
     const { t } = useTranslation();
-    const [size, setSize] = useShippingLabelSize();
 
     if (labels.length === 0) {
         return null;
     }
 
-    const anyReady = labels.some((label) => label.ready);
-
     return (
         <SectionCard title={t('shipping_label.panel.title')}>
             <div className="space-y-3">
-                {anyReady && (
-                    <ShippingLabelSizePicker size={size} onChange={setSize} />
-                )}
                 <ul className="divide-border divide-y">
                     {labels.map((label) => (
                         <li
@@ -445,7 +437,6 @@ export function PartnerShippingLabels({
                             {label.ready && label.print_url ? (
                                 <ShippingLabelPrintButtons
                                     url={label.print_url}
-                                    size={size}
                                 />
                             ) : (
                                 <span className="text-muted-foreground text-sm">

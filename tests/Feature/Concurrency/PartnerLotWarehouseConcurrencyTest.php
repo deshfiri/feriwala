@@ -72,6 +72,9 @@ afterEach(function () {
         DB::statement("ALTER TABLE {$table} ENABLE TRIGGER USER");
     }
 
+    // Only a draft product may be deleted (P3-3); this one never went further
+    // than the test, so it goes back to draft first.
+    DB::table('products')->where('id', $this->product->id)->update(['status' => 'draft']);
     DB::table('products')->where('id', $this->product->id)->delete();
     DB::table('categories')->where('id', '>', $this->watermarks['categories'])->delete();
     DB::table('warehouses')->whereIn('id', [$this->tejgaon->id, $this->chattogram->id])->delete();
