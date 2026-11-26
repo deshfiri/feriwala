@@ -15,7 +15,13 @@ import { useTranslation } from '@/hooks/use-translation';
 import type { Money } from '@/lib/money';
 import type { StatusTone } from '@/lib/status';
 import { show as showOrder } from '@/routes/admin/orders';
-import { correct, index, retry, show } from '@/routes/admin/storefront-profits';
+import {
+    correct,
+    holdRelease,
+    index,
+    retry,
+    show,
+} from '@/routes/admin/storefront-profits';
 import type { StorefrontProfitRow } from './index';
 
 type Lot = {
@@ -67,6 +73,9 @@ type Props = {
         }[];
     };
     can_retry: boolean;
+    /** A reason a person must clear before anything is credited. */
+    review_hold: string | null;
+    can_clear_hold: boolean;
     can_correct: boolean;
     password_confirmed: boolean;
     preview: {
@@ -86,6 +95,8 @@ type Props = {
 export default function StorefrontProfitShow({
     profit,
     can_retry,
+    review_hold,
+    can_clear_hold,
     can_correct,
     password_confirmed,
     preview,
@@ -94,6 +105,7 @@ export default function StorefrontProfitShow({
     const when = (value: string | null) =>
         value === null ? '—' : new Date(value).toLocaleString(locale);
     const retryForm = useForm({});
+    const holdForm = useForm({ reason: '' });
 
     const facts: [string, ReactNode][] = [
         [t('storefront_profit.fields.delivered_at'), when(profit.delivered_at)],
@@ -275,6 +287,64 @@ export default function StorefrontProfitShow({
                     </div>
 
                     <div className="space-y-4">
+                        {review_hold && (
+                            <SectionCard
+                                title={t('storefront_profit.hold.title')}
+                            >
+                                <p className="text-muted-foreground mb-3 text-sm">
+                                    {t(
+                                        `storefront_profit.reasons.${review_hold}`,
+                                    )}
+                                </p>
+                                {can_clear_hold && (
+                                    <form
+                                        className="space-y-2"
+                                        onSubmit={(event) => {
+                                            event.preventDefault();
+                                            holdForm.post(
+                                                holdRelease.url(profit.id),
+                                                {
+                                                    preserveScroll: true,
+                                                },
+                                            );
+                                        }}
+                                    >
+                                        <Label htmlFor="hold-reason">
+                                            {t('storefront_profit.hold.reason')}
+                                        </Label>
+                                        <Input
+                                            id="hold-reason"
+                                            value={holdForm.data.reason}
+                                            onChange={(event) =>
+                                                holdForm.setData(
+                                                    'reason',
+                                                    event.target.value,
+                                                )
+                                            }
+                                        />
+                                        <InputError
+                                            message={holdForm.errors.reason}
+                                        />
+                                        <ConfirmButton
+                                            type="submit"
+                                            size="sm"
+                                            disabled={holdForm.processing}
+                                            confirm={{
+                                                title: t(
+                                                    'storefront_profit.hold.confirm_title',
+                                                ),
+                                                description: t(
+                                                    'storefront_profit.hold.confirm_body',
+                                                ),
+                                            }}
+                                        >
+                                            {t('storefront_profit.hold.clear')}
+                                        </ConfirmButton>
+                                    </form>
+                                )}
+                            </SectionCard>
+                        )}
+
                         {can_retry && (
                             <SectionCard
                                 title={t('storefront_profit.actions.retry')}

@@ -56,6 +56,8 @@ return [
         'technical_failure' => 'Crediting failed for a technical reason.',
         'review_required_after_release' => 'Credited, but a cost can no longer be proven.',
         'negative_profit_after_release' => 'Credited, then reduced below zero by a return.',
+        'possible_duplicate' => 'An earlier credit may already represent this profit.',
+        'delivered_time_unproven' => 'The original delivery time cannot be proven.',
     ],
 
     'unproven' => [
@@ -111,6 +113,25 @@ return [
         'cod_confirmed' => 'Cash collection recorded.',
         'retried' => 'Credit retried.',
         'corrected' => 'Cost recorded.',
+        'hold_cleared' => 'Review hold cleared. The profit follows its facts again.',
+    ],
+
+    'summary' => [
+        'pending' => 'Pending',
+        'due' => 'Due now',
+        'released' => 'Released',
+        'reversed' => 'Reversed',
+        'blocked' => 'Blocked',
+        'unresolved' => 'Unresolved',
+    ],
+
+    'hold' => [
+        'title' => 'Held for review',
+        'clear' => 'Clear the hold',
+        'reason' => 'What you checked',
+        'confirm_title' => 'Clear this review hold?',
+        'confirm_body' => 'The profit is credited when due, once. Only clear it after checking the earlier credit or the delivery time.',
+        'all_reasons' => 'Every reason',
     ],
 
     'refused' => [

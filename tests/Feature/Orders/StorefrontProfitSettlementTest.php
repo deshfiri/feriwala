@@ -6,6 +6,7 @@ use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Billing\Enums\FeeType;
 use App\Domain\Billing\Enums\GatewayOwnership;
 use App\Domain\Billing\Enums\PaymentStatus;
+use App\Domain\Billing\Models\FeeRule;
 use App\Domain\Billing\Models\PartnerGatewayConfiguration;
 use App\Domain\Billing\Models\PartnerGatewayConfigurationVersion;
 use App\Domain\Catalog\Models\Product;
@@ -64,6 +65,10 @@ use Illuminate\Support\Str;
  */
 
 beforeEach(function () {
+    // Every scenario lives on one clock: orders are placed and paid the
+    // morning of 1 November, delivered later that day, so the 24-hour hold is
+    // measured from facts in a known order.
+    $this->travelTo(CarbonImmutable::parse('2026-11-01 08:00:00'));
     $this->seed(RolesAndPermissionsSeeder::class);
     app(SettingsRepository::class)->define(CodTerms::ENABLED, 'orders', SettingType::Boolean, true);
     websiteTestFee(FeeType::WebsiteDelivery, 0);
@@ -227,6 +232,8 @@ function storefrontProfitPay(Order $order, GatewayOwnership $ownership = Gateway
 /** The courier delivers: the delivery history records Delivered at `$at`. */
 function storefrontProfitDeliver(Order $order, CarbonImmutable $at): void
 {
+    // What happens next (cash confirmed, returns) happens at the delivery.
+    test()->travelTo($at);
     $order = $order->refresh();
 
     foreach ([OrderDeliveryStatus::CourierAssigned, OrderDeliveryStatus::Shipped, OrderDeliveryStatus::OutForDelivery] as $step) {
@@ -400,7 +407,62 @@ describe('who earns, and how much', function () {
     });
 });
 
+describe('the formula and its breakdown', function () {
+    it('keeps the delivery charge for Banij and the margin for the Partner', function (int $quantity, int $deliveryFee, string $delivery, string $customerTotal, string $base, string $banij, string $partner) {
+        FeeRule::query()->where('fee_type', FeeType::WebsiteDelivery->value)->delete();
+        websiteTestFee(FeeType::WebsiteDelivery, $deliveryFee);
+        [$account, $website] = storefrontProfitPartner(AccountType::Conditional, '1500.00');
+        storefrontProfitPurchase($account, $this->product, $quantity, '1000.00');
+
+        $money = fn (string $amount) => Money::fromDecimal($amount, Currency::BDT);
+        $address = ['line1' => 'House 12', 'city' => 'Dhaka', 'country' => 'BD'];
+        $subtotal = $money('1500.00')->multipliedBy($quantity);
+        [$order] = app(PlaceWebsiteOrder::class)->handle($website, new WebsiteOrderSubmission(
+            deliveryLocation: deliveryTestLocation(), reference: 'SF-DL-'.Str::upper(Str::random(6)), idempotencyKey: (string) Str::uuid(),
+            customer: new WebsiteCustomerDetails(name: 'Ayesha Rahman', mobile: '+88017'.random_int(10000000, 99999999)),
+            shippingAddress: $address, billingAddress: $address,
+            items: [['sku' => $this->product->sku, 'quantity' => $quantity]], claimedUnitPrices: [$money('1500.00')],
+            claimedTotals: ['subtotal' => $subtotal, 'discount' => $money('0.00'), 'shipping' => $money($delivery), 'tax' => $money('0.00'), 'grand_total' => $money($customerTotal)],
+            paymentMethod: 'cod',
+        ));
+
+        storefrontProfitDeliver($order, CarbonImmutable::parse('2026-11-01 10:00:00'));
+        storefrontProfitConfirmCod($order);
+
+        $profit = storefrontProfitOf($order);
+        expect($profit->breakdown['customer_total'])->toBe($customerTotal)
+            ->and($profit->breakdown['delivery_charge_retained'])->toBe($delivery)
+            ->and($profit->breakdown['product_base_price_total'])->toBe($base)
+            ->and($profit->breakdown['banij_receivable'])->toBe($banij)
+            ->and($profit->breakdown['partner_profit'])->toBe($partner)
+            ->and($profit->profit_amount->toDecimal())->toBe($partner);
+    })->with([
+        '৳1,500 sold, ৳1,000 base, ৳100 delivery' => [1, 10000, '100.00', '1600.00', '1000.00', '1100.00', '500.00'],
+        'free delivery' => [1, 0, '0.00', '1500.00', '1000.00', '1000.00', '500.00'],
+        'two units, ৳100 delivery' => [2, 10000, '100.00', '3100.00', '2000.00', '2100.00', '1000.00'],
+    ]);
+});
+
 describe('the 24-hour hold', function () {
+    it('counts the 24 hours from the later of delivery and collection', function () {
+        [$account, $website] = storefrontProfitPartner(AccountType::NonConditional);
+        $order = storefrontProfitPlace($website, 2, '2600.00');
+        $delivered = CarbonImmutable::parse('2026-11-01 10:00:00');
+        storefrontProfitDeliver($order, $delivered);
+
+        $collected = $delivered->addHours(10);
+        $this->travelTo($collected);
+        storefrontProfitConfirmCod($order);
+
+        expect(storefrontProfitOf($order)->release_at->equalTo($collected->addHours(24)))->toBeTrue();
+
+        storefrontProfitSweep($delivered->addHours(24));
+        expect(storefrontProfitCredited($account))->toBe('0.00');
+
+        storefrontProfitSweep($collected->addHours(24));
+        expect(storefrontProfitCredited($account))->toBe('200.00');
+    });
+
     it('shows the profit as pending once the order is dispatched, before anything is credited', function () {
         [$account, $website] = storefrontProfitPartner(AccountType::NonConditional);
         $order = storefrontProfitPlace($website, 2, '2600.00');

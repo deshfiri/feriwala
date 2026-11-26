@@ -39,9 +39,13 @@ class IssueShipmentLabel
     ) {}
 
     /**
+     * `$reason` says how the label came about when that is not the ordinary
+     * course — the legacy reconciliation records that it reconstructed it, and
+     * that the Storefront branding is today's, not necessarily what shipped.
+     *
      * @throws ShipmentLabelRefused
      */
-    public function handle(Shipment $shipment, ?User $actor): ShipmentLabel
+    public function handle(Shipment $shipment, ?User $actor, ?string $reason = null): ShipmentLabel
     {
         $current = $this->current($shipment);
 
@@ -58,7 +62,7 @@ class IssueShipmentLabel
         }
 
         try {
-            return $this->database->transaction(function () use ($shipment, $actor, $attributes): ShipmentLabel {
+            return $this->database->transaction(function () use ($shipment, $actor, $attributes, $reason): ShipmentLabel {
                 /** @var Shipment $locked */
                 $locked = Shipment::query()->lockForUpdate()->findOrFail($shipment->id);
 
@@ -73,6 +77,7 @@ class IssueShipmentLabel
                     'version' => 1,
                     'issued_by' => $actor?->id,
                     'issued_at' => now(),
+                    'issue_reason' => $reason,
                 ]);
 
                 // The warehouse becomes part of the shipment's record the

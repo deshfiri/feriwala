@@ -34,8 +34,19 @@ export type StorefrontProfitRow = {
 
 type Props = {
     profits: Paginator<StorefrontProfitRow>;
-    filters: { status: string | null; search: string | null };
+    filters: {
+        status: string | null;
+        reason: string | null;
+        search: string | null;
+    };
     statuses: { value: string; label: string }[];
+    /** The reconciliation queue: what a person settles by hand. */
+    reasons: { value: string; label: string }[];
+    /** Counted on the server. */
+    summary: Record<
+        'pending' | 'due' | 'released' | 'reversed' | 'blocked' | 'unresolved',
+        number
+    >;
 };
 
 const controlClass =
@@ -49,6 +60,8 @@ export default function StorefrontProfits({
     profits,
     filters,
     statuses,
+    reasons,
+    summary,
 }: Props) {
     const { t, locale } = useTranslation();
     const { setFilter } = useTableQuery({ only: ['profits', 'filters'] });
@@ -145,6 +158,31 @@ export default function StorefrontProfits({
                     description={t('storefront_profit.admin_description')}
                 />
 
+                <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+                    {(
+                        [
+                            'pending',
+                            'due',
+                            'released',
+                            'reversed',
+                            'blocked',
+                            'unresolved',
+                        ] as const
+                    ).map((key) => (
+                        <div
+                            key={key}
+                            className="bg-card rounded-xl border p-3"
+                        >
+                            <dt className="text-muted-foreground text-xs">
+                                {t(`storefront_profit.summary.${key}`)}
+                            </dt>
+                            <dd className="text-xl font-semibold tabular-nums">
+                                {summary[key]}
+                            </dd>
+                        </div>
+                    ))}
+                </dl>
+
                 <DataTable
                     columns={columns}
                     paginator={profits}
@@ -153,21 +191,56 @@ export default function StorefrontProfits({
                     searchPlaceholder={t('storefront_profit.fields.order')}
                     onlyReload={['profits', 'filters']}
                     filters={
-                        <select
-                            aria-label={t('storefront_profit.fields.status')}
-                            value={filters.status ?? ''}
-                            onChange={(e) =>
-                                setFilter('status', e.target.value || undefined)
-                            }
-                            className={`${controlClass} w-44`}
-                        >
-                            <option value="">—</option>
-                            {statuses.map((option) => (
-                                <option key={option.value} value={option.value}>
-                                    {option.label}
+                        <div className="flex flex-wrap gap-2">
+                            <select
+                                aria-label={t(
+                                    'storefront_profit.fields.status',
+                                )}
+                                value={filters.status ?? ''}
+                                onChange={(e) =>
+                                    setFilter(
+                                        'status',
+                                        e.target.value || undefined,
+                                    )
+                                }
+                                className={`${controlClass} w-44`}
+                            >
+                                <option value="">—</option>
+                                {statuses.map((option) => (
+                                    <option
+                                        key={option.value}
+                                        value={option.value}
+                                    >
+                                        {option.label}
+                                    </option>
+                                ))}
+                            </select>
+                            <select
+                                aria-label={t(
+                                    'storefront_profit.fields.reason',
+                                )}
+                                value={filters.reason ?? ''}
+                                onChange={(e) =>
+                                    setFilter(
+                                        'reason',
+                                        e.target.value || undefined,
+                                    )
+                                }
+                                className={`${controlClass} w-64`}
+                            >
+                                <option value="">
+                                    {t('storefront_profit.hold.all_reasons')}
                                 </option>
-                            ))}
-                        </select>
+                                {reasons.map((option) => (
+                                    <option
+                                        key={option.value}
+                                        value={option.value}
+                                    >
+                                        {option.label}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
                     }
                     renderCard={(row) => (
                         <div className="space-y-2">

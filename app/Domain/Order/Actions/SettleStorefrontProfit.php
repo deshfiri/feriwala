@@ -234,6 +234,69 @@ class SettleStorefrontProfit
     }
 
     /**
+     * Hold a profit for a person: nothing is credited until it is cleared.
+     * Only before anything was credited; a repeat changes nothing.
+     */
+    public function placeReviewHold(PartnerStorefrontProfit $profit, string $reason): PartnerStorefrontProfit
+    {
+        return $this->locked($profit->order, function (PartnerStorefrontProfit $locked, Order $order) use ($reason) {
+            if ($locked->review_hold === null && $locked->status->isUnsettled()) {
+                $locked->forceFill(['review_hold' => $reason, 'review_hold_at' => CarbonImmutable::now()])->save();
+
+                $this->audit->handle(new AuditEntry(
+                    action: 'storefront_profit.review_hold_placed',
+                    actorType: 'system',
+                    auditableType: PartnerStorefrontProfit::class,
+                    auditableId: $locked->id,
+                    after: ['order' => $order->reference, 'reason' => $reason],
+                    accountId: $locked->business_account_id,
+                    module: PermissionModule::Order->value,
+                    isSensitive: true,
+                ));
+            }
+
+            return $this->refresh($locked, $order);
+        });
+    }
+
+    /**
+     * Staff have looked and the profit stands: the hold comes off and the
+     * profit follows its facts again — credited by the sweep when due, once,
+     * under the order's own key.
+     */
+    public function clearReviewHold(User $actor, PartnerStorefrontProfit $profit, string $reason): PartnerStorefrontProfit
+    {
+        $reason = trim($reason);
+
+        if (mb_strlen($reason) < 10) {
+            throw new InvalidArgumentException(__('validation.min.string', ['attribute' => 'reason', 'min' => 10]));
+        }
+
+        return $this->locked($profit->order, function (PartnerStorefrontProfit $locked, Order $order) use ($actor, $reason) {
+            if ($locked->review_hold === null) {
+                return $locked;
+            }
+
+            $before = $locked->review_hold;
+            $locked->forceFill(['review_hold' => null, 'review_hold_at' => null])->save();
+
+            $this->audit->handle(new AuditEntry(
+                action: 'storefront_profit.review_hold_cleared',
+                actorId: $actor->id,
+                auditableType: PartnerStorefrontProfit::class,
+                auditableId: $locked->id,
+                before: ['review_hold' => $before],
+                reason: $reason,
+                accountId: $locked->business_account_id,
+                module: PermissionModule::Order->value,
+                isSensitive: true,
+            ));
+
+            return $this->refresh($locked, $order);
+        });
+    }
+
+    /**
      * Take an owed reversal when the Wallet can carry it.
      */
     public function recover(PartnerStorefrontProfitReversal $reversal): PartnerStorefrontProfitReversal
@@ -321,6 +384,7 @@ class SettleStorefrontProfit
             'cost_amount' => $cost,
             'profit_amount' => $cost === null ? null : $selling->minus($cost),
             'legacy_credited_amount' => $this->legacyCredited($order, $currency),
+            'breakdown' => $this->breakdown($order, $lines, $selling, $cost),
         ]);
 
         if ($profit->status === StorefrontProfitStatus::Released) {
@@ -345,12 +409,13 @@ class SettleStorefrontProfit
             $reason = 'technical_failure';
         }
 
-        // Exactly 24 hours after the authoritative Delivered time, once the
-        // money is also in; a later block or review does not move it.
+        // Exactly 24 hours after the later of the authoritative Delivered time
+        // and the authoritative collection time; a later block or review does
+        // not move it.
         $profit->forceFill([
             'status_reason' => $reason,
             'release_at' => $profit->delivered_at !== null && $profit->collected_at !== null
-                ? $profit->delivered_at->addHours(PartnerStorefrontProfit::HOLD_HOURS)
+                ? $profit->delivered_at->max($profit->collected_at)->addHours(PartnerStorefrontProfit::HOLD_HOURS)
                 : null,
         ]);
 
@@ -365,6 +430,44 @@ class SettleStorefrontProfit
         }
 
         return $profit;
+    }
+
+    /**
+     * The whole calculation, frozen with the profit so it can be shown and
+     * checked: what the customer pays, what Banij keeps (the units' frozen
+     * Product Base Price and the order's frozen delivery charge), what is tax,
+     * and what is left for the Partner. Delivery is never on the Partner's side
+     * of the sum, so it is never taken off twice.
+     *
+     * @param  list<array{item: OrderItem, basis: string, quantity: int, returned: int, selling: Money, cost: Money|null, profit: Money|null, unproven: string|null}>  $lines
+     * @return array<string, mixed>
+     */
+    protected function breakdown(Order $order, array $lines, Money $selling, ?Money $cost): array
+    {
+        $delivery = $order->delivery;
+        $deliveryTax = $order->delivery_tax ?? Money::zero($delivery->currency);
+
+        return [
+            'customer_total' => $order->total->toDecimal(),
+            'discount' => $order->discount->toDecimal(),
+            'product_tax_added' => $order->tax->toDecimal(),
+            'product_tax_included' => $order->tax_included->toDecimal(),
+            'delivery_charge_retained' => $delivery->toDecimal(),
+            'delivery_tax' => $deliveryTax->toDecimal(),
+            'net_product_selling' => $selling->toDecimal(),
+            'product_base_price_total' => $cost?->toDecimal(),
+            'banij_receivable' => $cost?->plus($delivery)->toDecimal(),
+            'partner_profit' => $cost === null ? null : $selling->minus($cost)->toDecimal(),
+            'lines' => array_map(fn (array $line) => [
+                'line' => $line['item']->public_id,
+                'basis' => $line['basis'],
+                'quantity' => $line['quantity'],
+                'returned' => $line['returned'],
+                'net_selling' => $line['selling']->toDecimal(),
+                'product_base_price' => $line['cost']?->toDecimal(),
+                'unproven' => $line['unproven'],
+            ], $lines),
+        ];
     }
 
     /**
@@ -393,6 +496,29 @@ class SettleStorefrontProfit
                 $profit->forceFill([
                     'collected_at' => $payment->completed_at ?? CarbonImmutable::now(),
                     'collected_amount' => $payment->amount,
+                ]);
+            }
+
+            return;
+        }
+
+        // Cash on delivery already confirmed by staff on the earlier, per-line
+        // settlement: authoritative only when every line of the order carries
+        // it — then the order's collection is when the last line was confirmed,
+        // and how much is what they add up to.
+        if ($profit->collected_at === null) {
+            $lines = OrderProceedsSettlement::query()->where('order_id', $order->id)->get();
+            $itemIds = $order->items()->pluck('id');
+
+            if ($itemIds->isNotEmpty()
+                && $lines->count() === $itemIds->count()
+                && $lines->every(fn (OrderProceedsSettlement $line) => $line->cod_collected_at !== null && $line->cod_amount_collected !== null)) {
+                $currency = Currency::from($order->currency_code);
+
+                $profit->forceFill([
+                    'collection_channel' => CollectionChannel::Cod,
+                    'collected_at' => $lines->max('cod_collected_at'),
+                    'collected_amount' => $lines->reduce(fn (Money $sum, OrderProceedsSettlement $line) => $sum->plus($line->cod_amount_collected ?? Money::zero($currency)), Money::zero($currency)),
                 ]);
             }
         }
@@ -444,6 +570,13 @@ class SettleStorefrontProfit
 
         if (($blocker = $this->blocker($order)) !== null) {
             return [StorefrontProfitStatus::Blocked, $blocker];
+        }
+
+        // Something a person must look at that the figures cannot clear: an
+        // earlier credit that may already be this profit, or a Delivered time
+        // the records cannot prove.
+        if ($profit->review_hold !== null) {
+            return [StorefrontProfitStatus::ReviewRequired, $profit->review_hold];
         }
 
         if ($profit->collected_amount?->equals($order->total) !== true) {

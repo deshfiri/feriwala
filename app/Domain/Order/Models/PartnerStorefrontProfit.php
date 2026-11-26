@@ -44,6 +44,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property int $attempts
  * @property CarbonImmutable|null $last_attempt_at
  * @property string|null $failure_message
+ * @property string|null $review_hold `possible_duplicate` or `delivered_time_unproven`: a person must clear it
+ * @property CarbonImmutable|null $review_hold_at
+ * @property array<string, mixed>|null $breakdown the whole calculation, as it stood when last worked out
  * @property CarbonImmutable $created_at
  * @property CarbonImmutable $updated_at
  * @property-read Order $order
@@ -82,6 +85,8 @@ class PartnerStorefrontProfit extends Model
             'legacy_credited_amount' => MoneyCast::class,
             'attempts' => 'integer',
             'last_attempt_at' => 'immutable_datetime',
+            'review_hold_at' => 'immutable_datetime',
+            'breakdown' => 'array',
             'created_at' => 'immutable_datetime',
             'updated_at' => 'immutable_datetime',
         ];

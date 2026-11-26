@@ -2074,6 +2074,9 @@ Route::middleware(['auth', 'noindex', 'two-factor'])
         Route::get('storefront-profits', [StorefrontProfitController::class, 'index'])->name('storefront-profits.index');
         Route::get('storefront-profits/{profit}', [StorefrontProfitController::class, 'show'])->name('storefront-profits.show');
         Route::post('storefront-profits/{profit}/retry', [StorefrontProfitController::class, 'retry'])->name('storefront-profits.retry');
+        Route::post('storefront-profits/{profit}/hold-release', [StorefrontProfitController::class, 'clearHold'])
+            ->middleware(RequirePassword::class)
+            ->name('storefront-profits.hold-release');
         Route::post('storefront-profits/{profit}/correction', [StorefrontProfitController::class, 'correct'])
             ->middleware(RequirePassword::class)
             ->name('storefront-profits.correct');

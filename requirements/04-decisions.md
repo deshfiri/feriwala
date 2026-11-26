@@ -1975,3 +1975,50 @@ quantity, remaining quantity, purchase time). Holds take the oldest lots first a
 and quantity; releases and returns go back to the same lots; every change is an append-only,
 uniquely keyed movement, so nothing is taken or restored twice. The lots always hold exactly the
 Partner's `available` units.
+
+### Amendment, 2026-11-26 — formula stated in full, release time, legacy reconciliation
+
+**Requested by the owner on 2026-11-26.**
+
+- **The formula.** "Product Base Price" is the per-unit amount frozen at placement: the platform
+  price for Banij central stock (`platform_retained_amount`), the FIFO acquisition cost for
+  Partner stock.
+  - Banij receivable = Σ delivered units' Product Base Price + the order's frozen delivery charge.
+  - Partner profit = net product selling (after discount, excluding tax) − Σ Product Base Price.
+  - Delivery belongs to Banij and is never subtracted from the Partner a second time.
+  - Example: ৳1,500 selling, ৳1,000 base, ৳100 delivery → Banij ৳1,100, Partner ৳500. With free
+    delivery, Partner ৳500. Two units with ৳100 delivery → Banij ৳2,100, Partner ৳1,000.
+- **Release** is 24 hours after the **later** of the Delivered time and the collection time.
+  Collection confirmed after delivery restarts the 24 hours from the confirmation.
+- **The full breakdown is stored** with each profit (customer total, discount, product tax,
+  delivery charge, delivery tax, net product selling, Product Base Price total, Banij receivable,
+  Partner profit, and each line), so an amount can always be explained.
+- **Review holds.** A profit can be held for `possible_duplicate` (an earlier SalesCredit may
+  already represent it) or `delivered_time_unproven` (the Delivered row was created by
+  reconciliation, so its time is the sync time, not the delivery). Held means review, never
+  credit. Only staff with `wallet.adjust_wallet` clear a hold, with a confirmed password and a
+  reason, and that is audited.
+- **Legacy collection.** A COD collection already recorded on every line of the earlier per-line
+  settlement is proof of collection, at the latest of those times. Delivered alone never is.
+- **`php artisan storefront-profit:reconcile`** (also `storefront:reconcile-history`) replaces the
+  audit-only path for historical orders:
+  - Dry run by default. `--apply`, `--order`, `--partner`/`--account`, `--website`, `--from`,
+    `--to`, `--provider=steadfast`, `--resume`, `--details`, `--no-courier-api`, `--limit`.
+  - Per order, in order: account type, courier, delivery, collection, cost, settlement, release
+    when due, label, classification.
+  - One locked transaction per order. A failure is recorded and the run continues. Runs keep a
+    checkpoint. Every effect is keyed, so a second `--apply` changes nothing.
+  - It never books a courier. It reads a parcel's state only through the read-only invoice and
+    status lookups, and moves it only through the legal transitions.
+  - Labels are issued only from complete data and marked as reconstructed.
+  - Each run writes a JSON/CSV report with no customer data.
+  - Exits non-zero only on a technical failure.
+- **Account-type repair.** The `orders.account_type` lock admits one change: Conditional →
+  Non-Conditional on a website order, only inside the reconciliation's transaction
+  (`feriwala.account_type_reconciliation`). It is proven from the receivable's frozen
+  `account_type_at_placement`, or the placement lines' platform price, never from the account
+  today, and it is audited.
+- **Admin → Storefront profits** shows pending, due, released, reversed, blocked and unresolved
+  counts, and filters the review queue by reason.
+- Legacy rows without an authoritative Product Base Price go to the review report. They do not
+  block the live implementation.
