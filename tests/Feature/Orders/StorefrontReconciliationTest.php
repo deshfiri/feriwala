@@ -486,9 +486,15 @@ describe('orders credited under the earlier formula', function () {
         $line = $order->items()->sole();
         $wholesale = $line->getRawOriginal('product_cost');
 
-        DB::table('order_items')->where('id', $line->id)->update(['product_cost' => '5000.00']);
+        $setCost = function (?string $cost) use ($line): void {
+            DB::statement('ALTER TABLE order_items DISABLE TRIGGER order_items_history_guard');
+            DB::table('order_items')->where('id', $line->id)->update(['product_cost' => $cost]);
+            DB::statement('ALTER TABLE order_items ENABLE TRIGGER order_items_history_guard');
+        };
+
+        $setCost('5000.00');
         reconcileRun();
-        DB::table('order_items')->where('id', $line->id)->update(['product_cost' => $wholesale]);
+        $setCost($wholesale);
     }
 
     function reconcileToppedUp(BusinessAccount $account): string

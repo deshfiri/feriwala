@@ -511,6 +511,9 @@ describe('who sees and who moves', function () {
         app(AdvanceOrderCourierStatus::class)->handle($order->refresh(), OrderCourierStatus::Assigned, $this->staff);
         $seen('courier_booked', 'courier_booked');
 
+        app(AdvanceOrderCourierStatus::class)->handle($order->refresh(), OrderCourierStatus::PickupRequested, $this->staff);
+        $seen('courier_booked', 'courier_booked');
+
         app(AdvanceOrderCourierStatus::class)->handle($order->refresh(), OrderCourierStatus::PickedUp, $this->staff);
         $seen('picked_up', 'picked_up');
 
