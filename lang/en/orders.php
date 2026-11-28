@@ -762,6 +762,8 @@ return [
             'refunded' => 'Refunded',
             'partially_refunded' => 'Partially refunded',
             'reconciliation_required' => 'Reconciliation required',
+            // Paid to the courier at the door; shown until the order is delivered.
+            'cod_pending' => 'Payment pending (cash on delivery)',
         ],
         'payment_methods' => [
             'online' => 'Online payment',

@@ -217,7 +217,7 @@ export function StaffCourierPanel({ courier }: { courier: StaffCourierData }) {
                 )}
 
                 {courier.warehouse_problem && (
-                    <p className="text-sm text-warning" role="status">
+                    <p className="text-warning text-sm" role="status">
                         {courier.warehouse_problem}
                     </p>
                 )}
@@ -331,12 +331,6 @@ export function PartnerCourierCard({
                     </Row>
                     <Row label={t('steadfast.partner.tracking')}>
                         {courier.tracking_number ?? '—'}
-                    </Row>
-                    <Row label={t('steadfast.partner.status')}>
-                        <StatusPill
-                            tone={courier.status_tone}
-                            label={courier.status_label}
-                        />
                     </Row>
                     {courier.updated_at && (
                         <Row label={t('steadfast.partner.updated')}>

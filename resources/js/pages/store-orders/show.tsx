@@ -166,7 +166,15 @@ export default function StoreOrderShow({
 
                 <div className="grid gap-4 lg:grid-cols-[2fr_1fr]">
                     <div className="space-y-4">
-                        <SectionCard title={t('store_orders.timeline')}>
+                        <SectionCard
+                            title={t('store_orders.timeline')}
+                            actions={
+                                <StatusPill
+                                    tone={order.progress.tone}
+                                    label={order.progress.label}
+                                />
+                            }
+                        >
                             <StoreOrderTimeline timeline={timeline} />
                         </SectionCard>
 
@@ -397,31 +405,6 @@ export default function StoreOrderShow({
                             <p className="text-muted-foreground mt-2 text-xs">
                                 {t('store_orders.payment_apart')}
                             </p>
-                        </SectionCard>
-
-                        <SectionCard title={t('store_orders.delivery')}>
-                            <dl className="space-y-1 text-sm">
-                                <div className="flex justify-between">
-                                    <dt className="text-muted-foreground">
-                                        {t('store_orders.courier')}
-                                    </dt>
-                                    <dd>
-                                        {t(
-                                            `store_orders.axes.${order.courier}`,
-                                        )}
-                                    </dd>
-                                </div>
-                                <div className="flex justify-between">
-                                    <dt className="text-muted-foreground">
-                                        {t('store_orders.delivery_status')}
-                                    </dt>
-                                    <dd>
-                                        {t(
-                                            `store_orders.axes.${order.delivery}`,
-                                        )}
-                                    </dd>
-                                </div>
-                            </dl>
                         </SectionCard>
 
                         {order.cancellation_reason && (

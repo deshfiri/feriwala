@@ -7,6 +7,7 @@ import StatusPill from '@/components/status-pill';
 import { useTableQuery } from '@/hooks/use-table-query';
 import { useTranslation } from '@/hooks/use-translation';
 import type { Money } from '@/lib/money';
+import type { StatusTone } from '@/lib/status';
 import type { Column, Paginator } from '@/types';
 
 export type StoreOrderRow = {
@@ -22,6 +23,8 @@ export type StoreOrderRow = {
     fulfilment: string;
     courier: string;
     delivery: string;
+    /** The one status a Partner reads: the order's step, then the courier's progress to the door. */
+    progress: { value: string; label: string; tone: StatusTone };
     payment: string | null;
     total: Money;
     placed_at: string;
@@ -97,16 +100,23 @@ export default function StoreOrderList({
 
     const badges = (row: StoreOrderRow) => (
         <div className="flex flex-wrap gap-1">
-            <StatusPill
-                tone={
-                    row.step === 'delivered' || row.step === 'completed'
-                        ? 'success'
-                        : row.step
-                          ? 'info'
-                          : 'danger'
-                }
-                label={row.step_label}
-            />
+            {forStaff ? (
+                <StatusPill
+                    tone={
+                        row.step === 'delivered' || row.step === 'completed'
+                            ? 'success'
+                            : row.step
+                              ? 'info'
+                              : 'danger'
+                    }
+                    label={row.step_label}
+                />
+            ) : (
+                <StatusPill
+                    tone={row.progress.tone}
+                    label={row.progress.label}
+                />
+            )}
             {forStaff && (
                 <>
                     <StatusPill

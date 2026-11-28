@@ -27,6 +27,7 @@ use App\Domain\Order\Enums\AllocationSourceType;
 use App\Domain\Order\Enums\OrderCourierStatus;
 use App\Domain\Order\Enums\OrderDeliveryStatus;
 use App\Domain\Order\Enums\OrderFulfillmentStatus;
+use App\Domain\Order\Enums\OrderPaymentState;
 use App\Domain\Order\Enums\OrderSource;
 use App\Domain\Order\Enums\OrderStatus;
 use App\Domain\Order\Exceptions\AllocationRefused;
@@ -163,7 +164,6 @@ class OrderController extends Controller
                 'customer_phone' => OrderCustomerDetails::of($order)['phone'],
                 'status' => $order->status->value,
                 'status_tone' => $order->status->tone(),
-                'payment_status' => $order->payment?->status->value,
                 'needs_attention' => $order->status === OrderStatus::OnHold
                     || ($order->payment?->status->needsReconciliation() ?? false),
                 'total' => $order->total->jsonSerialize(),
@@ -377,7 +377,7 @@ class OrderController extends Controller
                 ])->all(),
                 'payment' => $payment === null ? null : [
                     'reference' => $payment->reference,
-                    'status' => $payment->status->value,
+                    'status' => $this->shownPaymentStatus($record),
                     'method' => $record->isCashOnDelivery() ? 'cod' : 'online',
                     'gateway' => $payment->gateway,
                     'gateway_mode' => $payment->gateway_mode,
@@ -533,7 +533,7 @@ class OrderController extends Controller
                 'total' => $record->total->jsonSerialize(),
             ],
             'payment' => $payment === null ? null : [
-                'status' => $payment->status->label(),
+                'status' => __('orders.admin.payment_statuses.'.$this->shownPaymentStatus($record)),
                 'method' => match (true) {
                     $payment->isPartnerOwned() => 'partner_gateway',
                     $record->isCashOnDelivery() => 'cod',
@@ -1252,6 +1252,25 @@ class OrderController extends Controller
                 'reason' => $change->reason,
             ])->all(),
         ];
+    }
+
+    /**
+     * The payment status on an order's details page.
+     *
+     * A cash-on-delivery order's payment record never leaves Draft: no gateway
+     * ever settles it, the courier collects the cash. So it reads "Payment
+     * pending (cash on delivery)" until the parcel is delivered, then "Paid",
+     * never "Draft".
+     */
+    protected function shownPaymentStatus(Order $order): ?string
+    {
+        if (! $order->isCashOnDelivery()) {
+            return $order->payment?->status->value;
+        }
+
+        return OrderPaymentState::forOrder($order) === OrderPaymentState::Paid
+            ? PaymentStatus::Paid->value
+            : 'cod_pending';
     }
 
     /**

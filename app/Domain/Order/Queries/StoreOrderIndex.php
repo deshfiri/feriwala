@@ -3,6 +3,7 @@
 namespace App\Domain\Order\Queries;
 
 use App\Domain\Billing\Enums\PaymentStatus;
+use App\Domain\Order\Enums\OrderCourierStatus;
 use App\Domain\Order\Enums\OrderDeliveryStatus;
 use App\Domain\Order\Enums\OrderPaymentState;
 use App\Domain\Order\Enums\OrderSource;
@@ -92,6 +93,40 @@ class StoreOrderIndex
     }
 
     /**
+     * The one status a Partner reads: the order's own step until it leaves the
+     * warehouse, then wherever the courier and delivery have taken it, each
+     * update replacing the last as it arrives. An exception (cancelled, failed,
+     * returned, on hold) wins over progress.
+     *
+     * @return array{value: string, label: string, tone: string}
+     */
+    public function progress(Order $order): array
+    {
+        $courier = $order->courier_status;
+        $delivery = $order->delivery_status;
+        $step = StoreOrderStep::for($order->status);
+
+        [$value, $tone] = match (true) {
+            $order->status === OrderStatus::Cancelled || $order->cancelled_at !== null => ['cancelled', 'danger'],
+            in_array($delivery, [OrderDeliveryStatus::ReturnRequested, OrderDeliveryStatus::Returned, OrderDeliveryStatus::Refunded], true),
+            in_array($order->status, [OrderStatus::ReturnRequested, OrderStatus::ReturnApproved, OrderStatus::Returning, OrderStatus::Returned], true),
+            $courier === OrderCourierStatus::ReturnedToOrigin => ['returned', 'warning'],
+            $order->status === OrderStatus::Completed => ['completed', 'success'],
+            $delivery === OrderDeliveryStatus::Delivered, $order->status === OrderStatus::Delivered, $courier === OrderCourierStatus::Delivered => ['delivered', 'success'],
+            $delivery === OrderDeliveryStatus::FailedDelivery, $order->status === OrderStatus::DeliveryFailed, $courier === OrderCourierStatus::FailedDelivery => ['failed_delivery', 'danger'],
+            $order->status === OrderStatus::OnHold, $delivery === OrderDeliveryStatus::OnHold => ['on_hold', 'warning'],
+            $delivery === OrderDeliveryStatus::OutForDelivery => ['out_for_delivery', 'info'],
+            $delivery === OrderDeliveryStatus::InTransit, $courier === OrderCourierStatus::InTransit, $order->status === OrderStatus::InTransit => ['in_transit', 'info'],
+            $courier === OrderCourierStatus::PickedUp => ['picked_up', 'info'],
+            in_array($courier, [OrderCourierStatus::Assigned, OrderCourierStatus::PickupRequested], true) => ['courier_booked', 'info'],
+            $step !== null => [$step->value, 'info'],
+            default => ['on_hold', 'warning'],
+        };
+
+        return ['value' => $value, 'label' => (string) __('store_orders.progress.'.$value), 'tone' => $tone];
+    }
+
+    /**
      * One row of the list. The partner and storefront are the order's own
      * snapshot-time records, never a live lookup of anything else.
      *
@@ -115,6 +150,7 @@ class StoreOrderIndex
             'courier' => $order->courier_status->value,
             'delivery' => $order->delivery_status->value,
             // A delivered cash-on-delivery order is paid: the courier collected the cash.
+            'progress' => $this->progress($order),
             'payment' => OrderPaymentState::forOrder($order) === OrderPaymentState::Paid
                 ? PaymentStatus::Paid->value
                 : $order->payment?->status->value,

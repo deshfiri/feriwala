@@ -753,6 +753,7 @@ return [
             'refunded' => 'রিফান্ড হয়েছে',
             'partially_refunded' => 'আংশিক রিফান্ড হয়েছে',
             'reconciliation_required' => 'মিলিয়ে দেখা প্রয়োজন',
+            'cod_pending' => 'পেমেন্ট বাকি (ক্যাশ অন ডেলিভারি)',
         ],
         'payment_methods' => [
             'online' => 'অনলাইন পেমেন্ট',

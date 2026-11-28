@@ -47,8 +47,33 @@ class StoreOrderTimeline
             }
         }
 
+        // Delivered as the courier reported it counts, even before the order's
+        // own status catches up.
+        $delivered = $order->deliveryStatusHistory->sortBy('id')
+            ->first(fn ($change) => $change->new_status === OrderDeliveryStatus::Delivered);
+
+        if ($delivered !== null) {
+            $reached['delivered'] ??= $this->mark($delivered->changed_at->toIso8601String(), $delivered->changedBy?->name, $delivered->source->value);
+        }
+
         $courier = $this->courierSteps($order);
         $current = StoreOrderStep::for($order->status);
+
+        if (isset($reached['delivered']) && $current === StoreOrderStep::Dispatched) {
+            $current = StoreOrderStep::Delivered;
+        }
+
+        // While dispatched, the latest courier update is where the order is now:
+        // each one takes over from the last as it arrives.
+        $courierCurrent = null;
+
+        if ($current === StoreOrderStep::Dispatched) {
+            foreach ($courier as $key => [, $mark]) {
+                if ($mark !== null) {
+                    $courierCurrent = $key;
+                }
+            }
+        }
         $cancelled = in_array($order->status, [OrderStatus::Cancelled, OrderStatus::RefundPending, OrderStatus::Refunded, OrderStatus::PartiallyRefunded], true)
             && $order->cancelled_at !== null;
 
@@ -59,17 +84,18 @@ class StoreOrderTimeline
         ];
 
         foreach ($order_of_steps as $step) {
-            $steps[] = $this->step($step->value, $step->label(), $reached[$step->value] ?? null, $current === $step && ! $cancelled);
+            $isCurrent = $current === $step && ! $cancelled && ! ($step === StoreOrderStep::Dispatched && $courierCurrent !== null);
+            $steps[] = $this->step($step->value, $step->label(), $reached[$step->value] ?? null, $isCurrent);
         }
 
         // Courier steps appear only once the order has been dispatched.
         if (isset($reached['dispatched'])) {
             foreach ($courier as $key => [$label, $mark]) {
-                $steps[] = $this->step($key, $label, $mark, false);
+                $steps[] = $this->step($key, $label, $mark, $key === $courierCurrent && ! $cancelled);
             }
         }
 
-        $steps[] = $this->step('delivered', StoreOrderStep::Delivered->label(), $reached['delivered'] ?? null, $current === StoreOrderStep::Delivered);
+        $steps[] = $this->step('delivered', StoreOrderStep::Delivered->label(), $reached['delivered'] ?? null, $current === StoreOrderStep::Delivered && ! $cancelled);
 
         if (isset($reached['completed'])) {
             $steps[] = $this->step('completed', StoreOrderStep::Completed->label(), $reached['completed'], $current === StoreOrderStep::Completed);

@@ -7,6 +7,7 @@ use App\Domain\Inventory\Enums\StockReservationStatus;
 use App\Domain\Inventory\Models\PartnerStockItem;
 use App\Domain\Inventory\Models\Warehouse;
 use App\Domain\Order\Actions\AdvanceOrderCourierStatus;
+use App\Domain\Order\Actions\AdvanceOrderDeliveryStatus;
 use App\Domain\Order\Actions\AdvanceStoreOrder;
 use App\Domain\Order\Actions\CancelStoreOrder;
 use App\Domain\Order\Actions\ConfirmCodOrder;
@@ -20,6 +21,7 @@ use App\Domain\Order\Data\ReturnedLine;
 use App\Domain\Order\Data\ReturnSubmission;
 use App\Domain\Order\Data\WebsiteOrderSubmission;
 use App\Domain\Order\Enums\OrderCourierStatus;
+use App\Domain\Order\Enums\OrderDeliveryStatus;
 use App\Domain\Order\Enums\OrderStatus;
 use App\Domain\Order\Enums\OrderStatusChangeSource;
 use App\Domain\Order\Enums\ReturnDisposition;
@@ -487,6 +489,41 @@ describe('who sees and who moves', function () {
 
         $this->actingAs($this->account->owner)->get(route('store-orders.show', $order->public_id))
             ->assertInertia(fn ($page) => $expected($page, 'order.customer_details'));
+    });
+
+    it('shows the Partner one status that follows the courier to the door, step by step', function () {
+        $order = storeOrderAdvance(storeOrderPlace(codeNeeded: false), STORE_ORDER_FULL_RUN);
+        $owner = $this->account->owner;
+
+        $seen = function (string $progress, string $current) use ($order, $owner) {
+            $this->actingAs($owner)->get(route('store-orders.index'))
+                ->assertInertia(fn ($page) => $page->where('orders.data.0.progress.value', $progress));
+
+            $this->actingAs($owner)->get(route('store-orders.show', $order->public_id))
+                ->assertInertia(fn ($page) => $page
+                    ->where('order.progress.value', $progress)
+                    ->where('order.progress.label', __('store_orders.progress.'.$progress))
+                    ->where('timeline.steps', fn ($steps) => collect($steps)->where('state', 'current')->pluck('key')->all() === [$current]));
+        };
+
+        $seen('dispatched', 'dispatched');
+
+        app(AdvanceOrderCourierStatus::class)->handle($order->refresh(), OrderCourierStatus::Assigned, $this->staff);
+        $seen('courier_booked', 'courier_booked');
+
+        app(AdvanceOrderCourierStatus::class)->handle($order->refresh(), OrderCourierStatus::PickedUp, $this->staff);
+        $seen('picked_up', 'picked_up');
+
+        foreach ([OrderDeliveryStatus::CourierAssigned, OrderDeliveryStatus::Shipped, OrderDeliveryStatus::InTransit] as $step) {
+            app(AdvanceOrderDeliveryStatus::class)->handle($order->refresh(), $step, $this->staff);
+        }
+        $seen('in_transit', 'in_transit');
+
+        app(AdvanceOrderDeliveryStatus::class)->handle($order->refresh(), OrderDeliveryStatus::OutForDelivery, $this->staff);
+        $seen('out_for_delivery', 'out_for_delivery');
+
+        app(AdvanceOrderDeliveryStatus::class)->handle($order->refresh(), OrderDeliveryStatus::Delivered, $this->staff);
+        $seen('delivered', 'delivered');
     });
 
     it('gives a wholesale order no store-order steps', function () {

@@ -9,6 +9,7 @@ use App\Domain\Account\VerificationCodes;
 use App\Domain\Billing\Enums\PaymentStatus;
 use App\Domain\Catalog\Policies\CatalogPolicy;
 use App\Domain\Order\Actions\SendCodConfirmationCode;
+use App\Domain\Order\Enums\OrderDeliveryStatus;
 use App\Domain\Order\Enums\OrderSource;
 use App\Domain\Order\Enums\OrderStatus;
 use App\Domain\Order\Enums\OrderStatusChangeSource;
@@ -323,6 +324,30 @@ describe('website orders (§18.5, P5-23, P6-14)', function () {
         $this->actingAs($staff)
             ->get(route('admin.orders.index', ['search' => 'Ayesha Fashion']))
             ->assertInertia(fn (Assert $page) => $page->has('orders.data', 1));
+    });
+
+    it('shows a COD order\'s payment as pending on its details page until delivery, then paid, never draft', function () {
+        $cod = adminOrderWebsiteOrder();
+        $wholesale = Order::factory()->create(['business_account_id' => $this->karim->id]);
+        $staff = testPlatformStaff(PlatformRole::OrderManager);
+
+        // The list carries no payment line at all.
+        $this->actingAs($staff)->get(route('admin.orders.index'))
+            ->assertInertia(fn (Assert $page) => $page->missing('orders.data.0.payment_status'));
+
+        $this->actingAs($staff)->get(route('admin.orders.show', $cod->public_id))
+            ->assertInertia(fn (Assert $page) => $page->where('order.payment.status', 'cod_pending'));
+
+        // A wholesale order really is waiting on its gateway payment.
+        $this->actingAs($staff)->get(route('admin.orders.show', $wholesale->public_id))
+            ->assertInertia(fn (Assert $page) => $page->where('order.payment.status', PaymentStatus::Draft->value));
+
+        foreach ([OrderDeliveryStatus::CourierAssigned, OrderDeliveryStatus::Shipped, OrderDeliveryStatus::OutForDelivery, OrderDeliveryStatus::Delivered] as $step) {
+            $cod->refresh()->moveDeliveryTo($step, new StatusChange(reason: 'test'), OrderStatusChangeSource::Staff);
+        }
+
+        $this->actingAs($staff)->get(route('admin.orders.show', $cod->public_id))
+            ->assertInertia(fn (Assert $page) => $page->where('order.payment.status', PaymentStatus::Paid->value));
     });
 
     it('shows the shop, the storefront reference and the customer to look up', function () {

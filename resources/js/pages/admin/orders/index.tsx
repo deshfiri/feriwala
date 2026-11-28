@@ -25,7 +25,6 @@ type OrderRow = {
     customer_phone: string | null;
     status: string;
     status_tone: StatusTone;
-    payment_status: string | null;
     needs_attention: boolean;
     total: Money;
     placed_at: string;
@@ -91,11 +90,6 @@ export default function AdminOrders({
             {row.needs_attention && (
                 <div className="text-warning-foreground text-xs font-medium">
                     {t('orders.admin.needs_attention')}
-                </div>
-            )}
-            {row.payment_status && (
-                <div className="text-muted-foreground text-xs">
-                    {t(`orders.admin.payment_statuses.${row.payment_status}`)}
                 </div>
             )}
         </div>
