@@ -169,6 +169,40 @@ describe('the Order Details editor', () => {
         expect(screen.queryByLabelText(/status/i)).toBeNull();
     });
 
+    it('opens when the page asks, on the Customer tab, and tells the page when its own button is used', () => {
+        const onOpenChange = vi.fn();
+        const { rerender } = render(
+            <AmendOrderDialog
+                orderId="01ORDER"
+                revision={revision()}
+                amend={amend()}
+                open={false}
+                onOpenChange={onOpenChange}
+            />,
+        );
+
+        expect(screen.queryAllByRole('tab')).toHaveLength(0);
+
+        fireEvent.click(
+            screen.getByRole('button', { name: 'orders.amend.open' }),
+        );
+        expect(onOpenChange).toHaveBeenCalledWith(true);
+
+        rerender(
+            <AmendOrderDialog
+                orderId="01ORDER"
+                revision={revision()}
+                amend={amend()}
+                open
+                onOpenChange={onOpenChange}
+            />,
+        );
+
+        expect(
+            screen.getByRole('tab', { name: 'orders.amend.tabs.customer' }),
+        ).toHaveAttribute('aria-selected', 'true');
+    });
+
     it('asks the server for the totals and profit, and sends only what changed with the reason', async () => {
         render(
             <AmendOrderDialog

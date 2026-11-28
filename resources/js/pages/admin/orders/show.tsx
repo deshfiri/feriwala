@@ -1,5 +1,5 @@
 import { Form, Head, Link } from '@inertiajs/react';
-import { AlertTriangle, ArrowLeft } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Pencil } from 'lucide-react';
 import { useState } from 'react';
 import OrderController from '@/actions/App/Http/Controllers/Admin/OrderController';
 import AdminStorefrontProfitPanel, {
@@ -47,9 +47,7 @@ import ShipmentsPanel, {
 } from '@/pages/admin/orders/shipments-panel';
 import { index } from '@/routes/admin/orders';
 import ReasonTextarea from '@/components/forms/reason-textarea';
-import EditableOrderDetails, {
-    type OrderRevisionPanel,
-} from '@/pages/admin/orders/editable-order-details';
+import type { OrderRevisionPanel } from '@/pages/admin/orders/editable-order-details';
 import RevisionHistory from '@/pages/admin/orders/revision-history';
 import AmendOrderDialog from '@/pages/admin/orders/amend-order-dialog';
 
@@ -249,6 +247,7 @@ export default function AdminOrder({
 }: Props) {
     const { t, locale } = useTranslation();
     const [cancelling, setCancelling] = useState(false);
+    const [amending, setAmending] = useState(false);
     const mayRevise =
         revision !== null &&
         (revision.can.edit_customer || revision.can.edit_address);
@@ -299,6 +298,8 @@ export default function AdminOrder({
                                     orderId={order.id}
                                     revision={revision}
                                     amend={revision.amend}
+                                    open={amending}
+                                    onOpenChange={setAmending}
                                 />
                             )}
                             {mayCancel && (
@@ -598,17 +599,27 @@ export default function AdminOrder({
                     </div>
 
                     <div className="space-y-6">
-                        {/* Each value editable in place, as a revision (D38), for staff who may. */}
-                        {revision && mayRevise ? (
-                            <EditableOrderDetails
-                                orderId={order.id}
-                                revision={revision}
-                            />
-                        ) : (
-                            <OrderCustomerCard
-                                customer={order.customer_details}
-                            />
-                        )}
+                        {/* Read here; changed only in the Order Details editor (D38). */}
+                        <OrderCustomerCard
+                            customer={order.customer_details}
+                            actions={
+                                mayAmend && mayRevise && revision?.amend ? (
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => setAmending(true)}
+                                        data-test="edit-customer"
+                                    >
+                                        <Pencil
+                                            className="size-4"
+                                            aria-hidden="true"
+                                        />
+                                        {t('orders.customer_card.edit')}
+                                    </Button>
+                                ) : undefined
+                            }
+                        />
 
                         {order.storefront_profit && (
                             <AdminStorefrontProfitPanel

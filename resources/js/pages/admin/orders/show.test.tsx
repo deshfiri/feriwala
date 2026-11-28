@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { AdminOrderDetail } from './show';
 
@@ -32,9 +32,14 @@ vi.mock('@inertiajs/react', async () => {
             processing: false,
             errors: {},
         }),
+        useHttp: () => ({ transform: vi.fn(), submit: vi.fn() }),
         usePage: () => ({ props: { translations: {} } }),
     };
 });
+
+vi.mock('@/hooks/use-confirm', () => ({
+    useConfirm: () => () => Promise.resolve(true),
+}));
 
 const { default: AdminOrder } = await import('./show');
 
@@ -193,6 +198,73 @@ describe('admin order page', () => {
             screen.getByRole('link', { name: '+8801711000001' }),
         ).toHaveAttribute('href', 'tel:+8801711000001');
         expect(screen.getByText('Shop 4, New Market')).toBeInTheDocument();
+    });
+
+    it('reads the customer plainly, with one Edit that opens the order editor', () => {
+        render(
+            <AdminOrder
+                order={order()}
+                can={{
+                    cancel: false,
+                    manage_shipments: false,
+                    record_cod_collection: false,
+                }}
+                revision={{
+                    number: 0,
+                    blocker: null,
+                    blocker_message: null,
+                    can: {
+                        edit_customer: true,
+                        edit_address: true,
+                        revise_items: true,
+                        revise_financials: true,
+                    },
+                    amend: {
+                        reference: 'ORD-260915-TEST0001',
+                        lines_editable: false,
+                        lines: [],
+                        discount: '0.00',
+                        delivery: '0.00',
+                        totals: {
+                            subtotal: money('0.00'),
+                            discount: money('0.00'),
+                            delivery: money('0.00'),
+                            tax: money('0.00'),
+                            total: money('0.00'),
+                        },
+                        payment: null,
+                        fulfilment: {
+                            courier: 'Unassigned',
+                            delivery: 'Not shipped',
+                        },
+                        products: [],
+                    },
+                    form: {
+                        customer: { name: 'Nusrat Jahan' },
+                        shipping_address: { line1: 'Shop 4, New Market' },
+                        billing_address: null,
+                        customer_note: null,
+                    },
+                    history: [],
+                }}
+            />,
+        );
+
+        // No pencil beside every value any more.
+        expect(
+            screen.queryAllByRole('button', {
+                name: 'orders.revision.edit_field',
+            }),
+        ).toHaveLength(0);
+        expect(screen.getByText('Nusrat Jahan')).toBeInTheDocument();
+
+        fireEvent.click(
+            screen.getByRole('button', { name: 'orders.customer_card.edit' }),
+        );
+
+        expect(
+            screen.getByRole('tab', { name: 'orders.amend.tabs.customer' }),
+        ).toHaveAttribute('aria-selected', 'true');
     });
 
     it("puts a storefront order's next step and its cancel on the same page", () => {

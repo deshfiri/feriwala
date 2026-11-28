@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import DetailList, { DetailItem } from '@/components/detail-list';
 import SectionCard from '@/components/section-card';
 import { useTranslation } from '@/hooks/use-translation';
@@ -21,8 +22,11 @@ export type OrderCustomerDetails = {
  */
 export default function OrderCustomerCard({
     customer,
+    actions,
 }: {
     customer: OrderCustomerDetails;
+    /** Shown in the card's header, such as staff's one Edit button. */
+    actions?: ReactNode;
 }) {
     const { t } = useTranslation();
     const missing = (
@@ -32,7 +36,7 @@ export default function OrderCustomerCard({
     );
 
     return (
-        <SectionCard title={t('orders.customer_card.title')}>
+        <SectionCard title={t('orders.customer_card.title')} actions={actions}>
             <DetailList columns={1}>
                 {customer.business_name && (
                     <DetailItem label={t('orders.customer_card.business')}>

@@ -400,6 +400,7 @@ return [
     // Who an order is for and where it goes: the same card on every order page.
     'customer_card' => [
         'title' => 'Customer',
+        'edit' => 'Edit',
         'business' => 'Business',
         'name' => 'Name',
         'phone' => 'Phone',

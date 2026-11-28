@@ -142,14 +142,22 @@ export default function AmendOrderDialog({
     orderId,
     revision,
     amend,
+    open: openProp,
+    onOpenChange,
 }: {
     orderId: string;
     revision: OrderRevisionPanel;
     amend: OrderAmendPanel;
+    /** When given, the page opens the editor too (from the customer card); otherwise it opens itself. */
+    open?: boolean;
+    onOpenChange?: (open: boolean) => void;
 }) {
     const { t } = useTranslation();
     const confirm = useConfirm();
-    const [open, setOpen] = useState(false);
+    const [ownOpen, setOwnOpen] = useState(false);
+    const open = openProp ?? ownOpen;
+    const setOpen = (next: boolean) =>
+        onOpenChange ? onOpenChange(next) : setOwnOpen(next);
     const [tab, setTab] = useState<Tab>('customer');
     const [customer, setCustomer] = useState<Fields>(
         revision.form.customer ?? {},
