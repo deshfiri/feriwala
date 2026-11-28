@@ -60,7 +60,7 @@ class WebsiteOrderPayload
             ])->all(),
             'payment' => [
                 'method' => $order->isCashOnDelivery() ? 'cod' : 'online',
-                'state' => OrderPaymentState::of($payment)?->value,
+                'state' => OrderPaymentState::forOrder($order)?->value,
                 'gateway' => $payment?->gateway,
                 'expires_at' => $payment?->expires_at?->toIso8601String(),
                 'redirect_url' => $redirectUrl,

@@ -9,7 +9,9 @@ use App\Domain\Inventory\Models\Warehouse;
 use App\Domain\Order\Actions\PlaceWebsiteOrder;
 use App\Domain\Order\Actions\SendCodConfirmationCode;
 use App\Domain\Order\Data\WebsiteOrderSubmission;
+use App\Domain\Order\Enums\OrderDeliveryStatus;
 use App\Domain\Order\Enums\OrderStatus;
+use App\Domain\Order\Enums\OrderStatusChangeSource;
 use App\Domain\Order\Models\Order;
 use App\Domain\Package\Enums\PackageFeature;
 use App\Domain\Settings\Enums\SettingType;
@@ -26,6 +28,7 @@ use App\Domain\Website\Models\WebsiteProduct;
 use App\Models\User;
 use App\Support\Money\Currency;
 use App\Support\Money\Money;
+use App\Support\StatusHistory\StatusChange;
 use Illuminate\Http\Client\Request as ClientRequest;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
@@ -289,6 +292,45 @@ describe('an order paid on delivery (§6.2, P6-10)', function () {
 
         expect($props)->not->toContain($code)
             ->and($props)->not->toContain('attempts');
+    });
+
+    it('shows it as paid once it is delivered, on every screen the Partner reads', function () {
+        $owner = $this->account->owner;
+        $show = route('websites.orders.show', [$this->website->public_id, $this->codOrder->public_id]);
+
+        $this->actingAs($owner)->get($show)
+            ->assertInertia(fn (Assert $page) => $page->where('order.payment_state', 'awaiting'));
+
+        foreach ([OrderDeliveryStatus::CourierAssigned, OrderDeliveryStatus::Shipped, OrderDeliveryStatus::OutForDelivery, OrderDeliveryStatus::Delivered] as $step) {
+            $this->codOrder->refresh()->moveDeliveryTo($step, new StatusChange(reason: 'test'), OrderStatusChangeSource::Staff);
+        }
+
+        // The courier took the cash at the door: no gateway payment ever settles.
+        expect($this->codOrder->refresh()->payment->status)->toBe(PaymentStatus::Draft);
+
+        $this->actingAs($owner)->get($show)
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('order.payment_state', 'paid')
+                ->where('order.payment.state', 'paid'));
+
+        $this->actingAs($owner)->get(route('websites.orders.index', $this->website->public_id))
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('orders.data', fn ($rows) => collect($rows)->firstWhere('id', $this->codOrder->public_id)['payment_state'] === 'paid'));
+
+        $this->actingAs($owner)->get(route('orders.index', ['payment' => 'paid']))
+            ->assertInertia(fn (Assert $page) => $page
+                ->has('orders.data', 1)
+                ->where('orders.data.0.id', $this->codOrder->public_id)
+                ->where('orders.data.0.payment_state', 'paid'));
+
+        $this->actingAs($owner)->get(route('store-orders.index', ['payment' => 'paid']))
+            ->assertInertia(fn (Assert $page) => $page
+                ->has('orders.data', 1)
+                ->where('orders.data.0.payment', 'paid'));
+
+        // The online order that was never paid still reads as awaiting.
+        $this->actingAs($owner)->get(route('websites.orders.show', [$this->website->public_id, $this->order->public_id]))
+            ->assertInertia(fn (Assert $page) => $page->where('order.payment_state', 'awaiting'));
     });
 
     it('cancels it before confirmation, and gives the stock back', function () {

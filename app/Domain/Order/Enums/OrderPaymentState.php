@@ -4,6 +4,7 @@ namespace App\Domain\Order\Enums;
 
 use App\Domain\Billing\Enums\PaymentStatus;
 use App\Domain\Billing\Models\Payment;
+use App\Domain\Order\Models\Order;
 
 /**
  * Where an order's payment stands, in the words its account needs (§10.2).
@@ -35,5 +36,29 @@ enum OrderPaymentState: string
             PaymentStatus::ReconciliationRequired => self::Reconciliation,
             PaymentStatus::Refunded, PaymentStatus::PartiallyRefunded => self::Refunded,
         };
+    }
+
+    /**
+     * Where this order's payment stands, counting a delivered cash-on-delivery
+     * order as paid: the courier collected the cash at the door, so "awaiting
+     * payment" would be wrong even though no gateway ever settled a payment.
+     */
+    public static function forOrder(Order $order): ?self
+    {
+        $state = self::of($order->payment);
+
+        if (in_array($state, [self::Awaiting, self::Confirming], true)
+            && $order->isCashOnDelivery()
+            && self::deliveredToCustomer($order)) {
+            return self::Paid;
+        }
+
+        return $state;
+    }
+
+    protected static function deliveredToCustomer(Order $order): bool
+    {
+        return $order->delivery_status === OrderDeliveryStatus::Delivered
+            || in_array($order->status, [OrderStatus::Delivered, OrderStatus::Completed], true);
     }
 }

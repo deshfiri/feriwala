@@ -251,7 +251,7 @@ class WebsiteOrderController extends Controller
             'status' => $order->status->value,
             'status_label' => $order->status->label(),
             'status_tone' => $order->status->tone(),
-            'payment_state' => OrderPaymentState::of($order->payment)?->value,
+            'payment_state' => OrderPaymentState::forOrder($order)?->value,
             'payment_method' => $order->isCashOnDelivery() ? 'cod' : 'online',
             'total' => $order->total->jsonSerialize(),
             'placed_at' => $order->placed_at->toIso8601String(),
@@ -328,7 +328,7 @@ class WebsiteOrderController extends Controller
                 ],
             ])->all(),
             'payment' => $payment === null ? null : [
-                'state' => OrderPaymentState::of($payment)?->value,
+                'state' => OrderPaymentState::forOrder($order)?->value,
                 'method' => $order->isCashOnDelivery() ? 'cod' : 'online',
                 'expires_at' => $payment->expires_at?->toIso8601String(),
                 'completed_at' => $payment->completed_at?->toIso8601String(),

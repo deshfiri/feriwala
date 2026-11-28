@@ -43,7 +43,7 @@ class WebsiteOrderDetailResource extends JsonResource
             'status' => $this->status->value,
             'status_label' => $this->status->label(),
             'status_tone' => $this->status->tone(),
-            'payment_state' => OrderPaymentState::of($payment)?->value,
+            'payment_state' => OrderPaymentState::forOrder($this->resource)?->value,
             'payment_method' => $this->isCashOnDelivery() ? 'cod' : 'online',
             'total' => new MoneyResource($this->total),
             'placed_at' => $this->placed_at->toIso8601String(),
@@ -108,7 +108,7 @@ class WebsiteOrderDetailResource extends JsonResource
                 ],
             ])->values()->all(),
             'payment' => $payment === null ? null : [
-                'state' => OrderPaymentState::of($payment)?->value,
+                'state' => OrderPaymentState::forOrder($this->resource)?->value,
                 'method' => $this->isCashOnDelivery() ? 'cod' : 'online',
                 'expires_at' => $payment->expires_at?->toIso8601String(),
                 'completed_at' => $payment->completed_at?->toIso8601String(),

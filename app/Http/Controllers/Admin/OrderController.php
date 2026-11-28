@@ -8,6 +8,7 @@ use App\Domain\Access\PermissionCatalogue;
 use App\Domain\Account\Models\BusinessAccount;
 use App\Domain\Billing\Enums\PaymentStatus;
 use App\Domain\Cases\Queries\CaseLinks;
+use App\Domain\Catalog\Policies\CatalogPolicy;
 use App\Domain\Courier\Models\Shipment;
 use App\Domain\Courier\Queries\ShipmentLabelPanel;
 use App\Domain\Courier\Queries\StoreOrderCourierPanel;
@@ -199,7 +200,7 @@ class OrderController extends Controller
             'items.activeAllocations.warehouse', 'items.activeAllocations.supplier', 'items.activeAllocations.offer',
             'items.activeAllocations.fulfilmentCommitment.statusHistory.changedBy:id,name',
             'items.activeAllocations.payable',
-            'items.proceedsSettlement',
+            'items.proceedsSettlement', 'items.product:id,public_id,deleted_at',
             'payment.invoice', 'statusHistory.changedBy:id,name', 'website:id,public_id,name,subdomain',
             'websiteCustomer:id,public_id,mobile,is_guest',
             'fulfillmentStatusHistory.changedBy:id,name',
@@ -216,6 +217,7 @@ class OrderController extends Controller
         $canOverrideFulfilmentState = Gate::forUser($actor)->allows('overrideFulfilmentState', $record);
         $canManageShipments = Gate::forUser($actor)->allows('manageShipments', Shipment::class);
         $canRecordCodCollection = Gate::forUser($actor)->allows('recordCodCollection', $record);
+        $canOpenProducts = CatalogPolicy::canViewAny($actor);
 
         return Inertia::render('admin/orders/show', [
             'order' => [
@@ -315,6 +317,11 @@ class OrderController extends Controller
                 'lines' => $record->items->map(fn (OrderItem $item) => [
                     'id' => $item->public_id,
                     'name' => $item->product_name,
+                    // The catalogue product, for staff who may open it; null when
+                    // they may not, or the product has since been deleted.
+                    'product_url' => $canOpenProducts && $item->product !== null && ! $item->product->trashed()
+                        ? route('admin.catalog.products.edit', $item->product->public_id)
+                        : null,
                     'sku' => $item->sku,
                     'variant' => $item->variant_label,
                     'quantity' => $item->quantity,

@@ -1,9 +1,13 @@
 <?php
 
+use App\Domain\Access\Enums\PermissionAction;
+use App\Domain\Access\Enums\PermissionModule;
 use App\Domain\Access\Enums\PlatformRole;
+use App\Domain\Access\PermissionCatalogue;
 use App\Domain\Account\Enums\AccountStatus;
 use App\Domain\Account\VerificationCodes;
 use App\Domain\Billing\Enums\PaymentStatus;
+use App\Domain\Catalog\Policies\CatalogPolicy;
 use App\Domain\Order\Actions\SendCodConfirmationCode;
 use App\Domain\Order\Enums\OrderSource;
 use App\Domain\Order\Enums\OrderStatus;
@@ -115,6 +119,30 @@ it('shows staff the order\'s delivery charge and the rest of its breakdown', fun
             ->where('order.totals.discount', null)
             ->where('order.totals.tax', null)
             ->where('order.totals.cod_fee', null));
+});
+
+it('links each line to its catalogue product for staff who may open it, and only then', function () {
+    $order = Order::factory()->create(['business_account_id' => $this->karim->id]);
+    $product = websiteTestProduct();
+    $order->items()->create([
+        'line_number' => 1, 'product_id' => $product->id, 'sku' => $product->sku, 'product_name' => $product->name,
+        'quantity' => 1, 'currency_code' => 'BDT', 'unit_price' => Money::fromDecimal('100.00'),
+        'line_subtotal' => Money::fromDecimal('100.00'), 'line_total' => Money::fromDecimal('100.00'),
+    ]);
+
+    $withCatalogue = testPlatformStaff(PlatformRole::OrderManager);
+    $withCatalogue->givePermissionTo(PermissionCatalogue::name(PermissionModule::Catalog, PermissionAction::View));
+    $withoutCatalogue = testPlatformStaff(PlatformRole::OrderManager);
+    expect(CatalogPolicy::canViewAny($withoutCatalogue))->toBeFalse();
+
+    $line = fn ($user) => $this->actingAs($user)->get(route('admin.orders.show', $order->public_id))->assertOk();
+
+    $line($withCatalogue)->assertInertia(fn (Assert $page) => $page
+        ->where('order.lines.0.product_url', route('admin.catalog.products.edit', $product->public_id)));
+    $line($withoutCatalogue)->assertInertia(fn (Assert $page) => $page->where('order.lines.0.product_url', null));
+
+    $product->delete();
+    $line($withCatalogue)->assertInertia(fn (Assert $page) => $page->where('order.lines.0.product_url', null));
 });
 
 it('sends a zero delivery charge rather than leaving it out', function () {

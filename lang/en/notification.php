@@ -101,8 +101,9 @@ return [
         ],
 
         'orders.storefront_profit_pending' => [
-            'title' => 'Storefront profit pending',
-            'description' => 'Your profit on a delivered order is held for 24 hours, then credited to your withdrawable balance.',
+            'title' => 'Order delivered',
+            'description' => 'Your order was delivered. Your profit is under review and will be added to your wallet after 24 hours.',
+            'description_amount' => 'Your order was delivered. Your profit of :amount is under review and will be added to your wallet after 24 hours.',
         ],
 
         'orders.storefront_profit_released' => [

@@ -2,6 +2,9 @@
 
 namespace App\Domain\Order\Queries;
 
+use App\Domain\Billing\Enums\PaymentStatus;
+use App\Domain\Order\Enums\OrderDeliveryStatus;
+use App\Domain\Order\Enums\OrderPaymentState;
 use App\Domain\Order\Enums\OrderSource;
 use App\Domain\Order\Enums\OrderStatus;
 use App\Domain\Order\Enums\StoreOrderStep;
@@ -29,7 +32,7 @@ class StoreOrderIndex
     {
         $query = Order::query()
             ->where('source', OrderSource::Website->value)
-            ->with(['businessAccount:id,public_id,name', 'website:id,public_id,name,subdomain', 'payment:id,status'])
+            ->with(['businessAccount:id,public_id,name', 'website:id,public_id,name,subdomain', 'payment:id,status,gateway'])
             ->when($accountId !== null, fn (Builder $q) => $q->where('business_account_id', $accountId));
 
         if ($accountId === null && $request->filled('partner')) {
@@ -48,7 +51,14 @@ class StoreOrderIndex
         }
 
         if ($request->filled('payment')) {
-            $query->whereHas('payment', fn (Builder $q) => $q->where('status', $request->string('payment')->toString()));
+            $payment = $request->string('payment')->toString();
+
+            // The filter matches what the row shows, a delivered COD order counting as paid.
+            $query->where(fn (Builder $q) => $payment === PaymentStatus::Paid->value
+                ? $q->whereHas('payment', fn (Builder $p) => $p->where('status', $payment))
+                    ->orWhere(fn (Builder $cod) => $this->deliveredCashOnDelivery($cod))
+                : $q->whereHas('payment', fn (Builder $p) => $p->where('status', $payment))
+                    ->whereNot(fn (Builder $cod) => $this->deliveredCashOnDelivery($cod)));
         }
 
         foreach (['from' => '>=', 'to' => '<='] as $key => $operator) {
@@ -64,6 +74,21 @@ class StoreOrderIndex
         }
 
         return $query->orderByDesc('placed_at')->orderByDesc('id');
+    }
+
+    /**
+     * A cash-on-delivery order (no gateway) whose parcel reached the customer,
+     * still unsettled on the payment record: the courier collected the cash.
+     *
+     * @param  Builder<Order>  $query
+     */
+    protected function deliveredCashOnDelivery(Builder $query): void
+    {
+        $query->whereHas('payment', fn (Builder $p) => $p->whereNull('gateway')
+            ->whereIn('status', [PaymentStatus::Draft->value, PaymentStatus::Initiated->value, PaymentStatus::Pending->value]))
+            ->where(fn (Builder $delivered) => $delivered
+                ->where('delivery_status', OrderDeliveryStatus::Delivered->value)
+                ->orWhereIn('status', [OrderStatus::Delivered->value, OrderStatus::Completed->value]));
     }
 
     /**
@@ -89,7 +114,10 @@ class StoreOrderIndex
             'fulfilment' => $order->fulfillment_status->value,
             'courier' => $order->courier_status->value,
             'delivery' => $order->delivery_status->value,
-            'payment' => $order->payment?->status->value,
+            // A delivered cash-on-delivery order is paid: the courier collected the cash.
+            'payment' => OrderPaymentState::forOrder($order) === OrderPaymentState::Paid
+                ? PaymentStatus::Paid->value
+                : $order->payment?->status->value,
             'total' => $order->total->jsonSerialize(),
             'placed_at' => $order->placed_at->toIso8601String(),
         ];

@@ -2085,3 +2085,21 @@ Partner's `available` units.
   clears. A second run pays nothing.
 - Review still applies to a profit below zero, a collection that differs from the order total, a
   possible duplicate credit, and an unproven Delivered time.
+
+### Amendment, 2026-11-28 — a delivered cash-on-delivery order is paid
+
+**Decided by the owner on 2026-11-28.**
+
+- **Delivery is the collection.** The courier hands the parcel over only against the cash, so a
+  delivered COD order is collected in full (the order total) at its Delivered time. The profit then
+  holds for 24 hours from delivery and is credited without staff confirming the cash.
+- **The Partner is told at delivery** that the order was delivered and what profit is under review
+  and will be added to the wallet after 24 hours (`orders.storefront_profit_pending`, with the
+  amount).
+- **Payment reads "Paid"** on every Partner screen once a COD order is delivered, although no
+  gateway payment ever settles. `OrderPaymentState::forOrder()` holds the rule.
+- **Staff can still record a short collection.** Until the profit is credited, staff may record that
+  the courier collected a different amount. That sends the profit to review as
+  `collection_mismatch`. Once the profit is credited, the collection cannot be changed.
+- Older delivered COD orders that were waiting on staff confirmation are credited by
+  `storefront:reconcile-history --apply`.

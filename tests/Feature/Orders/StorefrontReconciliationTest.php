@@ -251,16 +251,16 @@ describe('historical Partner profit', function () {
             ->and(WalletTransaction::query()->where('idempotency_key', 'partner-storefront-profit:'.$order->public_id)->count())->toBe(1);
     });
 
-    it('credits nothing for a delivered order with no collection proof', function () {
+    it('credits an old delivered cash-on-delivery order with no staff confirmation: delivery was the collection', function () {
         [$account, $website] = reconcilePartner(AccountType::NonConditional);
         $order = reconcilePlace($website, 2, '2600.00');
         reconcileDeliveredAgo($order);
 
         $result = reconcileRun();
 
-        expect(reconcileRow($result, $order)['classification'])->toBe('awaiting_cod_collection')
-            ->and($result['counts']['awaiting_cod_collection'])->toBe(1)
-            ->and(reconcileCredited($account))->toBe('0.00');
+        expect(reconcileRow($result, $order)['classification'])->toBe('credited')
+            ->and($result['counts']['awaiting_cod_collection'])->toBe(0)
+            ->and(reconcileCredited($account))->toBe('2200.00');
     });
 
     it('credits a verified Banij-gateway order', function () {

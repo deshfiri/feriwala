@@ -115,6 +115,8 @@ export type AdminOrderDetail = {
     lines: {
         id: string;
         name: string;
+        /** The catalogue product's page; null when the viewer may not open it or it was deleted. */
+        product_url: string | null;
         sku: string;
         variant: string | null;
         quantity: number;
@@ -372,7 +374,16 @@ export default function AdminOrder({
                                     >
                                         <div className="min-w-0 space-y-0.5">
                                             <p className="font-medium">
-                                                {line.name}
+                                                {line.product_url ? (
+                                                    <Link
+                                                        href={line.product_url}
+                                                        className="underline-offset-4 hover:underline"
+                                                    >
+                                                        {line.name}
+                                                    </Link>
+                                                ) : (
+                                                    line.name
+                                                )}
                                             </p>
                                             <p className="text-muted-foreground font-mono text-xs">
                                                 {line.sku}

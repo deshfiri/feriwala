@@ -34,7 +34,7 @@ class WebsiteOrderResource extends JsonResource
             'status' => $this->status->value,
             'status_label' => $this->status->label(),
             'status_tone' => $this->status->tone(),
-            'payment_state' => OrderPaymentState::of($this->payment)?->value,
+            'payment_state' => OrderPaymentState::forOrder($this->resource)?->value,
             /** `cod` (paid on delivery) or `online`. */
             'payment_method' => $this->isCashOnDelivery() ? 'cod' : 'online',
             'total' => new MoneyResource($this->total),

@@ -139,8 +139,19 @@ class BusinessOrderIndex
      */
     protected function union(BusinessAccount $account): Builder
     {
+        /*
+         * A delivered cash-on-delivery order (a payment with no gateway) is paid:
+         * the courier collected the cash at the door. The same rule as
+         * OrderPaymentState::forOrder().
+         */
         $paymentState = <<<'SQL'
-            CASE p.status
+            CASE
+                WHEN p.status IN ('draft', 'initiated', 'pending')
+                    AND p.gateway IS NULL
+                    AND o.source = 'website'
+                    AND (o.delivery_status = 'delivered' OR o.status IN ('delivered', 'completed'))
+                THEN 'paid'
+            ELSE CASE p.status
                 WHEN 'draft' THEN 'awaiting'
                 WHEN 'initiated' THEN 'awaiting'
                 WHEN 'pending' THEN 'confirming'
@@ -150,7 +161,7 @@ class BusinessOrderIndex
                 WHEN 'reconciliation_required' THEN 'reconciliation'
                 WHEN 'refunded' THEN 'refunded'
                 WHEN 'partially_refunded' THEN 'refunded'
-            END
+            END END
         SQL;
 
         $website = DB::table('orders as o')

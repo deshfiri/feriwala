@@ -101,6 +101,14 @@ class RecentNotifications
             }
         }
 
+        // An event that carries an amount says it, where its wording has a line for it.
+        $formatted = is_array($data['amount'] ?? null) ? ($data['amount']['formatted'] ?? null) : null;
+        $withAmount = is_string($formatted) ? $this->line($event, 'description_amount') : null;
+
+        if ($withAmount !== null && is_string($formatted)) {
+            return $this->withReference(str_replace(':amount', $formatted, $withAmount), $data);
+        }
+
         return $this->withReference($this->line($event, 'description'), $data);
     }
 
@@ -224,7 +232,10 @@ class RecentNotifications
                 : null;
         }
 
-        if (! str_starts_with($event, 'courier.partner.')) {
+        $forPartner = str_starts_with($event, 'courier.partner.')
+            || in_array($event, ['orders.storefront_profit_pending', 'orders.storefront_profit_released', 'orders.storefront_profit_reversed'], true);
+
+        if (! $forPartner) {
             return null;
         }
 

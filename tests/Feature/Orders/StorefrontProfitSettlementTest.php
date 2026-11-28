@@ -13,6 +13,7 @@ use App\Domain\Catalog\Models\Product;
 use App\Domain\Inventory\Actions\ReceivePartnerPurchase;
 use App\Domain\Inventory\Models\StockItem;
 use App\Domain\Inventory\Models\Warehouse;
+use App\Domain\Notification\Queries\RecentNotifications;
 use App\Domain\Order\Actions\AuditStorefrontProfits;
 use App\Domain\Order\Actions\ConfirmOrderPayment;
 use App\Domain\Order\Actions\PlaceWebsiteOrder;
@@ -471,22 +472,22 @@ describe('the formula and its breakdown', function () {
 });
 
 describe('the 24-hour hold', function () {
-    it('counts the 24 hours from the later of delivery and collection', function () {
+    it('counts the 24 hours from delivery, which is when cash on delivery is collected', function () {
         [$account, $website] = storefrontProfitPartner(AccountType::NonConditional);
         $order = storefrontProfitPlace($website, 2, '2600.00');
         $delivered = CarbonImmutable::parse('2026-11-01 10:00:00');
         storefrontProfitDeliver($order, $delivered);
 
-        $collected = $delivered->addHours(10);
-        $this->travelTo($collected);
+        // Staff confirming the same cash later does not move the release.
+        $this->travelTo($delivered->addHours(10));
         storefrontProfitConfirmCod($order);
 
-        expect(storefrontProfitOf($order)->release_at->equalTo($collected->addHours(24)))->toBeTrue();
+        expect(storefrontProfitOf($order)->release_at->equalTo($delivered->addHours(24)))->toBeTrue();
 
-        storefrontProfitSweep($delivered->addHours(24));
+        storefrontProfitSweep($delivered->addHours(24)->subSecond());
         expect(storefrontProfitCredited($account))->toBe('0.00');
 
-        storefrontProfitSweep($collected->addHours(24));
+        storefrontProfitSweep($delivered->addHours(24));
         expect(storefrontProfitCredited($account))->toBe('2200.00');
     });
 
@@ -506,14 +507,70 @@ describe('the 24-hour hold', function () {
             ->and(storefrontProfitCredited($account))->toBe('0.00');
     });
 
-    it('keeps a delivered cash-on-delivery order awaiting its collection', function () {
+    it('takes a delivered cash-on-delivery order as collected in full at its delivery', function () {
+        Notification::fake();
         [$account, $website] = storefrontProfitPartner(AccountType::Conditional, '2200.00');
         storefrontProfitPurchase($account, $this->product, 1, '1500.00');
         $order = storefrontProfitPlace($website, 1, '2200.00');
+        $delivered = CarbonImmutable::parse('2026-11-01 10:00:00');
+        storefrontProfitDeliver($order, $delivered);
+
+        $profit = storefrontProfitOf($order);
+        expect($profit->status)->toBe(StorefrontProfitStatus::Holding)
+            ->and($profit->collected_at->equalTo($delivered))->toBeTrue()
+            ->and($profit->collected_amount->toDecimal())->toBe($order->total->toDecimal())
+            ->and($profit->cod_confirmed_by)->toBeNull()
+            ->and($profit->release_at->equalTo($delivered->addHours(24)))->toBeTrue();
+
+        // The Partner hears at delivery: the amount and when it is credited.
+        Notification::assertSentTo($account->owner, StorefrontProfitUpdated::class, fn (StorefrontProfitUpdated $notification) => $notification->event === StorefrontProfitUpdated::PENDING
+            && $notification->amount['amount'] === '700.00'
+            && $notification->releaseAt === $delivered->addHours(24)->toIso8601String());
+    });
+
+    it('tells the Partner in the bell that the order was delivered and what profit is under review', function () {
+        [$account, $website] = storefrontProfitPartner(AccountType::NonConditional);
+        $order = storefrontProfitPlace($website, 2, '2600.00');
         storefrontProfitDeliver($order, CarbonImmutable::parse('2026-11-01 10:00:00'));
 
-        expect(storefrontProfitOf($order)->status)->toBe(StorefrontProfitStatus::AwaitingFacts)
-            ->and(storefrontProfitOf($order)->status_reason)->toBe('awaiting_collection');
+        $account->owner->notifyNow(new StorefrontProfitUpdated(storefrontProfitOf($order), StorefrontProfitUpdated::PENDING, Money::fromDecimal('2200.00', Currency::BDT)->jsonSerialize()));
+
+        $row = collect(app(RecentNotifications::class)->forUser($account->owner->refresh()))
+            ->firstWhere('title', __('notification.events')['orders.storefront_profit_pending']['title']);
+
+        expect($row)->not->toBeNull()
+            ->and($row->description)->toContain('delivered')
+            ->and($row->description)->toContain('৳2,200.00')
+            ->and($row->description)->toContain('24 hours')
+            ->and($row->description)->toContain($order->reference)
+            ->and($row->href)->toBe(route('store-orders.show', $order->public_id));
+    });
+
+    it('lets staff record a short collection on a delivered cash-on-delivery order until it is credited', function () {
+        [$account, $website] = storefrontProfitPartner(AccountType::NonConditional);
+        $order = storefrontProfitPlace($website, 2, '2600.00');
+        $delivered = CarbonImmutable::parse('2026-11-01 10:00:00');
+        storefrontProfitDeliver($order, $delivered);
+
+        app(SettleStorefrontProfit::class)->confirmCodCollection($this->staff, $order->refresh(), Money::fromDecimal('5000.00', Currency::BDT));
+        storefrontProfitSweep($delivered->addDays(2));
+
+        expect(storefrontProfitOf($order)->status)->toBe(StorefrontProfitStatus::ReviewRequired)
+            ->and(storefrontProfitOf($order)->status_reason)->toBe('collection_mismatch')
+            ->and(storefrontProfitCredited($account))->toBe('0.00');
+    });
+
+    it('refuses to change the collection once the profit is credited', function () {
+        [$account, $website] = storefrontProfitPartner(AccountType::NonConditional);
+        $order = storefrontProfitPlace($website, 2, '2600.00');
+        $delivered = CarbonImmutable::parse('2026-11-01 10:00:00');
+        storefrontProfitDeliver($order, $delivered);
+        storefrontProfitSweep($delivered->addHours(24));
+
+        expect(fn () => app(SettleStorefrontProfit::class)->confirmCodCollection($this->staff, $order->refresh(), Money::fromDecimal('5000.00', Currency::BDT)))
+            ->toThrow(InvalidArgumentException::class, __('storefront_profit.refused.already_collected'));
+
+        expect(storefrontProfitCredited($account))->toBe('2200.00');
     });
 
     it('credits nothing before 24 hours have passed since Delivered', function () {
@@ -529,17 +586,16 @@ describe('the 24-hour hold', function () {
             ->and(storefrontProfitCredited($account))->toBe('0.00');
     });
 
-    it('credits nothing without the collection, however long after delivery', function () {
+    it('credits a delivered cash-on-delivery order without waiting for staff to confirm the cash', function () {
         [$account, $website] = storefrontProfitPartner(AccountType::NonConditional);
         $order = storefrontProfitPlace($website, 2, '2600.00');
         $delivered = CarbonImmutable::parse('2026-11-01 10:00:00');
         storefrontProfitDeliver($order, $delivered);
 
-        storefrontProfitSweep($delivered->addDays(5));
+        storefrontProfitSweep($delivered->addHours(24));
 
-        expect(storefrontProfitOf($order)->status)->toBe(StorefrontProfitStatus::AwaitingFacts)
-            ->and(storefrontProfitOf($order)->status_reason)->toBe('awaiting_collection')
-            ->and(storefrontProfitCredited($account))->toBe('0.00');
+        expect(storefrontProfitOf($order)->status)->toBe(StorefrontProfitStatus::Released)
+            ->and(storefrontProfitCredited($account))->toBe('2200.00');
     });
 
     it('credits once, under the order\'s own key, however often the sweep runs', function () {
@@ -694,18 +750,6 @@ describe('what blocks it, and what takes it back', function () {
             ->and(WalletTransaction::query()->where('idempotency_key', 'like', 'partner-storefront-profit%')->count())->toBe(0);
     });
 
-    it('sends a collection that does not match the order total to review', function () {
-        [$account, $website] = storefrontProfitPartner(AccountType::NonConditional);
-        $order = storefrontProfitPlace($website, 2, '2600.00');
-        $delivered = CarbonImmutable::parse('2026-11-01 10:00:00');
-        storefrontProfitDeliver($order, $delivered);
-        app(SettleStorefrontProfit::class)->confirmCodCollection($this->staff, $order->refresh(), Money::fromDecimal('5000.00', Currency::BDT));
-        storefrontProfitSweep($delivered->addDays(2));
-
-        expect(storefrontProfitOf($order)->status)->toBe(StorefrontProfitStatus::ReviewRequired)
-            ->and(storefrontProfitOf($order)->status_reason)->toBe('collection_mismatch')
-            ->and(storefrontProfitCredited($account))->toBe('0.00');
-    });
 });
 
 describe('failures and staff', function () {

@@ -142,17 +142,27 @@ class SettleStorefrontProfit
         }
 
         return $this->locked($order, function (PartnerStorefrontProfit $profit, Order $lockedOrder) use ($actor, $amount) {
+            // A collection taken from the delivery itself is the order's total,
+            // assumed; until the profit is credited, staff may still record that
+            // the courier collected a different amount.
+            $assumedFromDelivery = $profit->collected_at !== null
+                && $profit->cod_confirmed_by === null
+                && $profit->status !== StorefrontProfitStatus::Released
+                && ! $profit->status->isTerminal();
+
             if ($profit->collected_at !== null) {
-                if ($profit->collected_amount?->equals($amount) !== true) {
-                    throw new InvalidArgumentException(__('storefront_profit.refused.already_collected'));
+                if ($profit->collected_amount?->equals($amount) === true) {
+                    return $profit;
                 }
 
-                return $profit;
+                if (! $assumedFromDelivery) {
+                    throw new InvalidArgumentException(__('storefront_profit.refused.already_collected'));
+                }
             }
 
             $profit->forceFill([
                 'collection_channel' => CollectionChannel::Cod,
-                'collected_at' => CarbonImmutable::now(),
+                'collected_at' => $profit->collected_at ?? CarbonImmutable::now(),
                 'collected_amount' => $amount,
                 'cod_confirmed_by' => $actor->id,
             ]);
@@ -599,6 +609,17 @@ class SettleStorefrontProfit
                     'collected_amount' => $lines->reduce(fn (Money $sum, OrderProceedsSettlement $line) => $sum->plus($line->cod_amount_collected ?? Money::zero($currency)), Money::zero($currency)),
                 ]);
             }
+        }
+
+        // Otherwise delivery is the collection: the courier hands the parcel
+        // over only against the order's cash, so a delivered COD order is paid
+        // in full at the moment it was delivered (D40, amended 2026-11-28).
+        if ($profit->collected_at === null && $profit->delivered_at !== null && $order->isCashOnDelivery()) {
+            $profit->forceFill([
+                'collection_channel' => CollectionChannel::Cod,
+                'collected_at' => $profit->delivered_at,
+                'collected_amount' => $order->total,
+            ]);
         }
     }
 
