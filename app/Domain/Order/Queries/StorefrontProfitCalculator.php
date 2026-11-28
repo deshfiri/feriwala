@@ -2,6 +2,9 @@
 
 namespace App\Domain\Order\Queries;
 
+use App\Domain\Catalog\Models\Product;
+use App\Domain\Catalog\Models\ProductVariant;
+use App\Domain\Catalog\WholesalePriceResolver;
 use App\Domain\Inventory\Enums\PartnerStockMovementType;
 use App\Domain\Inventory\Models\PartnerStockMovement;
 use App\Domain\Inventory\PartnerStockCostLots;
@@ -15,35 +18,83 @@ use App\Support\Money\Money;
 use Illuminate\Support\Facades\DB;
 
 /**
- * What a Partner earns on each line of a Storefront order, from frozen figures
- * only.
+ * What a Partner earns on a Storefront order (D40, amended 2026-11-28):
+ *
+ *     Partner profit = net goods selling − Partner base cost + delivery charge
+ *
+ * The delivery charge is added only when the order has one and at least one
+ * unit was kept.
  *
  * **Selling side** — the line's goods after its discount (the order's discount
  * is already shared across the lines, exactly, when the order is priced) and
- * without the tax inside the price. Delivery, delivery tax and any other charge
- * are never part of it.
+ * without the tax inside the price.
  *
- * **Cost side**, by where the units came from:
+ * **Partner base cost** is the product's **wholesale price** — what a business
+ * account pays per unit — never Banij's own base cost and never the suggested
+ * selling price. By where the units came from:
  *
- *   - Banij's central stock: the platform price frozen on the line when it was
- *     placed (`platform_retained_amount`, D34) — never the product's base cost,
- *     wholesale price or anything read today;
- *   - the Partner's own stock: what those exact units cost them, from the cost
- *     lots the sale took them from, first in, first out;
+ *   - Banij's central stock: the wholesale price frozen on the line when it was
+ *     placed (`product_cost`);
+ *   - the Partner's own stock: the wholesale price they actually paid for those
+ *     exact units, from the cost lots the sale took them from, first in, first
+ *     out;
  *   - the Partner's own stock sold before cost lots existed: the one price the
- *     Partner ever paid for that unit before the sale — and only when there was
- *     exactly one; otherwise the cost is unproven;
- *   - a cost staff set deliberately for the line, when they have.
+ *     Partner ever paid for that unit before the sale, when there was one;
+ *   - a cost staff set deliberately for the line, when they have;
+ *   - and when nothing was frozen at all (orders from before these records),
+ *     the product's wholesale price for that quantity as the catalogue holds it.
  *
- * Both sides count only the units that were kept: what came back on a return is
- * taken out of each, the newest lots first. A cost that cannot be proven is
- * reported with the reason, never guessed.
+ * So a base cost is always known. Both sides count only the units that were
+ * kept: what came back on a return is taken out of each, the newest lots first.
  */
 class StorefrontProfitCalculator
 {
     public function __construct(
         protected PartnerStockCostLots $lots,
+        protected WholesalePriceResolver $wholesalePrices,
     ) {}
+
+    /**
+     * The order's figures from its lines: selling, Partner base cost, the
+     * delivery charge that goes to the Partner, the Partner's profit and what
+     * Banij keeps. Null cost and profit only when a line's product no longer
+     * exists at all.
+     *
+     * @param  list<array{item: OrderItem, basis: string, quantity: int, returned: int, selling: Money, cost: Money|null, profit: Money|null, unproven: string|null}>  $lines
+     * @return array{selling: Money, cost: Money|null, delivery: Money, profit: Money|null, banij_receivable: Money|null}
+     */
+    public function totals(Order $order, array $lines): array
+    {
+        $currency = Currency::from($order->currency_code);
+        $selling = Money::zero($currency);
+        $cost = Money::zero($currency);
+        $proven = true;
+        $kept = 0;
+
+        foreach ($lines as $line) {
+            $selling = $selling->plus($line['selling']);
+            $kept += $line['quantity'] - $line['returned'];
+
+            if ($line['cost'] === null) {
+                $proven = false;
+
+                continue;
+            }
+
+            $cost = $cost->plus($line['cost']);
+        }
+
+        // Nothing kept, nothing delivered to keep: no delivery charge either.
+        $delivery = $kept > 0 && $order->delivery->isPositive() ? $order->delivery : Money::zero($currency);
+
+        return [
+            'selling' => $selling,
+            'cost' => $proven ? $cost : null,
+            'delivery' => $delivery,
+            'profit' => $proven ? $selling->minus($cost)->plus($delivery) : null,
+            'banij_receivable' => $proven ? $cost : null,
+        ];
+    }
 
     /**
      * @return list<array{item: OrderItem, basis: string, quantity: int, returned: int, selling: Money, cost: Money|null, profit: Money|null, unproven: string|null}>
@@ -101,11 +152,11 @@ class StorefrontProfitCalculator
         }
 
         if ($item->stockReservation?->isPartnerSourced() !== true) {
-            if ($item->platform_retained_amount === null) {
-                return [PartnerStorefrontProfitLine::BASIS_PLATFORM_PRICE, null, 'no_platform_price'];
+            if ($item->product_cost !== null) {
+                return [PartnerStorefrontProfitLine::BASIS_WHOLESALE_PRICE, $this->lots->share($item->product_cost, $item->quantity, 0, $kept), null];
             }
 
-            return [PartnerStorefrontProfitLine::BASIS_PLATFORM_PRICE, $this->lots->share($item->platform_retained_amount, $item->quantity, 0, $kept), null];
+            return $this->catalogueWholesale($item, $kept);
         }
 
         $fromLots = $this->lots->keptCost($item, $back);
@@ -114,11 +165,31 @@ class StorefrontProfitCalculator
             return [PartnerStorefrontProfitLine::BASIS_FIFO_LOTS, $fromLots, null];
         }
 
-        if ($this->lots->allocationsFor((int) $item->stock_reservation_id)->isNotEmpty()) {
-            return [PartnerStorefrontProfitLine::BASIS_FIFO_LOTS, null, 'lot_cost_unknown'];
+        [$basis, $cost] = $this->historicalSingleCost($order, $item, $kept);
+
+        return $cost !== null ? [$basis, $cost, null] : $this->catalogueWholesale($item, $kept);
+    }
+
+    /**
+     * The last word on a line nothing frozen prices: the product's wholesale
+     * price for the line's quantity, as the catalogue holds it now. Unknown only
+     * when the product itself is gone.
+     *
+     * @return array{0: string, 1: Money|null, 2: string|null}
+     */
+    protected function catalogueWholesale(OrderItem $item, int $kept): array
+    {
+        $basis = PartnerStorefrontProfitLine::BASIS_CATALOGUE_WHOLESALE_PRICE;
+        $product = Product::withTrashed()->find($item->product_id);
+
+        if (! $product instanceof Product) {
+            return [$basis, null, 'product_missing'];
         }
 
-        return $this->historicalSingleCost($order, $item, $kept);
+        $variant = $item->product_variant_id === null ? null : ProductVariant::query()->find($item->product_variant_id);
+        $whole = $this->wholesalePrices->unitPrice($product, $variant, $item->quantity)->multipliedBy($item->quantity);
+
+        return [$basis, $this->lots->share($whole, $item->quantity, 0, $kept), null];
     }
 
     /**

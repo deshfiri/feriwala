@@ -240,9 +240,10 @@ describe('the Partner\'s own stock and profit', function () {
         }
         $profit = app(SettleStorefrontProfit::class)->confirmCodCollection($this->staff, $order->refresh(), $order->total);
 
+        // Three units at the ৳1,500 wholesale price.
         expect($profit->selling_amount?->toDecimal())->toBe('7800.00')
-            ->and($profit->cost_amount?->toDecimal())->toBe('7500.00')
-            ->and($profit->profit_amount?->toDecimal())->toBe('300.00');
+            ->and($profit->cost_amount?->toDecimal())->toBe('4500.00')
+            ->and($profit->profit_amount?->toDecimal())->toBe('3300.00');
     });
 });
 
@@ -417,9 +418,10 @@ describe('the preview', function () {
             ->and($preview['totals']['difference']['amount'])->toBe('2600.00')
             ->and($preview['payment_consequence'])->toBe('cod_amount_updated')
             ->and($preview['profit']['net_selling']['amount'])->toBe('7800.00')
-            ->and($preview['profit']['product_base_price']['amount'])->toBe('7500.00')
-            ->and($preview['profit']['partner_profit']['amount'])->toBe('300.00')
-            ->and($preview['profit']['banij_receivable']['amount'])->toBe('7500.00')
+            ->and($preview['profit']['product_base_price']['amount'])->toBe('4500.00')
+            ->and($preview['profit']['delivery_charge']['amount'])->toBe('0.00')
+            ->and($preview['profit']['partner_profit']['amount'])->toBe('3300.00')
+            ->and($preview['profit']['banij_receivable']['amount'])->toBe('4500.00')
             ->and($order->refresh()->total->toDecimal())->toBe('5200.00')
             ->and(OrderItem::query()->count())->toBe($items)
             ->and(OrderRevision::query()->count())->toBe(0);

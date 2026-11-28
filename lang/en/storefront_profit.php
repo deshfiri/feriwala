@@ -33,7 +33,9 @@ return [
     ],
 
     'basis' => [
-        'platform_price' => 'Platform price (central stock)',
+        'platform_price' => 'Platform price (central stock, before 28 Nov 2026)',
+        'wholesale_price' => 'Wholesale price (central stock)',
+        'catalogue_wholesale' => 'Wholesale price from the catalogue',
         'fifo_lots' => 'Purchase lots, first in first out',
         'historical_single_cost' => 'Only purchase price before the sale',
         'finance_correction' => 'Set by finance',
@@ -66,6 +68,7 @@ return [
         'no_purchase_record' => 'No purchase of this product before the sale.',
         'ambiguous_purchase_cost' => 'Bought at more than one price before the sale.',
         'cost_unproven' => 'The cost cannot be proven.',
+        'product_missing' => 'The product no longer exists.',
     ],
 
     'partner' => [
@@ -145,6 +148,7 @@ return [
     'ledger' => [
         'credit' => 'Storefront profit for order :order',
         'reversal' => 'Storefront profit taken back — order :order',
+        'top_up' => 'Storefront profit topped up — order :order',
     ],
 
     'empty' => 'No Storefront profits match.',

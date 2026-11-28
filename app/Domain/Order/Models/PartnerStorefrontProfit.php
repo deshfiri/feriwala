@@ -37,6 +37,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property Money|null $cost_amount
  * @property Money|null $profit_amount
  * @property Money $released_amount
+ * @property Money $topped_up_amount top-ups paid after the first credit, summed
  * @property Money $reversed_amount
  * @property CarbonImmutable|null $released_at
  * @property int|null $wallet_transaction_id
@@ -54,6 +55,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property-read WalletTransaction|null $walletTransaction
  * @property-read Collection<int, PartnerStorefrontProfitLine> $lines
  * @property-read Collection<int, PartnerStorefrontProfitReversal> $reversals
+ * @property-read Collection<int, PartnerStorefrontProfitTopUp> $topUps
  */
 class PartnerStorefrontProfit extends Model
 {
@@ -80,6 +82,7 @@ class PartnerStorefrontProfit extends Model
             'cost_amount' => MoneyCast::class,
             'profit_amount' => MoneyCast::class,
             'released_amount' => MoneyCast::class,
+            'topped_up_amount' => MoneyCast::class,
             'reversed_amount' => MoneyCast::class,
             'released_at' => 'immutable_datetime',
             'legacy_credited_amount' => MoneyCast::class,
@@ -103,10 +106,16 @@ class PartnerStorefrontProfit extends Model
         return 'partner-storefront-profit:'.$this->order->public_id;
     }
 
+    /** Everything credited for this order: the first credit and any top-ups. */
+    public function creditedTotal(): Money
+    {
+        return $this->released_amount->plus($this->topped_up_amount);
+    }
+
     /** What has reached the Wallet and stayed there. */
     public function netCredited(): Money
     {
-        return $this->released_amount->minus($this->reversed_amount);
+        return $this->creditedTotal()->minus($this->reversed_amount);
     }
 
     /**
@@ -161,5 +170,13 @@ class PartnerStorefrontProfit extends Model
     public function reversals(): HasMany
     {
         return $this->hasMany(PartnerStorefrontProfitReversal::class);
+    }
+
+    /**
+     * @return HasMany<PartnerStorefrontProfitTopUp, $this>
+     */
+    public function topUps(): HasMany
+    {
+        return $this->hasMany(PartnerStorefrontProfitTopUp::class);
     }
 }

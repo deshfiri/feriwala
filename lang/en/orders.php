@@ -916,7 +916,8 @@ return [
         'profit' => [
             'title' => 'Partner profit',
             'net_selling' => 'Net product selling',
-            'product_base_price' => 'Product Base Price',
+            'product_base_price' => 'Partner base cost (wholesale price)',
+            'delivery_charge' => 'Delivery charge (to the Partner)',
             'partner_profit' => 'Partner profit',
             'banij_receivable' => 'Banij receivable',
             'unproven' => 'A product cost cannot be proven: the profit will wait for review.',

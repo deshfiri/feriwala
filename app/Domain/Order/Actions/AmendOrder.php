@@ -861,31 +861,16 @@ class AmendOrder
 
         if ($order->source === OrderSource::Website) {
             $order->unsetRelation('items');
-            $lines = $this->calculator->lines($order);
-            $currency = Currency::from($order->currency_code);
-            $selling = Money::zero($currency);
-            $base = Money::zero($currency);
-            $unproven = false;
-
-            foreach ($lines as $line) {
-                $selling = $selling->plus($line['selling']);
-
-                if ($line['cost'] === null) {
-                    $unproven = true;
-
-                    continue;
-                }
-
-                $base = $base->plus($line['cost']);
-            }
+            $totals = $this->calculator->totals($order, $this->calculator->lines($order));
 
             $profit = [
-                'net_selling' => $selling->jsonSerialize(),
-                'product_base_price' => $unproven ? null : $base->jsonSerialize(),
-                'partner_profit' => $unproven ? null : $selling->minus($base)->jsonSerialize(),
-                'banij_receivable' => $unproven ? null : $base->plus($order->delivery)->jsonSerialize(),
-                'unproven' => $unproven,
-                'negative' => ! $unproven && $selling->minus($base)->isNegative(),
+                'net_selling' => $totals['selling']->jsonSerialize(),
+                'product_base_price' => $totals['cost']?->jsonSerialize(),
+                'delivery_charge' => $totals['delivery']->jsonSerialize(),
+                'partner_profit' => $totals['profit']?->jsonSerialize(),
+                'banij_receivable' => $totals['banij_receivable']?->jsonSerialize(),
+                'unproven' => $totals['profit'] === null,
+                'negative' => $totals['profit']?->isNegative() === true,
             ];
         }
 

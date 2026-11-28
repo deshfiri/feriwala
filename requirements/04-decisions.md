@@ -2060,3 +2060,28 @@ Partner's `available` units.
   counts, and filters the review queue by reason.
 - Legacy rows without an authoritative Product Base Price go to the review report. They do not
   block the live implementation.
+
+### Amendment, 2026-11-28 — the Partner keeps the delivery charge; base cost is the wholesale price
+
+**Decided by the owner on 2026-11-28.** Supersedes the formula in the 2026-11-26 amendment.
+
+- **Partner profit = net goods selling − Partner base cost + delivery charge.** The delivery
+  charge is added when the order has one and at least one unit was kept. With no delivery charge,
+  it is net goods selling − Partner base cost. Example: ৳1,000 goods, ৳80 delivery, ৳700 base →
+  Partner ৳380; Banij keeps the ৳700.
+- **Partner base cost is the product's wholesale price**, meaning what a business account pays per
+  unit. It is never Banij's base cost and never the suggested selling price.
+  - Banij central stock: the wholesale price frozen on the line at placement (`product_cost`).
+  - The Partner's own stock: what they paid for those units at wholesale, from the FIFO cost lots,
+    or the one purchase price before the sale.
+  - Nothing frozen (older orders): the product's wholesale price for that quantity as the
+    catalogue holds it now.
+  - So the base cost is always known, and `cost_unproven` no longer sends a profit to review.
+- **Already-credited orders** are worked out again by `storefront:reconcile-history --apply`.
+  When a profit is now worth more, the difference is credited as withdrawable `SalesCredit`
+  under `partner-storefront-profit-top-up:{order}:{n}` and recorded append-only in
+  `partner_storefront_profit_top_ups`. When it is worth less, the existing compensating debit
+  applies. A profit with an open return, damage, refund or review hold is not topped up until that
+  clears. A second run pays nothing.
+- Review still applies to a profit below zero, a collection that differs from the order total, a
+  possible duplicate credit, and an unproven Delivered time.

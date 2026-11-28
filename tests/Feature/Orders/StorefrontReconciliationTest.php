@@ -246,8 +246,8 @@ describe('historical Partner profit', function () {
         $result = reconcileRun();
 
         expect(reconcileRow($result, $order)['classification'])->toBe('credited')
-            ->and(reconcileCredited($account))->toBe('200.00')
-            ->and($result['counts']['withdrawable_credited'])->toBe('200.00')
+            ->and(reconcileCredited($account))->toBe('2200.00')
+            ->and($result['counts']['withdrawable_credited'])->toBe('2200.00')
             ->and(WalletTransaction::query()->where('idempotency_key', 'partner-storefront-profit:'.$order->public_id)->count())->toBe(1);
     });
 
@@ -271,7 +271,7 @@ describe('historical Partner profit', function () {
 
         reconcileRun();
 
-        expect(reconcileCredited($account))->toBe('200.00');
+        expect(reconcileCredited($account))->toBe('2200.00');
     });
 
     it('reports a Partner-gateway order and never credits it', function () {
@@ -299,7 +299,7 @@ describe('historical Partner profit', function () {
         expect(reconcileCredited($account))->toBe('1400.00');
     });
 
-    it('credits nothing on an ambiguous cost basis', function () {
+    it('credits a sale bought at more than one price at the catalogue\'s wholesale price, never review', function () {
         [$account, $website] = reconcilePartner(AccountType::Conditional, '2200.00');
         reconcilePurchase($account, 1, '1000.00', '2026-10-01');
         reconcilePurchase($account, 1, '1200.00', '2026-10-02');
@@ -310,9 +310,10 @@ describe('historical Partner profit', function () {
 
         $result = reconcileRun();
 
-        expect(reconcileRow($result, $order)['classification'])->toBe('cost_basis_review_required')
-            ->and($result['counts']['ambiguous_cost_basis'])->toBe(1)
-            ->and(reconcileCredited($account))->toBe('0.00');
+        // ৳2,200 less the product's ৳1,500 wholesale price.
+        expect(reconcileRow($result, $order)['classification'])->toBe('credited')
+            ->and($result['counts']['ambiguous_cost_basis'])->toBe(0)
+            ->and(reconcileCredited($account))->toBe('700.00');
     });
 
     it('detects an earlier SalesCredit for the order and does not duplicate it', function () {
@@ -339,7 +340,7 @@ describe('historical Partner profit', function () {
 
         reconcileRun();
 
-        expect(reconcileCredited($account))->toBe('100.00');
+        expect(reconcileCredited($account))->toBe('1100.00');
     });
 
     it('credits nothing when everything came back', function () {
@@ -379,7 +380,7 @@ describe('historical Partner profit', function () {
         expect(Wallet::query()->where('business_account_id', $account->id)->exists())->toBeFalse();
 
         reconcileRun();
-        expect(Wallet::query()->where('business_account_id', $account->id)->sole()->total->toDecimal())->toBe('200.00');
+        expect(Wallet::query()->where('business_account_id', $account->id)->sole()->total->toDecimal())->toBe('2200.00');
     });
 
     it('corrects the account type only from a frozen placement record', function () {
@@ -415,7 +416,7 @@ describe('runs', function () {
 
         expect(collect($resumed['rows'])->pluck('order')->all())->toBe($orders->slice(1)->pluck('reference')->values()->all())
             ->and($resumed['counts']['orders_scanned'])->toBe(3)
-            ->and(reconcileCredited($account))->toBe('300.00');
+            ->and(reconcileCredited($account))->toBe('3300.00');
     });
 
     it('records one failing order and keeps the others', function () {
@@ -451,7 +452,7 @@ describe('runs', function () {
         expect(reconcileRow($result, $bad)['classification'])->toBe('technical_failure')
             ->and(reconcileRow($result, $good)['classification'])->toBe('credited')
             ->and($result['counts']['technical_failures'])->toBe(1)
-            ->and(reconcileCredited($account))->toBe('100.00');
+            ->and(reconcileCredited($account))->toBe('1100.00');
     });
 
     it('puts no customer data in the report or the audit trail', function () {
@@ -473,6 +474,97 @@ describe('runs', function () {
     });
 });
 
+describe('orders credited under the earlier formula', function () {
+    /**
+     * An order credited before 2026-11-28, when its central-stock cost was the
+     * ৳2,500 suggested price: profit ৳5,200 − ৳5,000 = ৳200. The line's frozen
+     * cost is set to what that formula charged, credited, then put back to the
+     * frozen wholesale price — the state an old order is in today.
+     */
+    function reconcileCreditedUnderOldFormula(Order $order): void
+    {
+        $line = $order->items()->sole();
+        $wholesale = $line->getRawOriginal('product_cost');
+
+        DB::table('order_items')->where('id', $line->id)->update(['product_cost' => '5000.00']);
+        reconcileRun();
+        DB::table('order_items')->where('id', $line->id)->update(['product_cost' => $wholesale]);
+    }
+
+    function reconcileToppedUp(BusinessAccount $account): string
+    {
+        return WalletTransaction::query()
+            ->where('business_account_id', $account->id)
+            ->where('idempotency_key', 'like', 'partner-storefront-profit-top-up:%')
+            ->get()
+            ->reduce(fn (Money $sum, WalletTransaction $t) => $sum->plus($t->amount), Money::zero(Currency::BDT))
+            ->toDecimal();
+    }
+
+    it('pays the difference once, under its own key, and nothing on a second run', function () {
+        [$account, $website] = reconcilePartner(AccountType::NonConditional);
+        $order = reconcilePlace($website, 2, '2600.00');
+        reconcileDeliveredAgo($order);
+        reconcileLegacyCod($order);
+        reconcileCreditedUnderOldFormula($order);
+        expect(reconcileCredited($account))->toBe('200.00');
+
+        $first = reconcileRun();
+        $second = reconcileRun();
+
+        $profit = PartnerStorefrontProfit::query()->where('order_id', $order->id)->sole();
+        expect(reconcileRow($first, $order)['classification'])->toBe('topped_up')
+            ->and($first['counts']['profits_topped_up'])->toBe(1)
+            ->and($first['counts']['withdrawable_credited'])->toBe('2000.00')
+            ->and(reconcileToppedUp($account))->toBe('2000.00')
+            ->and(WalletTransaction::query()->where('idempotency_key', 'partner-storefront-profit-top-up:'.$order->public_id.':1')->count())->toBe(1)
+            ->and($profit->released_amount->toDecimal())->toBe('200.00')
+            ->and($profit->topped_up_amount->toDecimal())->toBe('2000.00')
+            ->and($profit->netCredited()->toDecimal())->toBe('2200.00')
+            ->and(reconcileRow($second, $order)['classification'])->toBe('already_credited')
+            ->and($second['counts']['profits_topped_up'])->toBe(0)
+            ->and(reconcileToppedUp($account))->toBe('2000.00')
+            ->and(app(VerifyLedgerIntegrity::class)->problemsFor(Wallet::query()->where('business_account_id', $account->id)->sole()))->toBe([]);
+    });
+
+    it('pays nothing extra while a return is open', function () {
+        [$account, $website] = reconcilePartner(AccountType::NonConditional);
+        $order = reconcilePlace($website, 2, '2600.00');
+        reconcileDeliveredAgo($order);
+        reconcileLegacyCod($order);
+        reconcileCreditedUnderOldFormula($order);
+
+        DB::table('order_returns')->insert([
+            'public_id' => (string) Str::ulid(), 'reference' => 'RT-'.Str::upper(Str::random(8)), 'order_id' => $order->id,
+            'business_account_id' => $order->business_account_id, 'website_id' => $order->website_id, 'source' => 'staff',
+            'status' => 'requested', 'reason' => 'Customer changed their mind', 'requested_at' => now(), 'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        reconcileRun();
+
+        expect(reconcileToppedUp($account))->toBe('0.00')
+            ->and(PartnerStorefrontProfit::query()->where('order_id', $order->id)->value('topped_up_amount'))->toBe('0.00');
+    });
+
+    it('takes back a topped-up profit in full when every unit comes back, never below zero', function () {
+        [$account, $website] = reconcilePartner(AccountType::NonConditional);
+        $order = reconcilePlace($website, 2, '2600.00');
+        reconcileDeliveredAgo($order);
+        reconcileLegacyCod($order);
+        reconcileCreditedUnderOldFormula($order);
+        reconcileRun();
+
+        reconcileReturn($order, 2);
+        app(SettleStorefrontProfit::class)->sync($order->refresh());
+
+        $profit = PartnerStorefrontProfit::query()->where('order_id', $order->id)->sole();
+        expect($profit->reversed_amount->toDecimal())->toBe('2200.00')
+            ->and($profit->netCredited()->toDecimal())->toBe('0.00')
+            ->and($profit->status->value)->toBe('reversed')
+            ->and(Wallet::query()->where('business_account_id', $account->id)->sole()->total->isNegative())->toBeFalse();
+    });
+});
+
 describe('the command', function () {
     it('reconciles only the chosen Storefront and placement dates, under either name', function () {
         [$chosen, $website] = reconcilePartner(AccountType::NonConditional);
@@ -490,7 +582,7 @@ describe('the command', function () {
         $this->artisan('storefront:reconcile-history', ['--apply' => true, '--no-courier-api' => true, '--website' => $website->public_id, '--from' => now()->subMonth()->toDateString()])
             ->assertSuccessful();
 
-        expect(reconcileCredited($chosen))->toBe('200.00')
+        expect(reconcileCredited($chosen))->toBe('2200.00')
             ->and(reconcileCredited($other))->toBe('0.00');
     });
 

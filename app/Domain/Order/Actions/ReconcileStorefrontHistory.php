@@ -74,13 +74,15 @@ use Throwable;
  */
 class ReconcileStorefrontHistory
 {
+    public const TOP_UP_REASON = 'Partner profit restated on 2026-11-28: net goods selling less the wholesale price, plus the delivery charge.';
+
     public const LABEL_REASON = 'Reconstructed by the legacy reconciliation from the records as they stood; the Storefront branding is its current branding, not necessarily what the parcel originally shipped with.';
 
     /** @var list<string> */
     public const COUNTS = [
         'orders_scanned', 'courier_records_reconciled', 'delivered_statuses_updated', 'awaiting_cod_collection',
         'account_types_corrected', 'cost_lots_resolved', 'settlements_created', 'profits_credited',
-        'withdrawable_credited', 'already_credited_or_skipped', 'labels_generated', 'missing_courier_references',
+        'profits_topped_up', 'withdrawable_credited', 'already_credited_or_skipped', 'labels_generated', 'missing_courier_references',
         'missing_warehouse', 'ambiguous_cost_basis', 'possible_duplicates', 'review_required', 'technical_failures',
     ];
 
@@ -406,7 +408,19 @@ class ReconcileStorefrontHistory
             $effects['profit_credited'] = $profit->released_amount->toDecimal();
         }
 
+        // Credited under an earlier formula and worth more now: pay the
+        // difference, once, under its own key.
+        $toppedUp = $releasedBefore && $profit->status === StorefrontProfitStatus::Released
+            ? $this->settle->topUp($order, self::TOP_UP_REASON)
+            : null;
+
+        if ($toppedUp !== null) {
+            $effects['profit_topped_up'] = $toppedUp->toDecimal();
+            $profit->refresh();
+        }
+
         return match (true) {
+            $toppedUp !== null => 'topped_up',
             $profit->status === StorefrontProfitStatus::Released => $releasedBefore ? 'already_credited' : 'credited',
             $profit->status === StorefrontProfitStatus::Holding => 'settlement_pending',
             $profit->status_reason === 'awaiting_collection' => 'awaiting_cod_collection',
@@ -679,6 +693,11 @@ class ReconcileStorefrontHistory
             $counts['withdrawable_credited'] = Money::fromDecimal((string) $counts['withdrawable_credited'])->plus(Money::fromDecimal((string) $effects['profit_credited']))->toDecimal();
         }
 
+        if (isset($effects['profit_topped_up'])) {
+            $this->bump($counts, 'profits_topped_up');
+            $counts['withdrawable_credited'] = Money::fromDecimal((string) $counts['withdrawable_credited'])->plus(Money::fromDecimal((string) $effects['profit_topped_up']))->toDecimal();
+        }
+
         $bucket = match ($row['classification']) {
             'awaiting_cod_collection' => 'awaiting_cod_collection',
             'already_credited', 'no_profit', 'reported_only', 'cancelled', 'not_storefront' => 'already_credited_or_skipped',
@@ -755,7 +774,7 @@ class ReconcileStorefrontHistory
         fputcsv($csv, ['order', 'partner', 'classification', 'reasons', 'profit_status', 'profit', 'release_at', 'credited', 'failure']);
 
         foreach ($rows as $row) {
-            fputcsv($csv, [$row['order'], $row['partner'], $row['classification'], implode('|', $row['reasons']), $row['profit_status'], $row['profit'], $row['release_at'], $row['effects']['profit_credited'] ?? '', $row['failure']]);
+            fputcsv($csv, [$row['order'], $row['partner'], $row['classification'], implode('|', $row['reasons']), $row['profit_status'], $row['profit'], $row['release_at'], $row['effects']['profit_credited'] ?? $row['effects']['profit_topped_up'] ?? '', $row['failure']]);
         }
 
         rewind($csv);

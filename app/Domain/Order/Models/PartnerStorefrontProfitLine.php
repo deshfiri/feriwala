@@ -30,7 +30,14 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class PartnerStorefrontProfitLine extends Model
 {
+    /** Superseded 2026-11-28: lines worked out before then may still carry it. */
     public const BASIS_PLATFORM_PRICE = 'platform_price';
+
+    /** Banij central stock: the wholesale price frozen on the line at placement. */
+    public const BASIS_WHOLESALE_PRICE = 'wholesale_price';
+
+    /** Nothing frozen: the product's wholesale price as the catalogue holds it. */
+    public const BASIS_CATALOGUE_WHOLESALE_PRICE = 'catalogue_wholesale';
 
     public const BASIS_FIFO_LOTS = 'fifo_lots';
 

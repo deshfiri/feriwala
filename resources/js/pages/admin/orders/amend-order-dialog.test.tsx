@@ -58,9 +58,10 @@ vi.mock('@inertiajs/react', async () => {
                     stock: [{ sku: 'FW-1', before: 2, after: 3 }],
                     profit: {
                         net_selling: money('7800.00'),
-                        product_base_price: money('7500.00'),
-                        partner_profit: money('300.00'),
-                        banij_receivable: money('7500.00'),
+                        product_base_price: money('4500.00'),
+                        delivery_charge: money('0.00'),
+                        partner_profit: money('3300.00'),
+                        banij_receivable: money('4500.00'),
                         unproven: false,
                         negative: false,
                     },
@@ -195,7 +196,10 @@ describe('the Order Details editor', () => {
         expect(previewBody).toMatchObject({
             lines: [{ id: 'LINE1', quantity: 3, unit_price: null }],
         });
-        expect(screen.getAllByText('৳300.00').length).toBeGreaterThan(0);
+        expect(screen.getAllByText('৳3300.00').length).toBeGreaterThan(0);
+        expect(
+            screen.getByText('orders.amend.profit.delivery_charge'),
+        ).toBeInTheDocument();
 
         const save = screen.getByRole('button', {
             name: 'orders.amend.save',

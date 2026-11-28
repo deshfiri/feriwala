@@ -68,6 +68,11 @@ const MONEY_COLUMN_INVENTORY = [
     'order_revisions' => ['total_before', 'total_after', 'total_difference'],
     'orders' => ['subtotal', 'discount', 'delivery', 'delivery_tax', 'tax', 'tax_included', 'cod_fee', 'total'],
     'package_charges' => ['amount'],
+    // A Partner's Storefront profit topped up to the formula of 2026-11-28 (D40).
+    // Only the columns that change added are registered; the profit tables'
+    // older money columns are an existing gap in this inventory.
+    'partner_storefront_profit_top_ups' => ['amount'],
+    'partner_storefront_profits' => ['topped_up_amount'],
     'packages' => ['fee', 'registration_fee', 'renewal_fee', 'required_deposit', 'minimum_balance'],
     'payment_allocations' => ['amount'],
     'payment_logs' => ['amount'],

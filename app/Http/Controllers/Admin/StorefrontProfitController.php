@@ -282,7 +282,8 @@ class StorefrontProfitController extends Controller
             'selling' => $profit->selling_amount?->jsonSerialize(),
             'cost' => $profit->cost_amount?->jsonSerialize(),
             'profit' => $profit->profit_amount?->jsonSerialize(),
-            'released' => $profit->released_amount->jsonSerialize(),
+            // The first credit and any top-up since.
+            'released' => $profit->creditedTotal()->jsonSerialize(),
             'reversed' => $profit->reversed_amount->jsonSerialize(),
             'delivered_at' => $profit->delivered_at?->toIso8601String(),
             'collected_at' => $profit->collected_at?->toIso8601String(),

@@ -89,6 +89,7 @@ type Preview =
           profit: {
               net_selling: Money;
               product_base_price: Money | null;
+              delivery_charge: Money;
               partner_profit: Money | null;
               banij_receivable: Money | null;
               unproven: boolean;
@@ -1038,6 +1039,19 @@ export default function AmendOrderDialog({
                                                             />
                                                         </Fact>
                                                     )}
+                                                    <Fact
+                                                        label={t(
+                                                            'orders.amend.profit.delivery_charge',
+                                                        )}
+                                                        inline
+                                                    >
+                                                        <MoneyAmount
+                                                            amount={
+                                                                preview.profit
+                                                                    .delivery_charge
+                                                            }
+                                                        />
+                                                    </Fact>
                                                     {preview.profit
                                                         .partner_profit && (
                                                         <Fact

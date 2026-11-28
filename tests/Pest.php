@@ -1588,6 +1588,7 @@ function concurrencyTestForgetCostLots(int $accountId): void
         $tables = [
             'partner_storefront_profit_corrections' => 'partner_storefront_profit_corrections_no_delete',
             'partner_storefront_profit_reversals' => 'partner_storefront_profit_reversals_no_delete',
+            'partner_storefront_profit_top_ups' => 'partner_storefront_profit_top_ups_no_delete',
             'partner_storefront_profit_lines' => 'partner_storefront_profit_lines_no_delete',
             'partner_storefront_profits' => 'partner_storefront_profits_no_delete',
         ];

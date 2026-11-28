@@ -24,6 +24,7 @@ use App\Domain\Order\Models\OrderReturn;
 use App\Domain\Order\Models\PartnerStorefrontProfit;
 use App\Domain\Order\Models\PartnerStorefrontProfitLine;
 use App\Domain\Order\Models\PartnerStorefrontProfitReversal;
+use App\Domain\Order\Models\PartnerStorefrontProfitTopUp;
 use App\Domain\Order\Queries\StorefrontProfitCalculator;
 use App\Domain\Wallet\Actions\OpenWallet;
 use App\Domain\Wallet\Data\PostingContext;
@@ -297,6 +298,85 @@ class SettleStorefrontProfit
     }
 
     /**
+     * Pay the difference on a profit already credited that is now worth more —
+     * as when the formula was restated on 2026-11-28. Only for a released
+     * profit with nothing open against it and no review hold; the amount is
+     * worked out again under the order's lock, so a second call finds nothing
+     * left to pay. Returns what was paid, or null.
+     */
+    public function topUp(Order $order, string $reason): ?Money
+    {
+        if ($order->source !== OrderSource::Website) {
+            return null;
+        }
+
+        return $this->locked($order, function (PartnerStorefrontProfit $profit, Order $lockedOrder) use ($reason): ?Money {
+            $this->refresh($profit, $lockedOrder);
+
+            if ($profit->status !== StorefrontProfitStatus::Released
+                || $profit->profit_amount === null
+                || $profit->review_hold !== null
+                || $this->blocker($lockedOrder) !== null
+                || $profit->reversals()->where('status', PartnerStorefrontProfitReversal::STATUS_OWED)->exists()) {
+                return null;
+            }
+
+            $currency = Currency::from($profit->currency_code);
+            $profitAmount = $profit->profit_amount;
+            $entitled = $profitAmount->minus($profit->legacy_credited_amount);
+            $claimed = $profit->reversals()->get()->reduce(fn (Money $sum, PartnerStorefrontProfitReversal $reversal) => $sum->plus($reversal->amount), Money::zero($currency));
+            $due = $entitled->minus($profit->creditedTotal()->minus($claimed));
+
+            if (! $due->isPositive()) {
+                return null;
+            }
+
+            $key = 'partner-storefront-profit-top-up:'.$lockedOrder->public_id.':'.($profit->topUps()->count() + 1);
+
+            $transaction = $this->wallet->credit(
+                $this->wallets->handle($profit->businessAccount, $currency),
+                LedgerTransactionType::SalesCredit,
+                $due,
+                new PostingContext(
+                    source: 'partner_storefront_profit',
+                    description: __('storefront_profit.ledger.top_up', ['order' => $lockedOrder->reference]),
+                    idempotencyKey: $key,
+                    reason: $reason,
+                ),
+                BalanceType::Withdrawable,
+            );
+
+            PartnerStorefrontProfitTopUp::create([
+                'partner_storefront_profit_id' => $profit->id,
+                'currency_code' => $profit->currency_code,
+                'amount' => $due,
+                'idempotency_key' => $key,
+                'wallet_transaction_id' => $transaction->id,
+                'reason' => $reason,
+                'created_at' => CarbonImmutable::now(),
+            ]);
+
+            $profit->forceFill(['topped_up_amount' => $profit->topped_up_amount->plus($due)])->save();
+
+            $this->audit->handle(new AuditEntry(
+                action: 'storefront_profit.topped_up',
+                actorType: 'system',
+                auditableType: PartnerStorefrontProfit::class,
+                auditableId: $profit->id,
+                before: ['credited' => $profit->creditedTotal()->minus($due)->toDecimal()],
+                after: ['order' => $lockedOrder->reference, 'amount' => $due->toDecimal(), 'profit' => $profitAmount->toDecimal(), 'credited' => $profit->creditedTotal()->toDecimal()],
+                reason: $reason,
+                accountId: $profit->business_account_id,
+                module: PermissionModule::Order->value,
+            ));
+
+            $this->notifyPartner($profit, StorefrontProfitUpdated::RELEASED, $due);
+
+            return $due;
+        });
+    }
+
+    /**
      * Take an owed reversal when the Wallet can carry it.
      */
     public function recover(PartnerStorefrontProfitReversal $reversal): PartnerStorefrontProfitReversal
@@ -340,6 +420,7 @@ class SettleStorefrontProfit
                         'currency_code' => $lockedOrder->currency_code,
                         'status' => StorefrontProfitStatus::AwaitingFacts,
                         'released_amount' => Money::zero(Currency::from($lockedOrder->currency_code)),
+                        'topped_up_amount' => Money::zero(Currency::from($lockedOrder->currency_code)),
                         'reversed_amount' => Money::zero(Currency::from($lockedOrder->currency_code)),
                         'legacy_credited_amount' => Money::zero(Currency::from($lockedOrder->currency_code)),
                     ]);
@@ -374,17 +455,14 @@ class SettleStorefrontProfit
 
         $lines = $this->calculator->lines($order);
         $this->writeLines($profit, $lines);
-
-        $proven = collect($lines)->every(fn (array $line) => $line['cost'] !== null);
-        $selling = collect($lines)->reduce(fn (Money $sum, array $line) => $sum->plus($line['selling']), Money::zero($currency));
-        $cost = $proven ? collect($lines)->reduce(fn (Money $sum, array $line) => $sum->plus($line['cost'] ?? Money::zero($currency)), Money::zero($currency)) : null;
+        $totals = $this->calculator->totals($order, $lines);
 
         $profit->forceFill([
-            'selling_amount' => $selling,
-            'cost_amount' => $cost,
-            'profit_amount' => $cost === null ? null : $selling->minus($cost),
+            'selling_amount' => $totals['selling'],
+            'cost_amount' => $totals['cost'],
+            'profit_amount' => $totals['profit'],
             'legacy_credited_amount' => $this->legacyCredited($order, $currency),
-            'breakdown' => $this->breakdown($order, $lines, $selling, $cost),
+            'breakdown' => $this->breakdown($order, $lines, $totals),
         ]);
 
         if ($profit->status === StorefrontProfitStatus::Released) {
@@ -434,30 +512,30 @@ class SettleStorefrontProfit
 
     /**
      * The whole calculation, frozen with the profit so it can be shown and
-     * checked: what the customer pays, what Banij keeps (the units' frozen
-     * Product Base Price and the order's frozen delivery charge), what is tax,
-     * and what is left for the Partner. Delivery is never on the Partner's side
-     * of the sum, so it is never taken off twice.
+     * checked: what the customer pays, what is tax, the Partner base cost (the
+     * wholesale price) Banij keeps, the delivery charge that goes to the Partner,
+     * and the Partner's profit.
      *
      * @param  list<array{item: OrderItem, basis: string, quantity: int, returned: int, selling: Money, cost: Money|null, profit: Money|null, unproven: string|null}>  $lines
+     * @param  array{selling: Money, cost: Money|null, delivery: Money, profit: Money|null, banij_receivable: Money|null}  $totals
      * @return array<string, mixed>
      */
-    protected function breakdown(Order $order, array $lines, Money $selling, ?Money $cost): array
+    protected function breakdown(Order $order, array $lines, array $totals): array
     {
-        $delivery = $order->delivery;
-        $deliveryTax = $order->delivery_tax ?? Money::zero($delivery->currency);
+        $deliveryTax = $order->delivery_tax ?? Money::zero($order->delivery->currency);
 
         return [
+            'formula' => 'net_goods_selling - wholesale_price + delivery_charge',
             'customer_total' => $order->total->toDecimal(),
             'discount' => $order->discount->toDecimal(),
             'product_tax_added' => $order->tax->toDecimal(),
             'product_tax_included' => $order->tax_included->toDecimal(),
-            'delivery_charge_retained' => $delivery->toDecimal(),
+            'delivery_charge_to_partner' => $totals['delivery']->toDecimal(),
             'delivery_tax' => $deliveryTax->toDecimal(),
-            'net_product_selling' => $selling->toDecimal(),
-            'product_base_price_total' => $cost?->toDecimal(),
-            'banij_receivable' => $cost?->plus($delivery)->toDecimal(),
-            'partner_profit' => $cost === null ? null : $selling->minus($cost)->toDecimal(),
+            'net_product_selling' => $totals['selling']->toDecimal(),
+            'product_base_price_total' => $totals['cost']?->toDecimal(),
+            'banij_receivable' => $totals['banij_receivable']?->toDecimal(),
+            'partner_profit' => $totals['profit']?->toDecimal(),
             'lines' => array_map(fn (array $line) => [
                 'line' => $line['item']->public_id,
                 'basis' => $line['basis'],
@@ -729,7 +807,7 @@ class SettleStorefrontProfit
             ->get()
             ->reduce(fn (Money $sum, PartnerStorefrontProfitReversal $reversal) => $sum->plus($reversal->amount), Money::zero($currency));
 
-        $due = $profit->released_amount->minus($claimed)->minus($entitled);
+        $due = $profit->creditedTotal()->minus($claimed)->minus($entitled);
 
         if (! $due->isPositive()) {
             return;
@@ -789,7 +867,7 @@ class SettleStorefrontProfit
 
         $profit->forceFill(['reversed_amount' => $profit->reversed_amount->plus($reversal->amount)]);
 
-        if ($profit->reversed_amount->equals($profit->released_amount)) {
+        if ($profit->reversed_amount->equals($profit->creditedTotal())) {
             $profit->transitionTo(StorefrontProfitStatus::Reversed);
         }
 
@@ -804,7 +882,7 @@ class SettleStorefrontProfit
                 'order' => $profit->order->reference,
                 'amount' => $reversal->amount->toDecimal(),
                 'reversed_total' => $profit->reversed_amount->toDecimal(),
-                'released' => $profit->released_amount->toDecimal(),
+                'released' => $profit->creditedTotal()->toDecimal(),
             ],
             accountId: $profit->business_account_id,
             module: PermissionModule::Order->value,

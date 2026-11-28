@@ -282,26 +282,30 @@ function storefrontProfitCredited(BusinessAccount $account): string
 }
 
 describe('who earns, and how much', function () {
-    it('credits a Non-Conditional Partner selling central stock on cash on delivery: selling price less the frozen platform price', function () {
+    it('credits a Non-Conditional Partner selling central stock on cash on delivery: selling price less the frozen wholesale price', function () {
         [$account, $website] = storefrontProfitPartner(AccountType::NonConditional);
         $order = storefrontProfitPlace($website, 2, '2600.00');
 
+        // Wholesale ৳1,500 a unit — not the ৳2,500 suggested price, not the ৳0 base cost.
         expect($order->account_type)->toBe(AccountType::NonConditional)
-            ->and($order->items->first()->platform_retained_amount->toDecimal())->toBe('5000.00');
+            ->and($order->items->first()->product_cost->toDecimal())->toBe('3000.00');
 
         $delivered = CarbonImmutable::parse('2026-11-01 10:00:00');
         storefrontProfitDeliver($order, $delivered);
         storefrontProfitConfirmCod($order);
 
         $profit = storefrontProfitOf($order);
+        $line = PartnerStorefrontProfitLine::query()->where('order_item_id', $order->items->first()->id)->firstOrFail();
         expect($profit->status)->toBe(StorefrontProfitStatus::Holding)
-            ->and($profit->profit_amount->toDecimal())->toBe('200.00')
+            ->and($line->cost_basis)->toBe(PartnerStorefrontProfitLine::BASIS_WHOLESALE_PRICE)
+            ->and($profit->cost_amount->toDecimal())->toBe('3000.00')
+            ->and($profit->profit_amount->toDecimal())->toBe('2200.00')
             ->and($profit->release_at->equalTo($delivered->addHours(24)))->toBeTrue();
 
         storefrontProfitSweep($delivered->addHours(24));
 
         expect(storefrontProfitOf($order)->status)->toBe(StorefrontProfitStatus::Released)
-            ->and(storefrontProfitCredited($account))->toBe('200.00');
+            ->and(storefrontProfitCredited($account))->toBe('2200.00');
     });
 
     it('credits a Non-Conditional Partner paid through Banij\'s gateway', function () {
@@ -316,7 +320,7 @@ describe('who earns, and how much', function () {
 
         storefrontProfitSweep($delivered->addHours(24));
 
-        expect(storefrontProfitCredited($account))->toBe('200.00');
+        expect(storefrontProfitCredited($account))->toBe('2200.00');
     });
 
     it('credits a Conditional Partner selling their own stock on cash on delivery: selling price less the FIFO purchase cost', function () {
@@ -401,14 +405,14 @@ describe('who earns, and how much', function () {
         storefrontProfitConfirmCod($order);
         storefrontProfitSweep($delivered->addHours(24));
 
-        expect(storefrontProfitCredited($seller))->toBe('200.00')
+        expect(storefrontProfitCredited($seller))->toBe('2200.00')
             ->and(storefrontProfitCredited($other))->toBe('0.00')
             ->and(storefrontProfitOf($order)->business_account_id)->toBe($seller->id);
     });
 });
 
 describe('the formula and its breakdown', function () {
-    it('keeps the delivery charge for Banij and the margin for the Partner', function (int $quantity, int $deliveryFee, string $delivery, string $customerTotal, string $base, string $banij, string $partner) {
+    it('gives the Partner the margin over the wholesale price and the delivery charge', function (int $quantity, int $deliveryFee, string $delivery, string $customerTotal, string $base, string $banij, string $partner) {
         FeeRule::query()->where('fee_type', FeeType::WebsiteDelivery->value)->delete();
         websiteTestFee(FeeType::WebsiteDelivery, $deliveryFee);
         [$account, $website] = storefrontProfitPartner(AccountType::Conditional, '1500.00');
@@ -431,16 +435,39 @@ describe('the formula and its breakdown', function () {
 
         $profit = storefrontProfitOf($order);
         expect($profit->breakdown['customer_total'])->toBe($customerTotal)
-            ->and($profit->breakdown['delivery_charge_retained'])->toBe($delivery)
+            ->and($profit->breakdown['delivery_charge_to_partner'])->toBe($delivery)
             ->and($profit->breakdown['product_base_price_total'])->toBe($base)
             ->and($profit->breakdown['banij_receivable'])->toBe($banij)
             ->and($profit->breakdown['partner_profit'])->toBe($partner)
             ->and($profit->profit_amount->toDecimal())->toBe($partner);
     })->with([
-        '৳1,500 sold, ৳1,000 base, ৳100 delivery' => [1, 10000, '100.00', '1600.00', '1000.00', '1100.00', '500.00'],
-        'free delivery' => [1, 0, '0.00', '1500.00', '1000.00', '1000.00', '500.00'],
-        'two units, ৳100 delivery' => [2, 10000, '100.00', '3100.00', '2000.00', '2100.00', '1000.00'],
+        '৳1,500 sold, ৳1,000 base, ৳100 delivery' => [1, 10000, '100.00', '1600.00', '1000.00', '1000.00', '600.00'],
+        'no delivery charge' => [1, 0, '0.00', '1500.00', '1000.00', '1000.00', '500.00'],
+        'two units, ৳100 delivery' => [2, 10000, '100.00', '3100.00', '2000.00', '2000.00', '1100.00'],
     ]);
+
+    it('gives no delivery charge on an order whose every unit came back', function () {
+        FeeRule::query()->where('fee_type', FeeType::WebsiteDelivery->value)->delete();
+        websiteTestFee(FeeType::WebsiteDelivery, 10000);
+        [$account, $website] = storefrontProfitPartner(AccountType::NonConditional);
+
+        $money = fn (string $amount) => Money::fromDecimal($amount, Currency::BDT);
+        $address = ['line1' => 'House 12', 'city' => 'Dhaka', 'country' => 'BD'];
+        [$order] = app(PlaceWebsiteOrder::class)->handle($website, new WebsiteOrderSubmission(
+            deliveryLocation: deliveryTestLocation(), reference: 'SF-RT-'.Str::upper(Str::random(6)), idempotencyKey: (string) Str::uuid(),
+            customer: new WebsiteCustomerDetails(name: 'Ayesha Rahman', mobile: '+88017'.random_int(10000000, 99999999)),
+            shippingAddress: $address, billingAddress: $address,
+            items: [['sku' => $this->product->sku, 'quantity' => 1]], claimedUnitPrices: [$money('2600.00')],
+            claimedTotals: ['subtotal' => $money('2600.00'), 'discount' => $money('0.00'), 'shipping' => $money('100.00'), 'tax' => $money('0.00'), 'grand_total' => $money('2700.00')],
+            paymentMethod: 'cod',
+        ));
+        storefrontProfitReturn($order, 1, 'completed', received: 1);
+
+        app(SettleStorefrontProfit::class)->sync($order->refresh());
+
+        expect(storefrontProfitOf($order)->breakdown['delivery_charge_to_partner'])->toBe('0.00')
+            ->and(storefrontProfitOf($order)->profit_amount->toDecimal())->toBe('0.00');
+    });
 });
 
 describe('the 24-hour hold', function () {
@@ -460,7 +487,7 @@ describe('the 24-hour hold', function () {
         expect(storefrontProfitCredited($account))->toBe('0.00');
 
         storefrontProfitSweep($collected->addHours(24));
-        expect(storefrontProfitCredited($account))->toBe('200.00');
+        expect(storefrontProfitCredited($account))->toBe('2200.00');
     });
 
     it('shows the profit as pending once the order is dispatched, before anything is credited', function () {
@@ -475,7 +502,7 @@ describe('the 24-hour hold', function () {
         $profit = storefrontProfitOf($order);
         expect($profit->status)->toBe(StorefrontProfitStatus::AwaitingFacts)
             ->and($profit->status_reason)->toBe('awaiting_delivery')
-            ->and($profit->profit_amount->toDecimal())->toBe('200.00')
+            ->and($profit->profit_amount->toDecimal())->toBe('2200.00')
             ->and(storefrontProfitCredited($account))->toBe('0.00');
     });
 
@@ -528,7 +555,7 @@ describe('the 24-hour hold', function () {
         app(SettleStorefrontProfit::class)->release(storefrontProfitOf($order)->id, $delivered->addHours(26));
 
         expect(WalletTransaction::query()->where('idempotency_key', 'partner-storefront-profit:'.$order->public_id)->count())->toBe(1)
-            ->and(storefrontProfitCredited($account))->toBe('200.00');
+            ->and(storefrontProfitCredited($account))->toBe('2200.00');
 
         $entry = LedgerEntry::query()->where('wallet_transaction_id', storefrontProfitOf($order)->wallet_transaction_id)->firstOrFail();
         expect($entry->balance_type)->toBe(BalanceType::Withdrawable)
@@ -548,7 +575,7 @@ describe('the Partner\'s own gateway', function () {
 
         $profit = storefrontProfitOf($order);
         expect($profit->status)->toBe(StorefrontProfitStatus::ReportedOnly)
-            ->and($profit->profit_amount->toDecimal())->toBe('200.00')
+            ->and($profit->profit_amount->toDecimal())->toBe('2200.00')
             ->and($profit->wallet_transaction_id)->toBeNull()
             ->and(storefrontProfitCredited($account))->toBe('0.00');
     });
@@ -587,16 +614,17 @@ describe('what blocks it, and what takes it back', function () {
         storefrontProfitDeliver($order, $delivered);
         storefrontProfitConfirmCod($order);
         storefrontProfitSweep($delivered->addHours(24));
-        expect(storefrontProfitCredited($account))->toBe('200.00');
+        expect(storefrontProfitCredited($account))->toBe('2200.00');
 
         storefrontProfitReturn($order, 1, 'completed', received: 1);
         app(SettleStorefrontProfit::class)->sync($order->refresh());
 
+        // One unit kept: ৳2,600 less ৳1,500 is ৳1,100; the other ৳1,100 comes back.
         $reversal = PartnerStorefrontProfitReversal::query()->sole();
         expect($reversal->status)->toBe(PartnerStorefrontProfitReversal::STATUS_POSTED)
-            ->and($reversal->amount->toDecimal())->toBe('100.00')
-            ->and(storefrontProfitCredited($account))->toBe('100.00')
-            ->and(storefrontProfitOf($order)->reversed_amount->toDecimal())->toBe('100.00');
+            ->and($reversal->amount->toDecimal())->toBe('1100.00')
+            ->and(storefrontProfitCredited($account))->toBe('1100.00')
+            ->and(storefrontProfitOf($order)->reversed_amount->toDecimal())->toBe('1100.00');
     });
 
     it('never takes the Wallet negative: an uncovered reversal is owed and taken when it can be', function () {
@@ -609,7 +637,7 @@ describe('what blocks it, and what takes it back', function () {
 
         // The Partner spends the profit.
         $wallet = app(OpenWallet::class)->handle($account, Currency::BDT);
-        app(WalletService::class)->debit($wallet, LedgerTransactionType::ReturnAdjustment, Money::fromDecimal('200.00', Currency::BDT), new PostingContext(source: 'test', description: 'spent', idempotencyKey: 'spent-'.Str::random(6), reason: 'Spent elsewhere.'), BalanceType::Withdrawable);
+        app(WalletService::class)->debit($wallet, LedgerTransactionType::ReturnAdjustment, Money::fromDecimal('2200.00', Currency::BDT), new PostingContext(source: 'test', description: 'spent', idempotencyKey: 'spent-'.Str::random(6), reason: 'Spent elsewhere.'), BalanceType::Withdrawable);
 
         storefrontProfitReturn($order, 2, 'completed', received: 2);
         app(SettleStorefrontProfit::class)->sync($order->refresh());
@@ -618,7 +646,7 @@ describe('what blocks it, and what takes it back', function () {
         expect($reversal->status)->toBe(PartnerStorefrontProfitReversal::STATUS_OWED)
             ->and($wallet->refresh()->total->isNegative())->toBeFalse();
 
-        app(WalletService::class)->credit($wallet, LedgerTransactionType::SalesCredit, Money::fromDecimal('500.00', Currency::BDT), new PostingContext(source: 'test', description: 'later sale', idempotencyKey: 'later-'.Str::random(6)), BalanceType::Withdrawable);
+        app(WalletService::class)->credit($wallet, LedgerTransactionType::SalesCredit, Money::fromDecimal('5000.00', Currency::BDT), new PostingContext(source: 'test', description: 'later sale', idempotencyKey: 'later-'.Str::random(6)), BalanceType::Withdrawable);
         storefrontProfitSweep($delivered->addDays(3));
 
         expect($reversal->refresh()->status)->toBe(PartnerStorefrontProfitReversal::STATUS_POSTED)
@@ -707,7 +735,7 @@ describe('failures and staff', function () {
         app(SettleStorefrontProfit::class)->retry($this->staff, $profit);
 
         expect(storefrontProfitOf($order)->status)->toBe(StorefrontProfitStatus::Released)
-            ->and(storefrontProfitCredited($account))->toBe('200.00');
+            ->and(storefrontProfitCredited($account))->toBe('2200.00');
     });
 
     it('tells the Partner the pending amount and release time without any customer details', function () {
@@ -751,7 +779,7 @@ describe('the account type and the historical audit', function () {
             ->and(storefrontProfitCredited($account))->toBe('0.00');
     });
 
-    it('never credits an ambiguous historical sale, even with --apply', function () {
+    it('prices a historical sale bought at more than one price at the product\'s wholesale price', function () {
         [$account, $website] = storefrontProfitPartner(AccountType::Conditional, '2200.00');
         storefrontProfitPurchase($account, $this->product, 1, '1000.00', paidAt: CarbonImmutable::parse('2026-10-01'));
         storefrontProfitPurchase($account, $this->product, 1, '1200.00', paidAt: CarbonImmutable::parse('2026-10-02'));
@@ -766,9 +794,15 @@ describe('the account type and the historical audit', function () {
         app(AuditStorefrontProfits::class)->handle(apply: true);
         storefrontProfitSweep($delivered->addDays(3));
 
-        expect(storefrontProfitOf($order)->status)->toBe(StorefrontProfitStatus::ReviewRequired)
-            ->and(PartnerStorefrontProfitLine::query()->where('order_item_id', $order->items->first()->id)->value('unproven_reason'))->toBe('ambiguous_purchase_cost')
-            ->and(storefrontProfitCredited($account))->toBe('0.00');
+        // Bought at ৳1,000 and at ৳1,200: no one purchase price, so the
+        // catalogue's ৳1,500 wholesale price — never a review for want of a cost.
+        $line = PartnerStorefrontProfitLine::query()->where('order_item_id', $order->items->first()->id)->firstOrFail();
+
+        expect($line->cost_basis)->toBe(PartnerStorefrontProfitLine::BASIS_CATALOGUE_WHOLESALE_PRICE)
+            ->and($line->cost_amount->toDecimal())->toBe('1500.00')
+            ->and($line->unproven_reason)->toBeNull()
+            ->and(storefrontProfitOf($order)->status)->toBe(StorefrontProfitStatus::Released)
+            ->and(storefrontProfitCredited($account))->toBe('700.00');
     });
 });
 
